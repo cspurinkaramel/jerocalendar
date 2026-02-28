@@ -3,29 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>JeroCalendar v3.0</title>
+    <title>JeroCalendar v4.0 SPA</title>
     <style>
-        /* カスタマイズ用の環境変数（デフォルト値） */
         :root { 
-            --bg-color: #ffffff; 
-            --text-color: #111111;
-            --border: #cccccc; 
-            --header-bg: #e0e0e0; 
-            --today-bg: #fff9c4; 
-            --sat-bg: #e3f2fd; 
-            --sun-bg: #ffebee;
-            --event-fs: 9px; /* 予定のフォントサイズ */
+            --bg-color: #ffffff; --text-color: #111; --border: #ccc; 
+            --header-bg: #e0e0e0; --today-bg: #fff9c4; --sat-bg: #e3f2fd; --sun-bg: #ffebee;
+            --event-fs: 9px; 
         }
-        
-        /* ダークテーマ用の変数定義 */
         [data-theme="dark"] {
-            --bg-color: #1e1e1e; --text-color: #eeeeee; --border: #444444; --header-bg: #333333;
+            --bg-color: #1e1e1e; --text-color: #eee; --border: #444; --header-bg: #333;
             --today-bg: #4a4a00; --sat-bg: #0d47a1; --sun-bg: #b71c1c;
         }
-
         body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg-color); color: var(--text-color); overflow: hidden; }
         
-        /* ヘッダーUI */
         #top-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: #222; color: white; height: 35px; box-sizing: border-box; }
         .nav-group { display: flex; gap: 10px; align-items: center; }
         .icon-btn { background: transparent; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0 5px; }
@@ -33,34 +23,44 @@
         #month-display { font-size: 16px; font-weight: bold; }
         #auth-btn { cursor: pointer; padding: 4px 10px; background: #4285f4; color: white; border: none; border-radius: 4px; font-size: 10px; }
         
-        /* カレンダーグリッド */
         #weekdays { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--header-bg); border-bottom: 1px solid var(--border); }
         .wd { text-align: center; padding: 3px 0; border-right: 1px solid var(--border); font-weight: bold; font-size: 10px; }
         #calendar { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(calc((100vh - 60px) / 6), auto); width: 100vw; height: calc(100vh - 60px); }
-        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; overflow: hidden; padding-top: 14px; display: flex; flex-direction: column; gap: 1px; }
-        .empty { background: var(--header-bg) !important; opacity: 0.5; }
-        .day-num { position: absolute; top: 0; left: 0; width: 100%; text-align: left; padding-left: 2px; font-weight: bold; font-size: 10px; background: rgba(128,128,128,0.2); z-index: 1; }
+        
+        /* セル全体をタップ可能にする */
+        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; overflow: hidden; padding-top: 14px; display: flex; flex-direction: column; gap: 1px; cursor: pointer; }
+        .day:active { background-color: rgba(0,0,0,0.1); } /* タップ時のフィードバック */
+        .empty { background: var(--header-bg) !important; opacity: 0.5; pointer-events: none; }
+        .day-num { position: absolute; top: 0; left: 0; width: 100%; text-align: left; padding-left: 2px; font-weight: bold; font-size: 10px; background: rgba(128,128,128,0.2); z-index: 1; pointer-events: none;}
         .today { background: var(--today-bg) !important; border: 1px solid #ffa000; box-sizing: border-box; }
         
-        /* 予定・タスクブロック（文字サイズを変数化） */
-        .event, .task { font-size: var(--event-fs); border-radius: 1px; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 1px; color: #000; }
+        /* 予定ブロック（タップ可能） */
+        .event, .task { font-size: var(--event-fs); border-radius: 1px; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 1px; color: #000; cursor: pointer; }
         .event { background: #bbdefb; border-left: 2px solid #1e88e5; }
-        .task { background: #c8e6c9; border-left: 2px solid #43a047; font-style: italic; }
+        .event:active { filter: brightness(0.8); }
+        .task { background: #c8e6c9; border-left: 2px solid #43a047; font-style: italic; pointer-events: none; } /* 今回タスク編集は割愛 */
 
-        /* 設定モーダル（GUI） */
-        #settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
-        .modal-content { background: var(--bg-color); padding: 20px; border-radius: 8px; width: 80%; max-width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .setting-row { margin-bottom: 15px; }
-        .setting-row label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: bold; }
-        .setting-row input, .setting-row select { width: 100%; padding: 5px; font-size: 14px; }
-        .close-btn { width: 100%; padding: 10px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px; }
+        /* 汎用モーダル基盤 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: var(--bg-color); padding: 20px; border-radius: 8px; width: 85%; max-width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); color: var(--text-color); }
+        .setting-row { margin-bottom: 12px; }
+        .setting-row label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: bold; }
+        .setting-row input, .setting-row select { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-color); color: var(--text-color); }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-group button { flex: 1; padding: 10px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; color: white; }
+        .btn-save { background: #4285f4; }
+        .btn-delete { background: #d32f2f; }
+        .btn-cancel { background: #757575; }
+        
+        /* ローディング表示 */
+        #loading-toast { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 200; font-size: 12px; }
     </style>
 </head>
 <body>
     <div id="top-bar">
         <div class="nav-group">
-            <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
-            <button class="icon-btn" onclick="addNewEvent()">＋</button>
+            <button class="icon-btn" onclick="toggleModal('settings-modal')">⚙️</button>
         </div>
         <div class="nav-group">
             <button class="nav-btn" onclick="changeMonth(-1)">◀︎</button>
@@ -73,112 +73,172 @@
     <div id="weekdays"></div>
     <div id="calendar"></div>
 
-    <div id="settings-modal">
+    <div id="settings-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3 style="margin-top:0;">カレンダー設定</h3>
+            <h3 style="margin-top:0;">設定</h3>
             <div class="setting-row">
-                <label>予定の文字サイズ: <span id="fs-val">9</span>px</label>
+                <label>文字サイズ: <span id="fs-val">9</span>px</label>
                 <input type="range" id="fontSizeSlider" min="6" max="14" value="9" oninput="updateSettings()">
             </div>
             <div class="setting-row">
-                <label>カラーテーマ</label>
-                <select id="themeSelect" onchange="updateSettings()">
-                    <option value="light">標準 (Light)</option>
-                    <option value="dark">ダーク (Dark)</option>
-                </select>
+                <label>テーマ</label>
+                <select id="themeSelect" onchange="updateSettings()"><option value="light">標準</option><option value="dark">ダーク</option></select>
             </div>
             <div class="setting-row">
                 <label>週の始まり</label>
-                <select id="weekStartSelect" onchange="updateSettings()">
-                    <option value="0">日曜日</option>
-                    <option value="1">月曜日</option>
-                </select>
+                <select id="weekStartSelect" onchange="updateSettings()"><option value="0">日曜日</option><option value="1">月曜日</option></select>
             </div>
-            <button class="close-btn" onclick="toggleSettings()">閉じる / 保存</button>
+            <div class="btn-group"><button class="btn-cancel" onclick="toggleModal('settings-modal')">閉じる</button></div>
         </div>
     </div>
 
+    <div id="event-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="event-modal-title" style="margin-top:0;">予定の追加</h3>
+            <input type="hidden" id="edit-event-id">
+            <div class="setting-row">
+                <label>日付</label>
+                <input type="date" id="event-date">
+            </div>
+            <div class="setting-row">
+                <label>タイトル</label>
+                <input type="text" id="event-title" placeholder="予定を入力">
+            </div>
+            <div class="btn-group">
+                <button class="btn-save" onclick="saveEvent()">保存</button>
+                <button class="btn-delete" id="btn-delete" onclick="deleteEvent()">削除</button>
+                <button class="btn-cancel" onclick="toggleModal('event-modal', false)">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="loading-toast">処理中...</div>
+
     <script>
         const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
-        const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
+        // 【最重要変更】readonlyを外し、カレンダーの完全な書き込み権限を要求する
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks.readonly';
         let tokenClient, gapiInited = false, gisInited = false;
-        let currentDisplayDate = new Date(); 
-        currentDisplayDate.setDate(1);
-        
-        // ユーザー設定オブジェクト
+        let currentDisplayDate = new Date(); currentDisplayDate.setDate(1);
         let userSettings = { fontSize: 9, theme: 'light', weekStart: 0 };
 
-        // 初期化と設定の読み込み
+        /* UI制御・設定系 */
         function initSettings() {
             const saved = localStorage.getItem('jero_settings');
             if (saved) userSettings = JSON.parse(saved);
-            
             document.getElementById('fontSizeSlider').value = userSettings.fontSize;
             document.getElementById('themeSelect').value = userSettings.theme;
             document.getElementById('weekStartSelect').value = userSettings.weekStart;
             applySettingsToDOM();
         }
-
         function updateSettings() {
             userSettings.fontSize = document.getElementById('fontSizeSlider').value;
             userSettings.theme = document.getElementById('themeSelect').value;
             userSettings.weekStart = parseInt(document.getElementById('weekStartSelect').value);
-            
             localStorage.setItem('jero_settings', JSON.stringify(userSettings));
             applySettingsToDOM();
-            if (gapiInited && localStorage.getItem('jero_token')) renderEmptyCalendar(); // 枠の再描画
+            if (gapiInited && localStorage.getItem('jero_token')) renderEmptyCalendar(); 
         }
-
         function applySettingsToDOM() {
             document.documentElement.style.setProperty('--event-fs', userSettings.fontSize + 'px');
             document.getElementById('fs-val').innerText = userSettings.fontSize;
             document.body.setAttribute('data-theme', userSettings.theme);
-            
-            // 曜日ヘッダーの再構築
-            const wdContainer = document.getElementById('weekdays');
-            wdContainer.innerHTML = '';
+            const wdContainer = document.getElementById('weekdays'); wdContainer.innerHTML = '';
             const days = ['日', '月', '火', '水', '木', '金', '土'];
             for(let i = 0; i < 7; i++) {
                 const dayIdx = (i + userSettings.weekStart) % 7;
-                const div = document.createElement('div');
-                div.className = 'wd';
-                div.innerText = days[dayIdx];
-                if (dayIdx === 0) div.style.color = userSettings.theme === 'dark' ? '#ff5252' : '#d32f2f'; // 日曜色
-                if (dayIdx === 6) div.style.color = userSettings.theme === 'dark' ? '#448aff' : '#1976d2'; // 土曜色
+                const div = document.createElement('div'); div.className = 'wd'; div.innerText = days[dayIdx];
+                if (dayIdx === 0) div.style.color = userSettings.theme === 'dark' ? '#ff5252' : '#d32f2f';
+                if (dayIdx === 6) div.style.color = userSettings.theme === 'dark' ? '#448aff' : '#1976d2';
                 wdContainer.appendChild(div);
             }
         }
+        function toggleModal(id, show) {
+            const modal = document.getElementById(id);
+            if(show === undefined) show = modal.style.display === 'none' || modal.style.display === '';
+            modal.style.display = show ? 'flex' : 'none';
+        }
+        function showLoading(msg) {
+            const t = document.getElementById('loading-toast'); t.innerText = msg; t.style.display = 'block';
+        }
+        function hideLoading() { document.getElementById('loading-toast').style.display = 'none'; }
 
-        function toggleSettings() {
-            const modal = document.getElementById('settings-modal');
-            const isHidden = modal.style.display === '' || modal.style.display === 'none';
-            modal.style.display = isHidden ? 'flex' : 'none';
-            // 閉じるときに再描画してデータを反映
-            if (!isHidden && localStorage.getItem('jero_token')) loadCalendarData();
+        /* カレンダーアクション（SPAの核） */
+        // セル（日付）をタップした時の処理（新規追加）
+        function openAddModal(dateStr) {
+            document.getElementById('event-modal-title').innerText = '予定の追加';
+            document.getElementById('edit-event-id').value = '';
+            document.getElementById('event-date').value = dateStr;
+            document.getElementById('event-title').value = '';
+            document.getElementById('btn-delete').style.display = 'none'; // 新規なので削除ボタンを隠す
+            toggleModal('event-modal', true);
         }
 
-        // 限界突破機能：予定の直接追加（Googleカレンダーの入力フォームへバイパス）
-        function addNewEvent() {
-            window.open('https://calendar.google.com/calendar/u/0/r/eventedit', '_blank');
+        // 既存の予定をタップした時の処理（編集・削除）
+        function openEditModal(e, id, dateStr, title) {
+            e.stopPropagation(); // 【超重要】親要素（セル）のタップイベント発火を防ぐ
+            document.getElementById('event-modal-title').innerText = '予定の編集';
+            document.getElementById('edit-event-id').value = id;
+            document.getElementById('event-date').value = dateStr;
+            document.getElementById('event-title').value = title;
+            document.getElementById('btn-delete').style.display = 'block';
+            toggleModal('event-modal', true);
         }
 
-        /* 既存のAPI通信ロジック */
+        /* API通信：CRUD処理の直叩き */
+        async function saveEvent() {
+            const id = document.getElementById('edit-event-id').value;
+            const date = document.getElementById('event-date').value;
+            const title = document.getElementById('event-title').value;
+            if(!title) { alert('タイトルを入力してください'); return; }
+
+            toggleModal('event-modal', false);
+            showLoading('保存中...');
+
+            const eventResource = {
+                summary: title,
+                start: { date: date }, // 今回は終日予定として処理（時間は今後の拡張）
+                end: { date: date }
+            };
+
+            try {
+                if (id) {
+                    // 更新（Update）
+                    await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: eventResource });
+                } else {
+                    // 新規作成（Insert）
+                    await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: eventResource });
+                }
+                await loadCalendarData(); // 保存完了後、画面遷移せずに再描画
+            } catch(e) {
+                alert('保存に失敗しました。認証が切れている可能性があります。');
+                console.error(e);
+            }
+            hideLoading();
+        }
+
+        async function deleteEvent() {
+            if(!confirm('本当にこの予定を削除しますか？')) return;
+            const id = document.getElementById('edit-event-id').value;
+            toggleModal('event-modal', false);
+            showLoading('削除中...');
+            try {
+                await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id });
+                await loadCalendarData();
+            } catch(e) { alert('削除に失敗しました。'); }
+            hideLoading();
+        }
+
+        /* 既存のAPI・描画ロジック */
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() {
             await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]});
-            gapiInited = true;
-            initSettings();
-            checkAutoLogin();
+            gapiInited = true; initSettings(); checkAutoLogin();
         }
-
-        function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', });
-            gisInited = true;
-        }
-
+        function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
+        
         function checkAutoLogin() {
-            const savedToken = localStorage.getItem('jero_token');
-            const savedTime = localStorage.getItem('jero_token_time');
+            const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time');
             if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) {
                 document.getElementById('auth-btn').innerText = '同期中...';
                 gapi.client.setToken({access_token: savedToken});
@@ -187,21 +247,19 @@
         }
 
         async function handleAuthClick() {
-            if (!gisInited || !gapiInited) { alert('準備中です。数秒お待ちください。'); return; }
+            if (!gisInited || !gapiInited) return;
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) throw (resp);
                 gapi.client.setToken({access_token: resp.access_token});
-                localStorage.setItem('jero_token', resp.access_token);
-                localStorage.setItem('jero_token_time', Date.now());
-                document.getElementById('auth-btn').innerText = '同期中...';
-                await loadCalendarData();
+                localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now());
+                document.getElementById('auth-btn').innerText = '同期中...'; await loadCalendarData();
             };
             tokenClient.requestAccessToken({prompt: 'consent'});
         }
 
         function changeMonth(offset) {
             currentDisplayDate.setMonth(currentDisplayDate.getMonth() + offset);
-            if (localStorage.getItem('jero_token')) { document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').innerText = '読込中...'; loadCalendarData(); } else { renderEmptyCalendar(); }
+            if (localStorage.getItem('jero_token')) { loadCalendarData(); } else { renderEmptyCalendar(); }
         }
 
         async function loadCalendarData() {
@@ -214,49 +272,43 @@
                     gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 500 }),
                     gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth })
                 ]);
-                let events = eventsResp.result.items || [];
-                let tasks = tasksResp.result.items || [];
-                // データをローカルにキャッシュして再描画時にAPIを叩かない工夫も可能だが今回は直接描画
-                renderCalendar(events, tasks);
+                renderCalendar(eventsResp.result.items || [], tasksResp.result.items || []);
                 document.getElementById('auth-btn').style.display = 'none';
             } catch(e) { document.getElementById('auth-btn').innerText = '再接続'; }
         }
 
-        function renderEmptyCalendar() {
-            document.getElementById('month-display').innerText = `${currentDisplayDate.getFullYear()}年 ${currentDisplayDate.getMonth() + 1}月`;
-            renderCalendar([], []);
-        }
+        function renderEmptyCalendar() { document.getElementById('month-display').innerText = `${currentDisplayDate.getFullYear()}年 ${currentDisplayDate.getMonth() + 1}月`; renderCalendar([], []); }
 
         function renderCalendar(events, tasks) {
             const cal = document.getElementById('calendar'); cal.innerHTML = '';
             const year = currentDisplayDate.getFullYear(); const month = currentDisplayDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            
-            // 週の始まり設定に基づく曜日ズレの計算
             let firstDayOfWeek = new Date(year, month, 1).getDay();
             let shift = (firstDayOfWeek - userSettings.weekStart + 7) % 7;
 
-            for (let i = 0; i < shift; i++) {
-                const emptyEl = document.createElement('div'); emptyEl.className = 'day empty'; cal.appendChild(emptyEl);
-            }
+            for (let i = 0; i < shift; i++) { const emptyEl = document.createElement('div'); emptyEl.className = 'day empty'; cal.appendChild(emptyEl); }
 
             const today = new Date();
             for (let i = 1; i <= daysInMonth; i++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
                 const dayEl = document.createElement('div');
                 let className = 'day';
-                
-                // 土日の背景色計算（週の始まり設定に依存しない絶対的な曜日計算）
                 const currentDayOfWeek = new Date(year, month, i).getDay();
                 if (currentDayOfWeek === 0) dayEl.style.backgroundColor = 'var(--sun-bg)';
                 if (currentDayOfWeek === 6) dayEl.style.backgroundColor = 'var(--sat-bg)';
-                
                 if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
+                
                 dayEl.className = className;
+                // セルをタップで新規追加モーダルを開く
+                dayEl.setAttribute('onclick', `openAddModal('${dateStr}')`);
                 dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
                 events.filter(e => (e.start.date || e.start.dateTime).includes(dateStr)).forEach(e => {
-                    const div = document.createElement('div'); div.className = 'event'; div.innerText = e.summary; dayEl.appendChild(div);
+                    const div = document.createElement('div'); div.className = 'event'; div.innerText = e.summary;
+                    // 予定をタップで編集モーダルを開く。e.summaryのエスケープ処理は簡易化。
+                    const safeTitle = e.summary.replace(/'/g, "\\'");
+                    div.setAttribute('onclick', `openEditModal(event, '${e.id}', '${dateStr}', '${safeTitle}')`);
+                    dayEl.appendChild(div);
                 });
                 tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
                     const div = document.createElement('div'); div.className = 'task'; div.innerText = '√ ' + t.title; dayEl.appendChild(div);
