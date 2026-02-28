@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JeroCalendar v1.0</title>
+    <title>JeroCalendar v1.1</title>
     <style>
         :root { --border: #ddd; --header-bg: #f8f9fa; --today: #fff9c4; }
         body { font-family: sans-serif; margin: 0; font-size: 10px; color: #333; }
@@ -33,6 +33,7 @@
         async function initializeGapiClient() {
             await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]});
             gapiInited = true;
+            checkAutoLogin(); // 準備完了後にオートログイン判定を実行
         }
 
         function gisLoaded() {
@@ -40,14 +41,40 @@
             gisInited = true;
         }
 
+        // オートログイン（1時間の定期券）の確認
+        function checkAutoLogin() {
+            const savedToken = localStorage.getItem('jero_token');
+            const savedTime = localStorage.getItem('jero_token_time');
+            // 鍵が存在し、かつ1時間（3500000ミリ秒）以内であればボタンを押さずに自動同期
+            if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) {
+                document.getElementById('auth-btn').innerText = '自動同期中...';
+                gapi.client.setToken({access_token: savedToken});
+                loadCalendarData().catch(e => {
+                    localStorage.removeItem('jero_token'); // 失敗時は破棄して手動に戻す
+                    document.getElementById('auth-btn').innerText = 'Googleに接続';
+                });
+            }
+        }
+
         async function handleAuthClick() {
-            // フェイルセーフ: 準備前に押された場合の防御
-            if (!gisInited) { alert('システムの準備中です。1〜2秒待ってから再度押してください。'); return; }
-            
+            if (!gisInited || !gapiInited) { alert('システム準備中です。数秒お待ちください。'); return; }
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) throw (resp);
+                
+                // 【最重要修正】取得した鍵を直接プログラムに握らせる（iPhoneフリーズ対策）
+                gapi.client.setToken({access_token: resp.access_token});
+                
+                // 鍵をiPhoneのポケット（localStorage）に保存
+                localStorage.setItem('jero_token', resp.access_token);
+                localStorage.setItem('jero_token_time', Date.now());
+
                 document.getElementById('auth-btn').innerText = '同期中...';
-                await loadCalendarData();
+                try {
+                    await loadCalendarData();
+                } catch(e) {
+                    alert('データ取得に失敗しました。');
+                    document.getElementById('auth-btn').innerText = '再試行';
+                }
             };
             tokenClient.requestAccessToken({prompt: 'consent'});
         }
@@ -83,7 +110,6 @@
             }
         }
     </script>
-    
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 </body>
