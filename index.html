@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JeroCalendar v1.0</title>
+    <style>
+        :root { --border: #ddd; --header-bg: #f8f9fa; --today: #fff9c4; }
+        body { font-family: sans-serif; margin: 0; font-size: 10px; color: #333; }
+        #header { display: flex; justify-content: space-between; padding: 10px; background: var(--header-bg); border-bottom: 1px solid var(--border); }
+        #calendar { display: grid; grid-template-columns: repeat(7, 1fr); width: 100vw; height: calc(100vh - 50px); border-left: 1px solid var(--border); border-top: 1px solid var(--border); }
+        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; overflow-y: auto; padding-top: 15px; }
+        .day-num { position: absolute; top: 1px; left: 1px; font-weight: bold; background: rgba(255,255,255,0.8); width: 100%; }
+        .today { background: var(--today); }
+        .event { background: #e3f2fd; border-radius: 2px; margin: 1px; padding: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #2196f3; }
+        .task { background: #f1f8e9; border-radius: 2px; margin: 1px; padding: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #4caf50; font-style: italic; }
+        #auth-btn { cursor: pointer; padding: 5px 15px; background: #4285f4; color: white; border: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <div id="month-display">2026年 2月</div>
+        <button id="auth-btn" onclick="handleAuthClick()">Googleに接続</button>
+    </div>
+    <div id="calendar"></div>
+
+    <script>
+        const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
+        let tokenClient, gapiInited = false, gisInited = false;
+
+        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+        async function initializeGapiClient() {
+            await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]});
+            gapiInited = true;
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', });
+            gisInited = true;
+        }
+
+        async function handleAuthClick() {
+            // フェイルセーフ: 準備前に押された場合の防御
+            if (!gisInited) { alert('システムの準備中です。1〜2秒待ってから再度押してください。'); return; }
+            
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) throw (resp);
+                document.getElementById('auth-btn').innerText = '同期中...';
+                await loadCalendarData();
+            };
+            tokenClient.requestAccessToken({prompt: 'consent'});
+        }
+
+        async function loadCalendarData() {
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const [eventsResp, tasksResp] = await Promise.all([
+                gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, singleEvents: true, orderBy: 'startTime' }),
+                gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth })
+            ]);
+            renderCalendar(eventsResp.result.items, tasksResp.result.items || []);
+            document.getElementById('auth-btn').style.display = 'none';
+        }
+
+        function renderCalendar(events, tasks) {
+            const cal = document.getElementById('calendar');
+            cal.innerHTML = '';
+            const now = new Date();
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                const dayEl = document.createElement('div');
+                dayEl.className = 'day' + (i === now.getDate() ? ' today' : '');
+                dayEl.innerHTML = `<div class="day-num">${i}</div>`;
+                events.filter(e => (e.start.date || e.start.dateTime).includes(dateStr)).forEach(e => {
+                    const div = document.createElement('div'); div.className = 'event'; div.innerText = e.summary; dayEl.appendChild(div);
+                });
+                tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
+                    const div = document.createElement('div'); div.className = 'task'; div.innerText = '√ ' + t.title; dayEl.appendChild(div);
+                });
+                cal.appendChild(dayEl);
+            }
+        }
+    </script>
+    
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+</body>
+</html>
