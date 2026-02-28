@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v5.2</title>
+    <title>JeroCalendar v5.2.1</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e0e0e0; --head-bg: #f8f8f8; 
@@ -189,7 +189,6 @@
 
         const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
 
-        /* --- UI & インジケーター --- */
         function initWeekdays() {
             const wdContainer = document.getElementById('weekdays');
             const days = ['日', '月', '火', '水', '木', '金', '土'];
@@ -207,7 +206,6 @@
             if(percent >= 100) setTimeout(() => { bar.style.width = '0%'; }, 500);
         }
 
-        /* --- 無限スクロール & 描画 --- */
         function setupObserver() {
             const options = { root: document.getElementById('scroll-container'), rootMargin: '300px', threshold: 0.1 };
             observer = new IntersectionObserver((entries) => {
@@ -224,34 +222,53 @@
 
         async function initCalendar() {
             setProgress(10);
-            const today = new Date(); const y = today.getFullYear(); const m = today.getMonth();
-            await fetchAndRenderMonth(y, m, 'append', true);
-            await fetchAndRenderMonth(y, m+1, 'append');
-            scrollToToday();
-            setProgress(100);
+            try {
+                const today = new Date(); const y = today.getFullYear(); const m = today.getMonth();
+                await fetchAndRenderMonth(y, m, 'append', true);
+                await fetchAndRenderMonth(y, m+1, 'append');
+                scrollToToday();
+            } finally {
+                setProgress(100);
+            }
         }
 
         async function loadNextMonth() {
-            if(renderedMonths.length === 0) return;
+            if(renderedMonths.length === 0 || isFetching) return;
             isFetching = true; setProgress(30);
-            const last = renderedMonths[renderedMonths.length - 1];
-            let nextY = last.year; let nextM = last.month + 1;
-            if(nextM > 11) { nextM = 0; nextY++; }
-            await fetchAndRenderMonth(nextY, nextM, 'append');
-            isFetching = false; setProgress(100);
+            try {
+                const last = renderedMonths[renderedMonths.length - 1];
+                let nextY = last.year; let nextM = last.month + 1;
+                if(nextM > 11) { nextM = 0; nextY++; }
+                await fetchAndRenderMonth(nextY, nextM, 'append');
+            } finally {
+                isFetching = false; setProgress(100);
+            }
         }
 
         async function loadPrevMonth() {
-            if(renderedMonths.length === 0) return;
+            if(renderedMonths.length === 0 || isFetching) return;
             isFetching = true; setProgress(30);
-            const container = document.getElementById('scroll-container');
-            const oldHeight = container.scrollHeight;
-            const first = renderedMonths[0];
-            let prevY = first.year; let prevM = first.month - 1;
-            if(prevM < 0) { prevM = 11; prevY--; }
-            await fetchAndRenderMonth(prevY, prevM, 'prepend');
-            container.scrollTop += (container.scrollHeight - oldHeight);
-            isFetching = false; setProgress(100);
+            try {
+                const container = document.getElementById('scroll-container');
+                const oldHeight = container.scrollHeight;
+                const first = renderedMonths[0];
+                let prevY = first.year; let prevM = first.month - 1;
+                if(prevM < 0) { prevM = 11; prevY--; }
+                await fetchAndRenderMonth(prevY, prevM, 'prepend');
+                container.scrollTop += (container.scrollHeight - oldHeight);
+            } finally {
+                isFetching = false; setProgress(100);
+            }
+        }
+
+        // 権限エラーハンドリング（防衛ロジック）
+        function handleApiError(err) {
+            if (err.status === 401 || err.status === 403) {
+                console.warn('権限不足を検知。トークンを破棄します。');
+                localStorage.removeItem('jero_token');
+                localStorage.removeItem('jero_token_time');
+                document.getElementById('auth-btn').style.display = 'block';
+            }
         }
 
         async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
@@ -260,13 +277,21 @@
             const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
 
             if (forceFetch || !dataCache[monthKey]) {
+                let events = [];
+                let tasks = [];
+
+                // 予定とタスクの取得を分離（道連れエラー防止）
                 try {
-                    const [eResp, tResp] = await Promise.all([
-                        gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }),
-                        gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true })
-                    ]);
-                    dataCache[monthKey] = { events: eResp.result.items || [], tasks: tResp.result.items || [] };
-                } catch(e) { console.error(e); return; }
+                    const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 });
+                    events = eResp.result.items || [];
+                } catch(e) { console.error('Calendar Fetch Error:', e); handleApiError(e); }
+
+                try {
+                    const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true });
+                    tasks = tResp.result.items || [];
+                } catch(e) { console.error('Tasks Fetch Error:', e); handleApiError(e); }
+
+                dataCache[monthKey] = { events, tasks };
             }
 
             const existing = document.getElementById(`month-${year}-${month}`);
@@ -359,7 +384,6 @@
             if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        /* --- モーダル制御（デイリーコマンドセンター） --- */
         function openDailyModal(dateStr, dow) {
             selectedDateStr = dateStr;
             const days = ['日','月','火','水','木','金','土'];
@@ -372,7 +396,6 @@
             let hasItems = false;
 
             if(data) {
-                // 予定一覧
                 data.events.filter(e => (e.start.date || e.start.dateTime).includes(dateStr)).forEach(e => {
                     hasItems = true;
                     let timeStr = "終日";
@@ -382,30 +405,19 @@
                     }
                     const color = (e.colorId && GOOGLE_COLORS[e.colorId]) ? GOOGLE_COLORS[e.colorId] : 'var(--accent)';
                     const item = document.createElement('div'); item.className = 'list-item';
-                    item.innerHTML = `
-                        <div class="li-title"><span class="color-dot" style="background:${color}"></span> ${e.summary}</div>
-                        <div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>
-                    `;
+                    item.innerHTML = `<div class="li-title"><span class="color-dot" style="background:${color}"></span> ${e.summary}</div><div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
                     item.onclick = () => openEditor(e);
                     list.appendChild(item);
                 });
                 
-                // タスク一覧（完了トグルとエディタ展開の分離）
                 data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
                     hasItems = true;
                     const isComp = t.status === 'completed';
                     const item = document.createElement('div'); item.className = 'list-item';
-                    item.innerHTML = `
-                        <div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : ''}">
-                            <span class="task-check" style="color:#34c759; font-size:18px; padding-right:8px;">${isComp ? '☑' : '☐'}</span> 
-                            <span class="task-title-text">${t.title}</span>
-                        </div>
-                        <div class="li-meta" style="padding-left: 26px;">${t.notes ? `📝 ${t.notes}` : ''}</div>
-                    `;
+                    item.innerHTML = `<div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : ''}"><span class="task-check" style="color:#34c759; font-size:18px; padding-right:8px;">${isComp ? '☑' : '☐'}</span><span class="task-title-text">${t.title}</span></div><div class="li-meta" style="padding-left: 26px;">${t.notes ? `📝 ${t.notes}` : ''}</div>`;
                     
-                    // チェックボックスタップ時（ステータスパッチ）
                     item.querySelector('.task-check').onclick = async (ev) => {
-                        ev.stopPropagation(); // エディタ展開を防ぐ
+                        ev.stopPropagation(); 
                         setProgress(30);
                         const newStatus = isComp ? 'needsAction' : 'completed';
                         try {
@@ -413,23 +425,20 @@
                             t.status = newStatus;
                             openDailyModal(dateStr, dow);
                             fetchAndRenderMonth(y, parseInt(m)-1, 'replace');
-                        } catch(err) { alert('タスクの更新に失敗した。'); }
+                        } catch(err) { alert('タスクの更新に失敗した。'); handleApiError(err); }
                         setProgress(100);
                     };
 
-                    // 行自体タップ時（エディタ展開）
                     item.onclick = () => openTaskEditor(t);
                     list.appendChild(item);
                 });
             }
 
             if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 20px;">予定はありません</div>`;
-
             document.getElementById('overlay').classList.add('active');
             setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
         }
 
-        /* --- 予定エディタ (Event CRUD) --- */
         function initColorPicker() {
             const picker = document.getElementById('color-picker');
             picker.innerHTML = `<div class="color-opt selected" style="background:#0a84ff" onclick="selectColor(this, '')"></div>`;
@@ -446,49 +455,27 @@
         function openEditor(eventObj = null) {
             document.getElementById('editor-modal').classList.add('active');
             const isEdit = eventObj !== null;
-            
             document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定';
             document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none';
             
-            const titleEl = document.getElementById('edit-title');
-            const locEl = document.getElementById('edit-loc');
-            const descEl = document.getElementById('edit-desc');
-            const allDayEl = document.getElementById('edit-allday');
-            const startEl = document.getElementById('edit-start');
-            const endEl = document.getElementById('edit-end');
+            const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc');
+            const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end');
             
             if (isEdit) {
-                document.getElementById('edit-id').value = eventObj.id;
-                titleEl.value = eventObj.summary || "";
-                locEl.value = eventObj.location || "";
-                descEl.value = eventObj.description || "";
-                
+                document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = eventObj.description || "";
                 if (eventObj.start.date) {
-                    allDayEl.checked = true;
-                    startEl.type = 'date'; endEl.type = 'date';
-                    startEl.value = eventObj.start.date;
-                    const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1);
-                    endEl.value = ed.toISOString().split('T')[0];
+                    allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date';
+                    startEl.value = eventObj.start.date; const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); endEl.value = ed.toISOString().split('T')[0];
                 } else {
-                    allDayEl.checked = false;
-                    startEl.type = 'datetime-local'; endEl.type = 'datetime-local';
-                    startEl.value = eventObj.start.dateTime.slice(0,16);
-                    endEl.value = eventObj.end.dateTime.slice(0,16);
+                    allDayEl.checked = false; startEl.type = 'datetime-local'; endEl.type = 'datetime-local';
+                    startEl.value = eventObj.start.dateTime.slice(0,16); endEl.value = eventObj.end.dateTime.slice(0,16);
                 }
-                
-                const colorOpts = document.querySelectorAll('.color-opt');
-                colorOpts.forEach(c => c.classList.remove('selected'));
-                if(eventObj.colorId) {
-                    colorOpts[parseInt(eventObj.colorId)].classList.add('selected');
-                    selectedColorId = eventObj.colorId;
-                } else {
-                    colorOpts[0].classList.add('selected'); selectedColorId = "";
-                }
+                const colorOpts = document.querySelectorAll('.color-opt'); colorOpts.forEach(c => c.classList.remove('selected'));
+                if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } 
+                else { colorOpts[0].classList.add('selected'); selectedColorId = ""; }
             } else {
-                document.getElementById('edit-id').value = "";
-                titleEl.value = ""; locEl.value = ""; descEl.value = "";
-                allDayEl.checked = true;
-                startEl.type = 'date'; endEl.type = 'date';
+                document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = "";
+                allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date';
                 startEl.value = selectedDateStr; endEl.value = selectedDateStr;
                 selectColor(document.querySelector('.color-opt'), "");
             }
@@ -496,19 +483,13 @@
 
         function toggleTimeInputs() {
             const isAllDay = document.getElementById('edit-allday').checked;
-            const startEl = document.getElementById('edit-start');
-            const endEl = document.getElementById('edit-end');
+            const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end');
             const currentStart = startEl.value;
-            
             if (isAllDay) {
-                startEl.type = 'date'; endEl.type = 'date';
-                startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr;
-                endEl.value = startEl.value;
+                startEl.type = 'date'; endEl.type = 'date'; startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr; endEl.value = startEl.value;
             } else {
-                startEl.type = 'datetime-local'; endEl.type = 'datetime-local';
-                const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr;
-                startEl.value = `${baseDate}T09:00`;
-                endEl.value = `${baseDate}T10:00`;
+                startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr;
+                startEl.value = `${baseDate}T09:00`; endEl.value = `${baseDate}T10:00`;
             }
         }
 
@@ -517,73 +498,48 @@
         async function saveEvent() {
             const title = document.getElementById('edit-title').value;
             if(!title) { alert('タイトルを入力してくれ。'); return; }
-            
             setProgress(30); closeAllModals();
-
-            const id = document.getElementById('edit-id').value;
-            const loc = document.getElementById('edit-loc').value;
-            const desc = document.getElementById('edit-desc').value;
-            const isAllDay = document.getElementById('edit-allday').checked;
-            const startVal = document.getElementById('edit-start').value;
-            const endVal = document.getElementById('edit-end').value;
+            const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const desc = document.getElementById('edit-desc').value;
+            const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value;
 
             const resource = { summary: title, location: loc, description: desc };
             if(selectedColorId) resource.colorId = selectedColorId;
-
-            if (isAllDay) {
-                resource.start = { date: startVal };
-                const ed = new Date(endVal); ed.setDate(ed.getDate() + 1);
-                resource.end = { date: ed.toISOString().split('T')[0] };
-            } else {
-                resource.start = { dateTime: new Date(startVal).toISOString() };
-                resource.end = { dateTime: new Date(endVal).toISOString() };
-            }
+            if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } 
+            else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
 
             try {
                 if (id) await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource });
                 else await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
-                
                 const targetDate = new Date(startVal);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { alert('保存失敗。再接続を試みてくれ。'); console.error(e); }
+            } catch(e) { alert('保存失敗。再接続を試みてくれ。'); console.error(e); handleApiError(e); }
             setProgress(100);
         }
 
         async function deleteEvent() {
             if(!confirm('予定を削除してよいか？')) return;
-            const id = document.getElementById('edit-id').value;
-            const startVal = document.getElementById('edit-start').value;
+            const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value;
             setProgress(30); closeAllModals();
             try {
                 await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id });
                 const targetDate = new Date(startVal);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { alert('削除に失敗した。'); }
+            } catch(e) { alert('削除に失敗した。'); handleApiError(e); }
             setProgress(100);
         }
 
-        /* --- タスクエディタ (Task CRUD - v5.2追加) --- */
         function openTaskEditor(taskObj = null) {
             document.getElementById('task-editor-modal').classList.add('active');
             const isEdit = taskObj !== null;
-            
             document.getElementById('task-editor-title').innerText = isEdit ? 'タスクの編集' : '新規タスク';
             document.getElementById('task-btn-delete').style.display = isEdit ? 'block' : 'none';
-            
-            const titleEl = document.getElementById('task-edit-title');
-            const notesEl = document.getElementById('task-edit-notes');
-            const dueEl = document.getElementById('task-edit-due');
+            const titleEl = document.getElementById('task-edit-title'); const notesEl = document.getElementById('task-edit-notes'); const dueEl = document.getElementById('task-edit-due');
             
             if (isEdit) {
-                document.getElementById('task-edit-id').value = taskObj.id;
-                titleEl.value = taskObj.title || "";
-                notesEl.value = taskObj.notes || "";
+                document.getElementById('task-edit-id').value = taskObj.id; titleEl.value = taskObj.title || ""; notesEl.value = taskObj.notes || "";
                 dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : "";
             } else {
-                document.getElementById('task-edit-id').value = "";
-                titleEl.value = ""; 
-                notesEl.value = "";
-                dueEl.value = selectedDateStr; // デフォルトは選択中の日付
+                document.getElementById('task-edit-id').value = ""; titleEl.value = ""; notesEl.value = ""; dueEl.value = selectedDateStr;
             }
         }
 
@@ -592,54 +548,37 @@
         async function saveTask() {
             const title = document.getElementById('task-edit-title').value;
             if(!title) { alert('タスク名を入力してくれ。'); return; }
-            
             setProgress(30); closeAllModals();
-
-            const id = document.getElementById('task-edit-id').value;
-            const notes = document.getElementById('task-edit-notes').value;
-            const dueVal = document.getElementById('task-edit-due').value;
+            const id = document.getElementById('task-edit-id').value; const notes = document.getElementById('task-edit-notes').value; const dueVal = document.getElementById('task-edit-due').value;
 
             const resource = { title, notes };
-            if (dueVal) {
-                // Tasks APIはRFC 3339形式のタイムスタンプを要求する
-                resource.due = new Date(dueVal).toISOString();
-            } else {
-                resource.due = null;
-            }
+            if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
 
             try {
                 if (id) await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource });
                 else await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource });
-                
-                // 再描画ターゲット（日付が空の場合は当月を描画）
                 const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { alert('タスクの保存に失敗した。'); console.error(e); }
+            } catch(e) { alert('タスクの保存に失敗した。'); console.error(e); handleApiError(e); }
             setProgress(100);
         }
 
         async function deleteTask() {
             if(!confirm('このタスクを完全に削除してよいか？')) return;
-            const id = document.getElementById('task-edit-id').value;
-            const dueVal = document.getElementById('task-edit-due').value;
+            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value;
             setProgress(30); closeAllModals();
             try {
                 await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id });
                 const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { alert('削除に失敗した。'); }
+            } catch(e) { alert('削除に失敗した。'); handleApiError(e); }
             setProgress(100);
         }
 
-        /* --- 全体制御 --- */
         function closeAllModals() {
-            closeEditor();
-            closeTaskEditor();
-            document.getElementById('daily-modal').classList.remove('active');
-            document.getElementById('overlay').classList.remove('active');
+            closeEditor(); closeTaskEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active');
         }
 
-        /* --- 認証基盤 --- */
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() {
             await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]});
@@ -663,6 +602,9 @@
                 gapi.client.setToken({access_token: resp.access_token});
                 localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now());
                 document.getElementById('auth-btn').style.display = 'none';
+                // リセットして再描画
+                document.getElementById('calendar-wrapper').innerHTML = '';
+                renderedMonths = [];
                 initCalendar();
             };
             tokenClient.requestAccessToken({prompt: 'consent'});
