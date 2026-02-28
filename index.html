@@ -2,69 +2,113 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>JeroCalendar v5.0 Singularity</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>JeroCalendar v5.1</title>
     <style>
-        :root { --bg-color: #ffffff; --text-color: #111; --border: #e0e0e0; --header-bg: #f8f8f8; --today-bg: #fff9c4; --sat-bg: #f0f8ff; --sun-bg: #fff0f5; --event-fs: 9px; }
-        [data-theme="dark"] { --bg-color: #000; --text-color: #fff; --border: #333; --header-bg: #1c1c1e; --today-bg: #333300; --sat-bg: #001f3f; --sun-bg: #3f0000; }
-        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg-color); color: var(--text-color); overflow: hidden; }
+        :root { 
+            --bg: #ffffff; --txt: #111; --border: #e0e0e0; --head-bg: #f8f8f8; 
+            --today: #fff9c4; --sat: #f0f8ff; --sun: #fff0f5; --fs: 9px; --accent: #0a84ff;
+        }
+        [data-theme="dark"] { 
+            --bg: #000; --txt: #fff; --border: #333; --head-bg: #1c1c1e; 
+            --today: #333300; --sat: #001f3f; --sun: #3f0000; 
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; }
 
-        /* ヘッダー周り */
-        #top-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; background: rgba(30,30,30,0.8); backdrop-filter: blur(10px); color: white; height: 40px; box-sizing: border-box; position: fixed; top: 0; width: 100%; z-index: 50; }
-        #month-display { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
-        .icon-btn { background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 5px; }
-        #auth-btn { cursor: pointer; padding: 4px 10px; background: #0a84ff; color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: bold; }
-
-        /* 曜日ヘッダー */
-        #weekdays { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--header-bg); border-bottom: 1px solid var(--border); position: fixed; top: 40px; width: 100%; z-index: 40; height: 20px; align-items: center; }
+        /* トップバー（ノッチ対応・プログレスバー内蔵） */
+        #top-bar { 
+            position: fixed; top: 0; width: 100%; z-index: 50; 
+            padding-top: env(safe-area-inset-top); /* iPhoneのノッチ回避 */
+            background: rgba(30,30,30,0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            color: white; display: flex; justify-content: space-between; align-items: center; 
+            box-sizing: border-box; height: calc(44px + env(safe-area-inset-top)); 
+        }
+        #progress-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); width: 0%; transition: width 0.3s; }
+        
+        .nav-group { display: flex; gap: 8px; align-items: center; padding: 0 15px; }
+        #month-display { font-size: 17px; font-weight: 600; letter-spacing: 0.5px; }
+        .icon-btn { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 4px; }
+        
+        /* 曜日・カレンダー基盤 */
+        #weekdays { position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; z-index: 40; height: 22px; display: grid; grid-template-columns: repeat(7, 1fr); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; }
         .wd { text-align: center; font-weight: bold; font-size: 10px; }
-
-        /* カレンダー本体（無限スクロール領域） */
-        #scroll-container { position: fixed; top: 60px; width: 100%; height: calc(100vh - 60px); overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
-        .month-wrapper { position: relative; }
-        .month-title { padding: 5px; font-size: 12px; font-weight: bold; background: var(--header-bg); border-bottom: 1px solid var(--border); text-align: center; color: #888; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(80px, auto); }
         
-        /* 日付セル */
-        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; overflow: hidden; padding-top: 14px; display: flex; flex-direction: column; gap: 1px; cursor: pointer; }
-        .day:active { background-color: rgba(128,128,128,0.2); }
-        .day-num { position: absolute; top: 1px; left: 2px; font-weight: bold; font-size: 10px; z-index: 1; }
-        .today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 14px; height: 14px; text-align: center; line-height: 14px; top: 0; left: 1px; }
+        #scroll-container { position: fixed; top: calc(66px + env(safe-area-inset-top)); width: 100%; height: calc(100vh - 66px - env(safe-area-inset-top)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .month-title { padding: 4px; font-size: 11px; font-weight: 600; background: var(--head-bg); border-bottom: 1px solid var(--border); text-align: center; color: #888; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(85px, auto); }
+        
+        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; padding-top: 15px; display: flex; flex-direction: column; gap: 1px; cursor: pointer; }
+        .day:active { background: rgba(128,128,128,0.15); }
+        .day-num { position: absolute; top: 2px; left: 2px; font-weight: bold; font-size: 10px; z-index: 1; }
+        .today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 15px; height: 15px; text-align: center; line-height: 15px; top: 1px; left: 1px; }
 
-        /* 予定ブロック */
-        .event, .task { font-size: var(--event-fs); border-radius: 2px; padding: 1px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 1px; color: #fff; font-weight: 500; }
-        .event { background: #0a84ff; }
-        .task { background: #34c759; font-style: italic; }
+        /* 予定・タスクの帯（Google Color対応） */
+        .event, .task { font-size: var(--fs); border-radius: 2px; padding: 1px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 1px; color: #fff; font-weight: 500; }
+        .task { background: #34c759; font-style: italic; border-left: 2px solid #248a3d; }
+        .task.completed { text-decoration: line-through; opacity: 0.6; }
 
-        /* デイリー・コマンドセンター（ハーフモーダル） */
-        .bottom-modal { position: fixed; bottom: -100%; left: 0; width: 100%; max-height: 80vh; background: var(--bg-color); border-top-left-radius: 16px; border-top-right-radius: 16px; box-shadow: 0 -5px 20px rgba(0,0,0,0.3); z-index: 100; transition: bottom 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); display: flex; flex-direction: column; }
+        /* 統合モーダル基盤（コマンドセンター＆エディタ） */
+        .bottom-modal { 
+            position: fixed; bottom: -100%; left: 0; width: 100%; max-height: 90vh; 
+            background: var(--bg); border-top-left-radius: 20px; border-top-right-radius: 20px; 
+            box-shadow: 0 -10px 25px rgba(0,0,0,0.3); z-index: 100; 
+            transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1); display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
+        }
         .bottom-modal.active { bottom: 0; }
-        .modal-drag-bar { width: 40px; height: 4px; background: #ccc; border-radius: 2px; margin: 8px auto; }
-        .modal-header { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h2 { margin: 0; font-size: 18px; }
-        .close-btn-round { background: #eee; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; font-weight: bold; color: #333; cursor: pointer; }
+        .modal-drag { width: 36px; height: 5px; background: #ccc; border-radius: 3px; margin: 10px auto; }
+        .modal-header { padding: 5px 20px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
+        .close-btn { background: #eee; border: none; border-radius: 50%; width: 28px; height: 28px; font-weight: bold; color: #333; cursor: pointer; }
         
-        .modal-body { padding: 10px 20px; overflow-y: auto; flex: 1; }
-        .list-item { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; cursor: pointer; }
+        .modal-body { padding: 0; overflow-y: auto; flex: 1; }
+        
+        /* デイリーリストUI */
+        .list-item { padding: 12px 20px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
         .list-item:active { background: rgba(128,128,128,0.1); }
-        .list-item-title { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
-        .list-item-meta { font-size: 12px; color: #888; display: flex; gap: 10px; }
+        .li-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .li-meta { font-size: 12px; color: #888; display: flex; gap: 12px; flex-wrap: wrap; }
+        .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
         
-        .add-action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--header-bg); }
-        .add-btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; color: white; cursor: pointer; background: #0a84ff;}
+        .action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--head-bg); }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; color: white; cursor: pointer; }
+        .btn-blue { background: var(--accent); } .btn-green { background: #34c759; } .btn-red { background: #ff3b30; } .btn-gray { background: #8e8e93; }
 
-        /* 暗幕 */
-        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 90; backdrop-filter: blur(2px); transition: opacity 0.3s; opacity: 0; }
+        /* エディタ専用UI */
+        .form-group { padding: 10px 20px; border-bottom: 1px solid var(--border); }
+        .form-group input[type="text"], .form-group textarea { width: 100%; border: none; background: transparent; color: var(--txt); font-size: 16px; outline: none; }
+        .form-group textarea { resize: none; height: 60px; margin-top: 5px; }
+        .form-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+        .form-row input[type="datetime-local"], .form-row input[type="date"] { background: transparent; border: none; color: var(--txt); font-size: 15px; }
+        
+        /* カラーパレット */
+        .color-palette { display: flex; gap: 10px; padding: 15px 20px; overflow-x: auto; }
+        .color-opt { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; }
+        .color-opt.selected { border-color: var(--txt); transform: scale(1.1); }
+
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 90; transition: opacity 0.3s; opacity: 0; }
         #overlay.active { display: block; opacity: 1; }
-
         .loader { text-align: center; padding: 20px; color: #888; font-size: 12px; }
+
+        /* トグルスイッチ */
+        .toggle { appearance: none; width: 40px; height: 24px; background: #ccc; border-radius: 12px; position: relative; outline: none; cursor: pointer; }
+        .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.2s; }
+        .toggle:checked { background: #34c759; }
+        .toggle:checked::after { left: 18px; }
     </style>
 </head>
 <body>
     <div id="top-bar">
-        <button class="icon-btn" onclick="scrollToToday()">◎</button>
-        <div id="month-display">2026年 2月</div>
-        <button id="auth-btn" onclick="handleAuthClick()">Google接続</button>
+        <div class="nav-group">
+            <button class="icon-btn" onclick="scrollToToday()">◎</button>
+            <button class="icon-btn" onclick="openSettings()">⚙️</button>
+        </div>
+        <div id="month-display">表示中...</div>
+        <div class="nav-group">
+            <button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 14px;">🔑</button>
+        </div>
+        <div id="progress-bar"></div>
     </div>
     
     <div id="weekdays"></div>
@@ -75,19 +119,41 @@
         <div id="bottom-trigger" class="loader">データを読み込み中...</div>
     </div>
 
-    <div id="overlay" onclick="closeDailyModal()"></div>
+    <div id="overlay" onclick="closeAllModals()"></div>
 
     <div id="daily-modal" class="bottom-modal">
-        <div class="modal-drag-bar"></div>
+        <div class="modal-drag"></div>
         <div class="modal-header">
-            <h2 id="daily-date-title">2月15日 (日)</h2>
-            <button class="close-btn-round" onclick="closeDailyModal()">×</button>
+            <h2 id="daily-date-title"></h2>
+            <button class="close-btn" onclick="closeAllModals()">✕</button>
         </div>
-        <div class="modal-body" id="daily-list">
-            </div>
-        <div class="add-action-bar">
-            <button class="add-btn" onclick="openEditModal('event')">＋ 新規予定</button>
-            <button class="add-btn" style="background:#34c759;" onclick="openEditModal('task')">＋ タスク</button>
+        <div class="modal-body" id="daily-list"></div>
+        <div class="action-bar">
+            <button class="btn btn-blue" onclick="openEditor()">＋ 予定</button>
+        </div>
+    </div>
+
+    <div id="editor-modal" class="bottom-modal" style="z-index: 105;">
+        <div class="modal-drag"></div>
+        <div class="modal-header">
+            <h2 id="editor-title">新規予定</h2>
+            <button class="close-btn" onclick="closeEditor()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-id">
+            <div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div>
+            <div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div>
+            <div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div>
+            <div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div>
+            <div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div>
+            <div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div>
+            <div class="color-palette" id="color-picker">
+                </div>
+        </div>
+        <div class="action-bar">
+            <button class="btn btn-gray" onclick="closeEditor()">取消</button>
+            <button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button>
+            <button class="btn btn-blue" onclick="saveEvent()">保存</button>
         </div>
     </div>
 
@@ -96,15 +162,16 @@
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks';
         let tokenClient, gapiInited = false, gisInited = false;
         
-        // データキャッシュエンジン
         const dataCache = {}; 
-        let renderedMonths = []; // [ {year, month, elementId} ]
-        
-        let observer;
-        let isFetching = false;
+        let renderedMonths = []; 
+        let observer, isFetching = false;
         let selectedDateStr = "";
+        let selectedColorId = "";
 
-        /* UI初期化 */
+        // Google Calendar Color ID マッピング
+        const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
+
+        /* --- UI & インジケーター --- */
         function initWeekdays() {
             const wdContainer = document.getElementById('weekdays');
             const days = ['日', '月', '火', '水', '木', '金', '土'];
@@ -113,16 +180,23 @@
                 if(i===0) div.style.color = '#ff3b30'; if(i===6) div.style.color = '#0a84ff';
                 wdContainer.appendChild(div);
             });
+            initColorPicker();
         }
 
-        /* 無限スクロール・コアロジック */
+        function setProgress(percent) {
+            const bar = document.getElementById('progress-bar');
+            bar.style.width = percent + '%';
+            if(percent >= 100) setTimeout(() => { bar.style.width = '0%'; }, 500);
+        }
+
+        /* --- 無限スクロール & 描画 --- */
         function setupObserver() {
-            const options = { root: document.getElementById('scroll-container'), rootMargin: '200px', threshold: 0.1 };
+            const options = { root: document.getElementById('scroll-container'), rootMargin: '300px', threshold: 0.1 };
             observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if(entry.isIntersecting && !isFetching && localStorage.getItem('jero_token')) {
-                        if(entry.target.id === 'bottom-trigger') loadNextMonth();
-                        if(entry.target.id === 'top-trigger') loadPrevMonth();
+                entries.forEach(e => {
+                    if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token')) {
+                        if(e.target.id === 'bottom-trigger') loadNextMonth();
+                        if(e.target.id === 'top-trigger') loadPrevMonth();
                     }
                 });
             }, options);
@@ -131,75 +205,77 @@
         }
 
         async function initCalendar() {
-            const today = new Date();
-            const y = today.getFullYear(); const m = today.getMonth();
+            setProgress(10);
+            const today = new Date(); const y = today.getFullYear(); const m = today.getMonth();
             await fetchAndRenderMonth(y, m, 'append', true);
             await fetchAndRenderMonth(y, m+1, 'append');
             scrollToToday();
+            setProgress(100);
         }
 
         async function loadNextMonth() {
             if(renderedMonths.length === 0) return;
-            isFetching = true;
+            isFetching = true; setProgress(30);
             const last = renderedMonths[renderedMonths.length - 1];
             let nextY = last.year; let nextM = last.month + 1;
             if(nextM > 11) { nextM = 0; nextY++; }
             await fetchAndRenderMonth(nextY, nextM, 'append');
-            isFetching = false;
+            isFetching = false; setProgress(100);
         }
 
         async function loadPrevMonth() {
             if(renderedMonths.length === 0) return;
-            isFetching = true;
+            isFetching = true; setProgress(30);
             const container = document.getElementById('scroll-container');
-            const oldScrollHeight = container.scrollHeight;
-            
+            const oldHeight = container.scrollHeight;
             const first = renderedMonths[0];
             let prevY = first.year; let prevM = first.month - 1;
             if(prevM < 0) { prevM = 11; prevY--; }
             await fetchAndRenderMonth(prevY, prevM, 'prepend');
-            
-            // スクロール位置の補正（前月を上に足した分、画面が跳ねるのを防ぐ）
-            container.scrollTop += (container.scrollHeight - oldScrollHeight);
-            isFetching = false;
+            container.scrollTop += (container.scrollHeight - oldHeight);
+            isFetching = false; setProgress(100);
         }
 
-        /* データ取得と描画 */
-        async function fetchAndRenderMonth(year, month, position = 'append', isInitial = false) {
+        async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
             const monthKey = `${year}-${month}`;
             const startOfMonth = new Date(year, month, 1).toISOString();
             const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
 
-            if (!dataCache[monthKey]) {
+            if (forceFetch || !dataCache[monthKey]) {
                 try {
                     const [eResp, tResp] = await Promise.all([
-                        gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 500 }),
-                        gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth })
+                        gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }),
+                        gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true })
                     ]);
                     dataCache[monthKey] = { events: eResp.result.items || [], tasks: tResp.result.items || [] };
                 } catch(e) { console.error(e); return; }
             }
 
+            // 既に描画済みの場合は再描画（更新時用）
+            const existing = document.getElementById(`month-${year}-${month}`);
+            if(existing) existing.remove();
+
             renderMonthDOM(year, month, dataCache[monthKey], position);
             
-            if (position === 'append') renderedMonths.push({year, month});
-            else renderedMonths.unshift({year, month});
-
+            if(!existing) {
+                if (position === 'append') renderedMonths.push({year, month});
+                else renderedMonths.unshift({year, month});
+            }
             updateHeaderDisplay();
         }
 
         function renderMonthDOM(year, month, data, position) {
             const wrapper = document.createElement('div');
-            wrapper.className = 'month-wrapper';
-            wrapper.id = `month-${year}-${month}`;
-            wrapper.innerHTML = `<div class="month-title" id="title-${year}-${month}">${year}年 ${month + 1}月</div><div class="calendar-grid"></div>`;
+            wrapper.className = 'month-wrapper'; wrapper.id = `month-${year}-${month}`;
+            wrapper.innerHTML = `<div class="month-title">${year}年 ${month + 1}月</div><div class="calendar-grid"></div>`;
             const grid = wrapper.querySelector('.calendar-grid');
 
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const firstDay = new Date(year, month, 1).getDay();
 
             for (let i = 0; i < firstDay; i++) {
-                const empty = document.createElement('div'); empty.className = 'day empty'; grid.appendChild(empty);
+                const empty = document.createElement('div'); empty.className = 'day empty'; 
+                empty.style.backgroundColor = 'var(--head-bg)'; grid.appendChild(empty);
             }
 
             const today = new Date();
@@ -208,56 +284,56 @@
                 const dayEl = document.createElement('div');
                 let className = 'day';
                 
-                const currentDayOfWeek = new Date(year, month, i).getDay();
-                if (currentDayOfWeek === 0) dayEl.style.backgroundColor = 'var(--sun-bg)';
-                if (currentDayOfWeek === 6) dayEl.style.backgroundColor = 'var(--sat-bg)';
+                const dow = new Date(year, month, i).getDay();
+                if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)';
+                if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)';
                 if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
                 
-                dayEl.className = className;
-                dayEl.id = `cell-${dateStr}`;
-                // マスタップでコマンドセンター展開
-                dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${currentDayOfWeek})`);
-                
+                dayEl.className = className; dayEl.id = `cell-${dateStr}`;
+                dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`);
                 dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
-                // 予定とタスクの描画（表示は最大3件などに絞る工夫も今後可能）
                 data.events.filter(e => (e.start.date || e.start.dateTime).includes(dateStr)).forEach(e => {
                     const div = document.createElement('div'); div.className = 'event'; 
-                    // 終日か時間指定かで表示を変える
                     let timeStr = "";
                     if(e.start.dateTime) {
-                        const d = new Date(e.start.dateTime);
-                        timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `;
+                        const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `;
                     }
                     div.innerText = timeStr + e.summary;
-                    // GoogleのカラーIDが取れればここで色を変える事も可能
+                    // Googleカラーの反映
+                    if(e.colorId && GOOGLE_COLORS[e.colorId]) div.style.backgroundColor = GOOGLE_COLORS[e.colorId];
                     dayEl.appendChild(div);
                 });
                 data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
-                    const div = document.createElement('div'); div.className = 'task'; div.innerText = '√ ' + t.title; dayEl.appendChild(div);
+                    const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
+                    div.innerText = '√ ' + t.title; dayEl.appendChild(div);
                 });
                 grid.appendChild(dayEl);
             }
 
             const container = document.getElementById('calendar-wrapper');
-            if (position === 'append') container.appendChild(wrapper);
-            else container.insertBefore(wrapper, container.firstChild);
+            if(position === 'append') container.appendChild(wrapper);
+            else if(position === 'prepend') container.insertBefore(wrapper, container.firstChild);
+            else { // replace
+                const children = Array.from(container.children);
+                const insertIndex = children.findIndex(c => {
+                    const [_, y, m] = c.id.split('-');
+                    return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month);
+                });
+                if(insertIndex === -1) container.appendChild(wrapper);
+                else container.insertBefore(wrapper, children[insertIndex]);
+            }
         }
 
-        /* ダイナミックヘッダー */
         document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
         function updateHeaderDisplay() {
-            const container = document.getElementById('scroll-container');
             const wrappers = document.querySelectorAll('.month-wrapper');
-            let currentMonthTitle = "";
             wrappers.forEach(w => {
                 const rect = w.getBoundingClientRect();
-                // 画面の中央付近にある月を特定
                 if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) {
-                    currentMonthTitle = w.querySelector('.month-title').innerText;
+                    document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText;
                 }
             });
-            if(currentMonthTitle) document.getElementById('month-display').innerText = currentMonthTitle;
         }
 
         function scrollToToday() {
@@ -267,22 +343,20 @@
             if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        /* デイリー・コマンドセンター（モーダル）制御 */
-        function openDailyModal(dateStr, dayOfWeek) {
+        /* --- モーダル制御（デイリーコマンドセンター） --- */
+        function openDailyModal(dateStr, dow) {
             selectedDateStr = dateStr;
             const days = ['日','月','火','水','木','金','土'];
             const [y, m, d] = dateStr.split('-');
-            document.getElementById('daily-date-title').innerText = `${parseInt(m)}月${parseInt(d)}日 (${days[dayOfWeek]})`;
+            document.getElementById('daily-date-title').innerText = `${parseInt(m)}月${parseInt(d)}日 (${days[dow]})`;
             
-            const list = document.getElementById('daily-list');
-            list.innerHTML = '';
-            
+            const list = document.getElementById('daily-list'); list.innerHTML = '';
             const monthKey = `${y}-${parseInt(m)-1}`;
             const data = dataCache[monthKey];
             let hasItems = false;
 
             if(data) {
-                // 予定の展開
+                // 予定一覧
                 data.events.filter(e => (e.start.date || e.start.dateTime).includes(dateStr)).forEach(e => {
                     hasItems = true;
                     let timeStr = "終日";
@@ -290,41 +364,201 @@
                         const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime);
                         timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`;
                     }
+                    const color = (e.colorId && GOOGLE_COLORS[e.colorId]) ? GOOGLE_COLORS[e.colorId] : 'var(--accent)';
                     const item = document.createElement('div'); item.className = 'list-item';
-                    item.innerHTML = `<div class="list-item-title"><span style="color:#0a84ff;">●</span> ${e.summary}</div>
-                                      <div class="list-item-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
-                    item.onclick = () => alert("v5.1でフル編集エディタを展開します"); // 次のフェーズの布石
+                    item.innerHTML = `
+                        <div class="li-title"><span class="color-dot" style="background:${color}"></span> ${e.summary}</div>
+                        <div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>
+                    `;
+                    // タップで編集エディタ展開
+                    item.onclick = () => openEditor(e);
                     list.appendChild(item);
                 });
-                // タスクの展開
+                
+                // タスク一覧（ワンタップ・キル実装）
                 data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
                     hasItems = true;
+                    const isComp = t.status === 'completed';
                     const item = document.createElement('div'); item.className = 'list-item';
-                    item.innerHTML = `<div class="list-item-title"><span style="color:#34c759;">√</span> ${t.title}</div>
-                                      <div class="list-item-meta">${t.notes ? `📝 ${t.notes}` : ''}</div>`;
+                    item.innerHTML = `
+                        <div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : ''}">
+                            <span style="color:#34c759; font-size:16px;">${isComp ? '☑' : '☐'}</span> ${t.title}
+                        </div>
+                        <div class="li-meta">${t.notes ? `📝 ${t.notes}` : ''}</div>
+                    `;
+                    // タスク状態のトグル通信
+                    item.onclick = async () => {
+                        setProgress(30);
+                        const newStatus = isComp ? 'needsAction' : 'completed';
+                        try {
+                            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }});
+                            t.status = newStatus; // キャッシュ更新
+                            openDailyModal(dateStr, dow); // リスト再描画
+                            fetchAndRenderMonth(y, parseInt(m)-1, 'replace'); // カレンダー再描画
+                        } catch(err) { alert('タスクの更新に失敗しました'); }
+                        setProgress(100);
+                    };
                     list.appendChild(item);
                 });
             }
 
-            if(!hasItems) {
-                list.innerHTML = `<div style="text-align:center; color:#888; padding: 20px;">予定はありません</div>`;
-            }
+            if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 20px;">予定はありません</div>`;
 
             document.getElementById('overlay').classList.add('active');
             setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
         }
 
-        function closeDailyModal() {
+        /* --- 統合エディタ (完全なCRUD) --- */
+        function initColorPicker() {
+            const picker = document.getElementById('color-picker');
+            // デフォルト色（青）
+            picker.innerHTML = `<div class="color-opt selected" style="background:#0a84ff" onclick="selectColor(this, '')"></div>`;
+            Object.keys(GOOGLE_COLORS).forEach(id => {
+                picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`;
+            });
+        }
+        function selectColor(el, id) {
+            document.querySelectorAll('.color-opt').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedColorId = id;
+        }
+
+        function openEditor(eventObj = null) {
+            document.getElementById('editor-modal').classList.add('active');
+            const isEdit = eventObj !== null;
+            
+            document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定';
+            document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none';
+            
+            // フォームの初期化
+            const titleEl = document.getElementById('edit-title');
+            const locEl = document.getElementById('edit-loc');
+            const descEl = document.getElementById('edit-desc');
+            const allDayEl = document.getElementById('edit-allday');
+            const startEl = document.getElementById('edit-start');
+            const endEl = document.getElementById('edit-end');
+            
+            if (isEdit) {
+                document.getElementById('edit-id').value = eventObj.id;
+                titleEl.value = eventObj.summary || "";
+                locEl.value = eventObj.location || "";
+                descEl.value = eventObj.description || "";
+                
+                if (eventObj.start.date) { // 終日
+                    allDayEl.checked = true;
+                    startEl.type = 'date'; endEl.type = 'date';
+                    startEl.value = eventObj.start.date;
+                    // Googleの仕様：終日の終了日は+1日されているため-1日する
+                    const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1);
+                    endEl.value = ed.toISOString().split('T')[0];
+                } else { // 時間指定
+                    allDayEl.checked = false;
+                    startEl.type = 'datetime-local'; endEl.type = 'datetime-local';
+                    startEl.value = eventObj.start.dateTime.slice(0,16);
+                    endEl.value = eventObj.end.dateTime.slice(0,16);
+                }
+                
+                // カラー復元
+                const colorOpts = document.querySelectorAll('.color-opt');
+                colorOpts.forEach(c => c.classList.remove('selected'));
+                if(eventObj.colorId) {
+                    colorOpts[parseInt(eventObj.colorId)].classList.add('selected');
+                    selectedColorId = eventObj.colorId;
+                } else {
+                    colorOpts[0].classList.add('selected'); selectedColorId = "";
+                }
+
+            } else {
+                // 新規
+                document.getElementById('edit-id').value = "";
+                titleEl.value = ""; locEl.value = ""; descEl.value = "";
+                allDayEl.checked = true;
+                startEl.type = 'date'; endEl.type = 'date';
+                startEl.value = selectedDateStr; endEl.value = selectedDateStr;
+                selectColor(document.querySelector('.color-opt'), "");
+            }
+        }
+
+        function toggleTimeInputs() {
+            const isAllDay = document.getElementById('edit-allday').checked;
+            const startEl = document.getElementById('edit-start');
+            const endEl = document.getElementById('edit-end');
+            const currentStart = startEl.value;
+            
+            if (isAllDay) {
+                startEl.type = 'date'; endEl.type = 'date';
+                startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr;
+                endEl.value = startEl.value;
+            } else {
+                startEl.type = 'datetime-local'; endEl.type = 'datetime-local';
+                const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr;
+                startEl.value = `${baseDate}T09:00`;
+                endEl.value = `${baseDate}T10:00`;
+            }
+        }
+
+        function closeEditor() {
+            document.getElementById('editor-modal').classList.remove('active');
+        }
+
+        function closeAllModals() {
+            closeEditor();
             document.getElementById('daily-modal').classList.remove('active');
             document.getElementById('overlay').classList.remove('active');
         }
 
-        function openEditModal(type) {
-            // ここでさらにGoogleフォームへのリンクではなく、画面内でのフルエディタを展開する
-            alert(`【${selectedDateStr}】に新規${type === 'event' ? '予定' : 'タスク'}を追加するエディタがここに出現します。\nUIを重くしないため、これはv5.1で完全統合します。`);
+        async function saveEvent() {
+            const title = document.getElementById('edit-title').value;
+            if(!title) { alert('タイトルを入力してください'); return; }
+            
+            setProgress(30);
+            closeAllModals();
+
+            const id = document.getElementById('edit-id').value;
+            const loc = document.getElementById('edit-loc').value;
+            const desc = document.getElementById('edit-desc').value;
+            const isAllDay = document.getElementById('edit-allday').checked;
+            const startVal = document.getElementById('edit-start').value;
+            const endVal = document.getElementById('edit-end').value;
+
+            const resource = { summary: title, location: loc, description: desc };
+            if(selectedColorId) resource.colorId = selectedColorId;
+
+            if (isAllDay) {
+                resource.start = { date: startVal };
+                // 終了日は+1日して送信
+                const ed = new Date(endVal); ed.setDate(ed.getDate() + 1);
+                resource.end = { date: ed.toISOString().split('T')[0] };
+            } else {
+                resource.start = { dateTime: new Date(startVal).toISOString() };
+                resource.end = { dateTime: new Date(endVal).toISOString() };
+            }
+
+            try {
+                if (id) await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource });
+                else await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
+                
+                // 【スマートリロード】変更があった月だけを再フェッチ
+                const targetDate = new Date(startVal);
+                await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
+            } catch(e) { alert('保存失敗。再接続してください。'); console.error(e); }
+            setProgress(100);
         }
 
-        /* 認証基盤 */
+        async function deleteEvent() {
+            if(!confirm('削除しますか？')) return;
+            const id = document.getElementById('edit-id').value;
+            const startVal = document.getElementById('edit-start').value;
+            setProgress(30); closeAllModals();
+            try {
+                await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id });
+                const targetDate = new Date(startVal);
+                await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
+            } catch(e) { alert('削除失敗'); }
+            setProgress(100);
+        }
+
+        /* --- 認証基盤 --- */
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() {
             await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]});
@@ -335,7 +569,6 @@
         function checkAutoLogin() {
             const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time');
             if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) {
-                document.getElementById('auth-btn').innerText = '同期中...';
                 gapi.client.setToken({access_token: savedToken});
                 document.getElementById('auth-btn').style.display = 'none';
                 initCalendar();
@@ -353,6 +586,8 @@
             };
             tokenClient.requestAccessToken({prompt: 'consent'});
         }
+        
+        function openSettings() { alert('UIカラーテーマ設定などはここに統合予定です。\nまずはCRUD通信の完全動作を確認してください。'); }
     </script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
