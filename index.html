@@ -3,65 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>JeroCalendar v2.0</title>
+    <title>JeroCalendar v3.0</title>
     <style>
-        :root { --border: #ccc; --header-bg: #e0e0e0; --today: #fff9c4; --sat: #e3f2fd; --sun: #ffebee; }
-        body { font-family: -apple-system, sans-serif; margin: 0; font-size: 9px; color: #111; overflow: hidden; background: #333; }
+        /* カスタマイズ用の環境変数（デフォルト値） */
+        :root { 
+            --bg-color: #ffffff; 
+            --text-color: #111111;
+            --border: #cccccc; 
+            --header-bg: #e0e0e0; 
+            --today-bg: #fff9c4; 
+            --sat-bg: #e3f2fd; 
+            --sun-bg: #ffebee;
+            --event-fs: 9px; /* 予定のフォントサイズ */
+        }
         
-        /* ヘッダー周りのUI（さいすけ風ナビゲーション） */
-        #top-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: #333; color: white; height: 35px; box-sizing: border-box;}
-        .nav-btn { background: transparent; border: 1px solid #777; color: white; border-radius: 4px; padding: 4px 15px; cursor: pointer; font-size: 14px; }
+        /* ダークテーマ用の変数定義 */
+        [data-theme="dark"] {
+            --bg-color: #1e1e1e; --text-color: #eeeeee; --border: #444444; --header-bg: #333333;
+            --today-bg: #4a4a00; --sat-bg: #0d47a1; --sun-bg: #b71c1c;
+        }
+
+        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg-color); color: var(--text-color); overflow: hidden; }
+        
+        /* ヘッダーUI */
+        #top-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: #222; color: white; height: 35px; box-sizing: border-box; }
+        .nav-group { display: flex; gap: 10px; align-items: center; }
+        .icon-btn { background: transparent; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0 5px; }
+        .nav-btn { background: transparent; border: 1px solid #777; color: white; border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 14px; }
         #month-display { font-size: 16px; font-weight: bold; }
         #auth-btn { cursor: pointer; padding: 4px 10px; background: #4285f4; color: white; border: none; border-radius: 4px; font-size: 10px; }
         
-        /* 曜日ヘッダー */
+        /* カレンダーグリッド */
         #weekdays { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--header-bg); border-bottom: 1px solid var(--border); }
-        .wd { text-align: center; padding: 3px 0; border-right: 1px solid var(--border); font-weight: bold; font-size: 10px;}
-        .wd:nth-child(1) { color: #d32f2f; } /* 日 */
-        .wd:nth-child(7) { color: #1976d2; border-right: none; } /* 土 */
-
-        /* カレンダー本体のグリッド */
-        #calendar { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(calc((100vh - 60px) / 6), auto); width: 100vw; height: calc(100vh - 60px); background: white; }
+        .wd { text-align: center; padding: 3px 0; border-right: 1px solid var(--border); font-weight: bold; font-size: 10px; }
+        #calendar { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(calc((100vh - 60px) / 6), auto); width: 100vw; height: calc(100vh - 60px); }
         .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; overflow: hidden; padding-top: 14px; display: flex; flex-direction: column; gap: 1px; }
+        .empty { background: var(--header-bg) !important; opacity: 0.5; }
+        .day-num { position: absolute; top: 0; left: 0; width: 100%; text-align: left; padding-left: 2px; font-weight: bold; font-size: 10px; background: rgba(128,128,128,0.2); z-index: 1; }
+        .today { background: var(--today-bg) !important; border: 1px solid #ffa000; box-sizing: border-box; }
         
-        /* 曜日ごとの背景色自動適用 */
-        .day:nth-child(7n+1) { background: var(--sun); } /* 日曜列 */
-        .day:nth-child(7n) { background: var(--sat); }   /* 土曜列 */
-        .empty { background: #f0f0f0 !important; }
-        
-        .day-num { position: absolute; top: 0; left: 0; width: 100%; text-align: left; padding-left: 2px; font-weight: bold; font-size: 10px; background: rgba(255,255,255,0.7); z-index: 1; }
-        .today { background: var(--today) !important; border: 1px solid #ffa000; box-sizing: border-box; }
-        
-        /* 予定・タスクの高密度ブロック */
-        .event { background: #bbdefb; border-radius: 1px; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #1e88e5; z-index: 2; margin: 0 1px; }
-        .task { background: #c8e6c9; border-radius: 1px; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #43a047; font-style: italic; z-index: 2; margin: 0 1px; }
+        /* 予定・タスクブロック（文字サイズを変数化） */
+        .event, .task { font-size: var(--event-fs); border-radius: 1px; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 1px; color: #000; }
+        .event { background: #bbdefb; border-left: 2px solid #1e88e5; }
+        .task { background: #c8e6c9; border-left: 2px solid #43a047; font-style: italic; }
+
+        /* 設定モーダル（GUI） */
+        #settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: var(--bg-color); padding: 20px; border-radius: 8px; width: 80%; max-width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .setting-row { margin-bottom: 15px; }
+        .setting-row label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: bold; }
+        .setting-row input, .setting-row select { width: 100%; padding: 5px; font-size: 14px; }
+        .close-btn { width: 100%; padding: 10px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div id="top-bar">
-        <button class="nav-btn" onclick="changeMonth(-1)">◀︎</button>
-        <div id="month-display">表示中...</div>
-        <button class="nav-btn" onclick="changeMonth(1)">▶︎</button>
+        <div class="nav-group">
+            <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
+            <button class="icon-btn" onclick="addNewEvent()">＋</button>
+        </div>
+        <div class="nav-group">
+            <button class="nav-btn" onclick="changeMonth(-1)">◀︎</button>
+            <div id="month-display">表示中...</div>
+            <button class="nav-btn" onclick="changeMonth(1)">▶︎</button>
+        </div>
         <button id="auth-btn" onclick="handleAuthClick()">接続</button>
     </div>
-    <div id="weekdays">
-        <div class="wd">日</div><div class="wd">月</div><div class="wd">火</div><div class="wd">水</div><div class="wd">木</div><div class="wd">金</div><div class="wd">土</div>
-    </div>
+    
+    <div id="weekdays"></div>
     <div id="calendar"></div>
+
+    <div id="settings-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">カレンダー設定</h3>
+            <div class="setting-row">
+                <label>予定の文字サイズ: <span id="fs-val">9</span>px</label>
+                <input type="range" id="fontSizeSlider" min="6" max="14" value="9" oninput="updateSettings()">
+            </div>
+            <div class="setting-row">
+                <label>カラーテーマ</label>
+                <select id="themeSelect" onchange="updateSettings()">
+                    <option value="light">標準 (Light)</option>
+                    <option value="dark">ダーク (Dark)</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label>週の始まり</label>
+                <select id="weekStartSelect" onchange="updateSettings()">
+                    <option value="0">日曜日</option>
+                    <option value="1">月曜日</option>
+                </select>
+            </div>
+            <button class="close-btn" onclick="toggleSettings()">閉じる / 保存</button>
+        </div>
+    </div>
 
     <script>
         const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
         const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
         let tokenClient, gapiInited = false, gisInited = false;
-        
-        // 状態変数：現在表示しているカレンダーの「年月」を保持
         let currentDisplayDate = new Date(); 
-        currentDisplayDate.setDate(1); // 月またぎのバグを防ぐため1日に固定
+        currentDisplayDate.setDate(1);
+        
+        // ユーザー設定オブジェクト
+        let userSettings = { fontSize: 9, theme: 'light', weekStart: 0 };
 
+        // 初期化と設定の読み込み
+        function initSettings() {
+            const saved = localStorage.getItem('jero_settings');
+            if (saved) userSettings = JSON.parse(saved);
+            
+            document.getElementById('fontSizeSlider').value = userSettings.fontSize;
+            document.getElementById('themeSelect').value = userSettings.theme;
+            document.getElementById('weekStartSelect').value = userSettings.weekStart;
+            applySettingsToDOM();
+        }
+
+        function updateSettings() {
+            userSettings.fontSize = document.getElementById('fontSizeSlider').value;
+            userSettings.theme = document.getElementById('themeSelect').value;
+            userSettings.weekStart = parseInt(document.getElementById('weekStartSelect').value);
+            
+            localStorage.setItem('jero_settings', JSON.stringify(userSettings));
+            applySettingsToDOM();
+            if (gapiInited && localStorage.getItem('jero_token')) renderEmptyCalendar(); // 枠の再描画
+        }
+
+        function applySettingsToDOM() {
+            document.documentElement.style.setProperty('--event-fs', userSettings.fontSize + 'px');
+            document.getElementById('fs-val').innerText = userSettings.fontSize;
+            document.body.setAttribute('data-theme', userSettings.theme);
+            
+            // 曜日ヘッダーの再構築
+            const wdContainer = document.getElementById('weekdays');
+            wdContainer.innerHTML = '';
+            const days = ['日', '月', '火', '水', '木', '金', '土'];
+            for(let i = 0; i < 7; i++) {
+                const dayIdx = (i + userSettings.weekStart) % 7;
+                const div = document.createElement('div');
+                div.className = 'wd';
+                div.innerText = days[dayIdx];
+                if (dayIdx === 0) div.style.color = userSettings.theme === 'dark' ? '#ff5252' : '#d32f2f'; // 日曜色
+                if (dayIdx === 6) div.style.color = userSettings.theme === 'dark' ? '#448aff' : '#1976d2'; // 土曜色
+                wdContainer.appendChild(div);
+            }
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            const isHidden = modal.style.display === '' || modal.style.display === 'none';
+            modal.style.display = isHidden ? 'flex' : 'none';
+            // 閉じるときに再描画してデータを反映
+            if (!isHidden && localStorage.getItem('jero_token')) loadCalendarData();
+        }
+
+        // 限界突破機能：予定の直接追加（Googleカレンダーの入力フォームへバイパス）
+        function addNewEvent() {
+            window.open('https://calendar.google.com/calendar/u/0/r/eventedit', '_blank');
+        }
+
+        /* 既存のAPI通信ロジック */
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() {
             await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]});
             gapiInited = true;
+            initSettings();
             checkAutoLogin();
         }
 
@@ -76,14 +182,8 @@
             if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) {
                 document.getElementById('auth-btn').innerText = '同期中...';
                 gapi.client.setToken({access_token: savedToken});
-                loadCalendarData().catch(e => {
-                    localStorage.removeItem('jero_token');
-                    document.getElementById('auth-btn').innerText = '接続';
-                    renderEmptyCalendar(); 
-                });
-            } else {
-                renderEmptyCalendar(); // 未ログイン時は枠組みだけ描画
-            }
+                loadCalendarData().catch(e => { localStorage.removeItem('jero_token'); document.getElementById('auth-btn').innerText = '接続'; renderEmptyCalendar(); });
+            } else { renderEmptyCalendar(); }
         }
 
         async function handleAuthClick() {
@@ -99,71 +199,59 @@
             tokenClient.requestAccessToken({prompt: 'consent'});
         }
 
-        // 前月・翌月への移動処理
         function changeMonth(offset) {
             currentDisplayDate.setMonth(currentDisplayDate.getMonth() + offset);
-            if (localStorage.getItem('jero_token')) {
-                document.getElementById('auth-btn').style.display = 'block';
-                document.getElementById('auth-btn').innerText = '読込中...';
-                loadCalendarData();
-            } else {
-                renderEmptyCalendar();
-            }
+            if (localStorage.getItem('jero_token')) { document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').innerText = '読込中...'; loadCalendarData(); } else { renderEmptyCalendar(); }
         }
 
         async function loadCalendarData() {
-            const year = currentDisplayDate.getFullYear();
-            const month = currentDisplayDate.getMonth();
+            const year = currentDisplayDate.getFullYear(); const month = currentDisplayDate.getMonth();
             document.getElementById('month-display').innerText = `${year}年 ${month + 1}月`;
-            
-            // 取得範囲を「表示している月」の1日〜末日に限定
             const startOfMonth = new Date(year, month, 1).toISOString();
             const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
-
             try {
                 const [eventsResp, tasksResp] = await Promise.all([
                     gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 500 }),
                     gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth })
                 ]);
-                renderCalendar(eventsResp.result.items || [], tasksResp.result.items || []);
+                let events = eventsResp.result.items || [];
+                let tasks = tasksResp.result.items || [];
+                // データをローカルにキャッシュして再描画時にAPIを叩かない工夫も可能だが今回は直接描画
+                renderCalendar(events, tasks);
                 document.getElementById('auth-btn').style.display = 'none';
-            } catch(e) {
-                console.error(e);
-                document.getElementById('auth-btn').innerText = '再接続';
-            }
+            } catch(e) { document.getElementById('auth-btn').innerText = '再接続'; }
         }
 
-        // データがない状態（外枠）だけを描画する関数
         function renderEmptyCalendar() {
             document.getElementById('month-display').innerText = `${currentDisplayDate.getFullYear()}年 ${currentDisplayDate.getMonth() + 1}月`;
             renderCalendar([], []);
         }
 
         function renderCalendar(events, tasks) {
-            const cal = document.getElementById('calendar');
-            cal.innerHTML = '';
-            const year = currentDisplayDate.getFullYear();
-            const month = currentDisplayDate.getMonth();
+            const cal = document.getElementById('calendar'); cal.innerHTML = '';
+            const year = currentDisplayDate.getFullYear(); const month = currentDisplayDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0:日曜日 〜 6:土曜日
+            
+            // 週の始まり設定に基づく曜日ズレの計算
+            let firstDayOfWeek = new Date(year, month, 1).getDay();
+            let shift = (firstDayOfWeek - userSettings.weekStart + 7) % 7;
 
-            // 月初の「曜日ズレ」を調整する空白マス
-            for (let i = 0; i < firstDayOfWeek; i++) {
-                const emptyEl = document.createElement('div');
-                emptyEl.className = 'day empty';
-                cal.appendChild(emptyEl);
+            for (let i = 0; i < shift; i++) {
+                const emptyEl = document.createElement('div'); emptyEl.className = 'day empty'; cal.appendChild(emptyEl);
             }
 
             const today = new Date();
-
             for (let i = 1; i <= daysInMonth; i++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
                 const dayEl = document.createElement('div');
-                
                 let className = 'day';
-                if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) {
-                    className += ' today';
-                }
+                
+                // 土日の背景色計算（週の始まり設定に依存しない絶対的な曜日計算）
+                const currentDayOfWeek = new Date(year, month, i).getDay();
+                if (currentDayOfWeek === 0) dayEl.style.backgroundColor = 'var(--sun-bg)';
+                if (currentDayOfWeek === 6) dayEl.style.backgroundColor = 'var(--sat-bg)';
+                
+                if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
                 dayEl.className = className;
                 dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
