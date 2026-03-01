@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v5.2.2</title>
+    <title>JeroCalendar v5.2.3</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e0e0e0; --head-bg: #f8f8f8; 
@@ -109,7 +109,7 @@
         </div>
         <div id="month-display">表示中...</div>
         <div class="nav-group">
-            <button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 14px;">🔑</button>
+            <button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 14px; display: none;">🔑</button>
         </div>
         <div id="progress-bar"></div>
     </div>
@@ -184,7 +184,6 @@
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks';
         let tokenClient, gapiInited = false, gisInited = false;
         
-        // 【修正1】constからletへ変更し、再認証時にキャッシュを空にできるようにした
         let dataCache = {}; 
         let renderedMonths = []; 
         let observer, isFetching = false, isAuthError = false;
@@ -265,25 +264,24 @@
             }
         }
 
-        // 【修正2】通信エラー検知時のUI/UX防衛ロジック
-        function handleApiError(err) {
-            if (err.status === 401 || err.status === 403) {
-                console.warn('権限エラー。トークンを破棄し再認証を促します。');
-                isAuthError = true;
-                localStorage.removeItem('jero_token');
-                localStorage.removeItem('jero_token_time');
-                
-                const authBtn = document.getElementById('auth-btn');
-                authBtn.classList.add('auth-pulse');
-                
-                const monthDisp = document.getElementById('month-display');
-                monthDisp.innerText = '⚠️再認証を頼む';
-                monthDisp.style.color = '#ff3b30';
-            }
+        // 強固なUI通知ロジック
+        function notifyAuthError() {
+            console.warn('権限エラーを捕捉。UIに再認証ボタンを表示します。');
+            isAuthError = true;
+            localStorage.removeItem('jero_token');
+            localStorage.removeItem('jero_token_time');
+            
+            const authBtn = document.getElementById('auth-btn');
+            authBtn.style.display = 'block';
+            authBtn.classList.add('auth-pulse');
+            
+            const monthDisp = document.getElementById('month-display');
+            monthDisp.innerText = '⚠️右上の🔑をタップ';
+            monthDisp.style.color = '#ff3b30';
         }
 
         async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
-            if (isAuthError) return; // エラー中は無駄な通信と描画をストップ
+            if (isAuthError) return;
 
             const monthKey = `${year}-${month}`;
             const startOfMonth = new Date(year, month, 1).toISOString();
@@ -292,24 +290,34 @@
             if (forceFetch || !dataCache[monthKey]) {
                 let events = [];
                 let tasks = [];
-                let hasError = false;
+                let authErrorDetected = false;
 
+                // 予定（Calendar）の取得を独立実行
                 try {
                     const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 });
                     events = eResp.result.items || [];
-                } catch(e) { handleApiError(e); hasError = true; }
+                } catch(e) { 
+                    console.error('Calendar Fetch Error:', e);
+                    const code = e.status || (e.result && e.result.error && e.result.error.code);
+                    if (code === 401 || code === 403) authErrorDetected = true;
+                }
 
+                // タスク（Tasks）の取得を独立実行
                 try {
                     const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true });
                     tasks = tResp.result.items || [];
-                } catch(e) { handleApiError(e); hasError = true; }
-
-                // エラーがあればキャッシュに保存しない（再取得を許可するため）
-                if (!hasError) {
-                    dataCache[monthKey] = { events, tasks };
-                } else {
-                    return; // 描画処理へ進ませない
+                } catch(e) { 
+                    console.error('Tasks Fetch Error:', e);
+                    const code = e.status || (e.result && e.result.error && e.result.error.code);
+                    if (code === 401 || code === 403) authErrorDetected = true;
                 }
+
+                if (authErrorDetected) {
+                    notifyAuthError();
+                }
+
+                // どちらか一方がエラーでも、取得できたデータだけでキャッシュを作りUIを維持する
+                dataCache[monthKey] = { events, tasks };
             }
 
             const existing = document.getElementById(`month-${year}-${month}`);
@@ -353,7 +361,6 @@
                 dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`);
                 dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
-                // 【修正3】e.start欠損データによるクラッシュ防止
                 data.events.filter(e => {
                     if (!e.start) return false;
                     const targetDate = e.start.date || e.start.dateTime;
@@ -392,7 +399,7 @@
 
         document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
         function updateHeaderDisplay() {
-            if (isAuthError) return; // エラー時はヘッダーの上書きをロック
+            if (isAuthError) return;
             const wrappers = document.querySelectorAll('.month-wrapper');
             wrappers.forEach(w => {
                 const rect = w.getBoundingClientRect();
@@ -453,7 +460,7 @@
                             t.status = newStatus;
                             openDailyModal(dateStr, dow);
                             fetchAndRenderMonth(y, parseInt(m)-1, 'replace');
-                        } catch(err) { alert('タスク更新失敗。'); handleApiError(err); }
+                        } catch(err) { alert('タスクの更新に失敗した。'); console.error(err); }
                         setProgress(100);
                     };
 
@@ -467,7 +474,6 @@
             setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
         }
 
-        /* --- エディタ関連ロジック（変更なしのため省略せず保持） --- */
         function initColorPicker() {
             const picker = document.getElementById('color-picker');
             picker.innerHTML = `<div class="color-opt selected" style="background:#0a84ff" onclick="selectColor(this, '')"></div>`;
@@ -541,7 +547,7 @@
                 else await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
                 const targetDate = new Date(startVal);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { handleApiError(e); }
+            } catch(e) { console.error(e); alert('予定の保存に失敗した。再接続を試みてくれ。'); }
             setProgress(100);
         }
 
@@ -553,7 +559,7 @@
                 await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id });
                 const targetDate = new Date(startVal);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { handleApiError(e); }
+            } catch(e) { console.error(e); alert('削除に失敗した。'); }
             setProgress(100);
         }
 
@@ -588,7 +594,7 @@
                 else await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource });
                 const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { handleApiError(e); }
+            } catch(e) { console.error(e); alert('タスクの保存に失敗した。'); }
             setProgress(100);
         }
 
@@ -600,7 +606,7 @@
                 await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id });
                 const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr);
                 await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true);
-            } catch(e) { handleApiError(e); }
+            } catch(e) { console.error(e); alert('削除に失敗した。'); }
             setProgress(100);
         }
 
@@ -622,10 +628,10 @@
                 document.getElementById('auth-btn').style.display = 'none';
                 initCalendar();
             } else {
-                // 初回、または期限切れが明らかな場合はボタンを表示して待機
                 isAuthError = true;
+                document.getElementById('auth-btn').style.display = 'block';
                 document.getElementById('auth-btn').classList.add('auth-pulse');
-                document.getElementById('month-display').innerText = '⚠️認証をタップ';
+                document.getElementById('month-display').innerText = '⚠️右上の🔑をタップ';
                 document.getElementById('month-display').style.color = '#ff3b30';
             }
         }
@@ -637,14 +643,12 @@
                 gapi.client.setToken({access_token: resp.access_token});
                 localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now());
                 
-                // UI状態の完全リセット
                 isAuthError = false;
                 const authBtn = document.getElementById('auth-btn');
                 authBtn.style.display = 'none';
                 authBtn.classList.remove('auth-pulse');
                 document.getElementById('month-display').style.color = 'white';
                 
-                // キャッシュとDOMの完全初期化（ここが極めて重要）
                 document.getElementById('calendar-wrapper').innerHTML = '';
                 renderedMonths = [];
                 dataCache = {}; 
@@ -653,7 +657,14 @@
             tokenClient.requestAccessToken({prompt: 'consent'});
         }
         
-        function openSettings() { alert('ミッション2: GUI連動による設定パネルは未実装だ。まずはタスクのCRUDを確認してくれ。'); }
+        // 緊急リセットスイッチ
+        function openSettings() { 
+            if(confirm('【緊急トークンリセット】\nデータ連携を一度破棄し、初期化しますか？\n(予定が表示されない場合にお試しください)')) {
+                localStorage.removeItem('jero_token');
+                localStorage.removeItem('jero_token_time');
+                location.reload();
+            }
+        }
     </script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
