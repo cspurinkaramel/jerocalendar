@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v5.5</title>
+    <title>JeroCalendar v5.6</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -17,6 +17,7 @@
         }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s, color 0.3s; }
 
+        /* トップバー */
         #top-bar { 
             position: fixed; top: 0; width: 100%; z-index: 50; padding-top: env(safe-area-inset-top);
             background: rgba(255,255,255,0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
@@ -40,6 +41,7 @@
         }
         #toast.show { top: calc(env(safe-area-inset-top) + 60px); }
 
+        /* カレンダー基盤 */
         #weekdays { position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; z-index: 40; height: 24px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; transition: background 0.3s, border-color 0.3s; }
         .wd { text-align: center; font-weight: bold; font-size: 10px; color: #888; }
         
@@ -52,22 +54,28 @@
         .day-num { position: absolute; top: 4px; left: 4px; font-weight: 600; font-size: 11px; z-index: 1; color: var(--txt); transition: color 0.3s;}
         .today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; top: 2px; left: 2px; }
 
-        /* タスクもイベントと同じ帯状へ洗練 */
+        /* イベントの帯（帯域表示ハック対応） */
         .event, .task { 
             font-size: var(--fs); border-radius: 4px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
             z-index: 2; margin: 0 2px; color: #fff; font-weight: 600; box-sizing: border-box; width: calc(100% - 4px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            position: relative;
         }
         .event { background-color: var(--accent); } 
-        /* タスクのチェックボックス表示は維持しつつ背景色ハックに対応 */
         .task { background-color: #34c759; } 
         .task.completed { text-decoration: line-through; opacity: 0.5; filter: grayscale(50%); }
 
-        /* スピナーアニメーション (上部スクロール用) */
+        /* 複数日の帯（連続性を持たせるCSSハック） */
+        .span-start { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: -1px; width: calc(100% - 2px); z-index: 3;}
+        .span-mid { border-radius: 0; margin: 0 -1px; width: calc(100% + 2px); z-index: 3;}
+        .span-end { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; width: calc(100% - 2px); z-index: 3;}
+
+        /* スピナーアニメーション */
         .loader-container { height: 40px; display: flex; justify-content: center; align-items: center; overflow: hidden; transition: height 0.3s; }
         .loader-container.hidden { height: 0; }
         .spinner { width: 24px; height: 24px; border: 3px solid rgba(10,132,255,0.3); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
+        /* モーダル基盤 */
         .bottom-modal { 
             position: fixed; bottom: -100%; left: 0; width: 100%; max-height: 90vh; background: var(--bg); border-top-left-radius: 20px; border-top-right-radius: 20px; 
             box-shadow: 0 -10px 25px rgba(0,0,0,0.3); z-index: 100; transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1), background 0.3s; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
@@ -88,7 +96,7 @@
         .color-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
         
         .action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--head-bg); transition: background 0.3s, border-color 0.3s;}
-        .btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; color: white; cursor: pointer; transition: transform 0.1s;}
+        .btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; color: white; cursor: pointer; transition: transform 0.1s; text-align: center;}
         .btn:active { transform: scale(0.96); }
         .btn-blue { background: var(--accent); } .btn-green { background: #34c759; } .btn-red { background: #ff3b30; } .btn-gray { background: #8e8e93; } .btn-yellow { background: #ff9500; }
 
@@ -102,12 +110,17 @@
         .setting-row select { padding: 8px; font-size: 16px; border-radius: 8px; background: var(--head-bg); color: var(--txt); border: 1px solid var(--border); outline: none;}
         .setting-row input[type="range"] { accent-color: var(--accent); }
 
-        .dict-container { background: var(--head-bg); border-radius: 10px; padding: 10px; margin-top: 10px; max-height: 200px; overflow-y: auto; }
-        .dict-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
-        .dict-add-row { display: flex; gap: 8px; margin-top: 10px; }
-        .dict-input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--txt); }
-        .dict-btn-add { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 0 15px; font-weight: bold; cursor: pointer; }
-        .dict-btn-del { background: transparent; border: none; color: #ff3b30; font-weight: bold; font-size: 18px; cursor: pointer; }
+        /* 高度な辞書UI */
+        .dict-container { background: var(--head-bg); border-radius: 10px; padding: 10px; margin-top: 10px; max-height: 250px; overflow-y: auto; }
+        .dict-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); font-size: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 8px;}
+        .dict-item:last-child { margin-bottom: 0; }
+        .dict-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .dict-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; }
+        .dict-btn-edit { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; margin-right: 5px; font-size: 12px;}
+        .dict-btn-del { background: #ff3b30; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px;}
+        
+        /* システム管理UI */
+        .sys-box { display: flex; gap: 10px; }
 
         .color-palette { display: flex; gap: 12px; padding: 15px 20px; overflow-x: auto; scrollbar-width: none;}
         .color-opt { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
@@ -165,18 +178,54 @@
                 <label>文字サイズ: <span id="fs-val">10</span>px</label>
                 <input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()">
             </div>
+            
             <div class="setting-row">
-                <label>視覚圧縮辞書 (自動アイコン化)</label>
-                <div class="dict-container" id="dict-list"></div>
-                <div class="dict-add-row">
-                    <input type="text" id="dict-new-key" class="dict-input" placeholder="例: 病院">
-                    <input type="text" id="dict-new-icon" class="dict-input" placeholder="例: 🏥" style="flex: 0.5;">
-                    <button class="dict-btn-add" onclick="addDictItem()">追加</button>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label>視覚圧縮・装飾辞書</label>
+                    <button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button>
                 </div>
+                <div class="dict-container" id="dict-list"></div>
+            </div>
+
+            <div class="setting-row">
+                <label>システム拡張</label>
+                <div class="sys-box">
+                    <button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="exportSettings()">データ書出 (Copy)</button>
+                    <button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="importSettings()">データ読込 (Paste)</button>
+                </div>
+                <button class="btn btn-red" style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 キャッシュと認証を完全リセット</button>
             </div>
         </div>
-        <div class="action-bar" style="flex-direction: column;">
-            <button class="btn btn-red" onclick="executeEmergencyReset()">🚨 データ完全リセット</button>
+    </div>
+
+    <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
+        <div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header">
+            <h2 id="dict-editor-title">辞書の編集</h2>
+            <button class="close-btn" onclick="closeDictEditor()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="dict-edit-idx">
+            <div class="form-group">
+                <label style="font-size:12px; color:#888;">検知キーワード (カンマ区切りで複数可)</label>
+                <input type="text" id="dict-edit-keys" placeholder="例: 誕生日, 【誕】" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);">
+            </div>
+            <div class="form-group">
+                <label style="font-size:12px; color:#888;">置換アイコン (絵文字など)</label>
+                <input type="text" id="dict-edit-icon" placeholder="例: 🎂" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);">
+            </div>
+            <div class="form-row">
+                <span>背景色 (HEX)</span>
+                <input type="color" id="dict-edit-bg" value="#0a84ff" style="border:none; width:40px; height:40px; background:transparent; cursor:pointer;">
+            </div>
+            <div class="form-row">
+                <span>文字色 (HEX)</span>
+                <input type="color" id="dict-edit-txt" value="#ffffff" style="border:none; width:40px; height:40px; background:transparent; cursor:pointer;">
+            </div>
+        </div>
+        <div class="action-bar">
+            <button class="btn btn-gray" onclick="closeDictEditor()">取消</button>
+            <button class="btn btn-blue" onclick="saveDictItem()">保存</button>
         </div>
     </div>
 
@@ -205,16 +254,16 @@
             <div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div>
             <div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div>
             <div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div>
-            <div class="form-row">
+            
+            <div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()">
                 <span>繰り返し</span>
-                <select id="edit-recurrence">
-                    <option value="">なし</option>
-                    <option value="RRULE:FREQ=DAILY">毎日</option>
-                    <option value="RRULE:FREQ=WEEKLY">毎週</option>
-                    <option value="RRULE:FREQ=MONTHLY">毎月</option>
-                    <option value="RRULE:FREQ=YEARLY">毎年</option>
-                </select>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span>
+                    <span style="color:#888;">＞</span>
+                </div>
             </div>
+            <input type="hidden" id="edit-recurrence-rule">
+
             <div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div>
             <div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div>
             <div class="color-palette" id="color-picker"></div>
@@ -224,6 +273,36 @@
             <button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button>
             <button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button>
             <button class="btn btn-blue" onclick="saveEvent()">保存</button>
+        </div>
+    </div>
+
+    <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;">
+        <div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header">
+            <h2>繰り返しの詳細</h2>
+            <button class="close-btn" onclick="closeRecurrenceEditor()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-row">
+                <span>頻度</span>
+                <select id="rec-freq" onchange="updateRecDisplay()">
+                    <option value="">繰り返さない</option>
+                    <option value="DAILY">毎日</option>
+                    <option value="WEEKLY">毎週</option>
+                    <option value="MONTHLY">毎月</option>
+                    <option value="YEARLY">毎年</option>
+                </select>
+            </div>
+            <div class="form-row" id="rec-until-row" style="display:none;">
+                <span>終了日</span>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()">
+                    <input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;">
+                </div>
+            </div>
+        </div>
+        <div class="action-bar">
+            <button class="btn btn-blue" onclick="applyRecurrence()">決定</button>
         </div>
     </div>
 
@@ -252,52 +331,113 @@
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks';
         let tokenClient, gapiInited = false, gisInited = false;
         
-        let dataCache = {}; 
-        let renderedMonths = []; 
-        let observer, isFetching = false, isAuthError = false;
-        let selectedDateStr = "";
-        let selectedColorId = "";
-        let selectedTaskColorId = ""; // タスク用
+        let dataCache = {}; let renderedMonths = []; let observer, isFetching = false, isAuthError = false;
+        let selectedDateStr = ""; let selectedColorId = ""; let selectedTaskColorId = "";
 
         const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
 
-        let semanticMap = {};
-        const DEFAULT_SEMANTIC_MAP = {
-            "【誕】": "🎂", "誕生日": "🎂", "【学】": "🏫", "学校": "🏫", "【プ】": "☕", "プライベート": "☕", "【病】": "🏥", "病院": "🏥", "【会】": "👥", "会議": "👥", "【休】": "🏖️", "休日": "🏖️", "【重】": "⚠️", "重要": "⚠️", "【生】": "🎓", "生徒": "🎓"
-        };
+        // --- 多次元・視覚圧縮辞書 (v5.6 Advanced Semantic Dict) ---
+        let advancedDict = [];
+        const DEFAULT_ADV_DICT = [
+            { keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" },
+            { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" },
+            { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" } // 日本の祝日代用
+        ];
 
         function loadDict() {
-            const savedDict = localStorage.getItem('jero_dict');
-            if (savedDict) { try { semanticMap = JSON.parse(savedDict); } catch(e) { semanticMap = Object.assign({}, DEFAULT_SEMANTIC_MAP); } } 
-            else { semanticMap = Object.assign({}, DEFAULT_SEMANTIC_MAP); }
+            const saved = localStorage.getItem('jero_adv_dict');
+            if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } 
+            else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); }
             renderDictUI();
         }
 
-        function saveDict() { localStorage.setItem('jero_dict', JSON.stringify(semanticMap)); renderDictUI(); triggerFullReRender(); }
+        function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
 
         function renderDictUI() {
             const container = document.getElementById('dict-list'); container.innerHTML = '';
-            if(Object.keys(semanticMap).length === 0) { container.innerHTML = '<div style="color:#888; text-align:center; padding:10px;">辞書は空だ。</div>'; return; }
-            for (const [key, icon] of Object.entries(semanticMap)) {
-                const item = document.createElement('div'); item.className = 'dict-item';
-                item.innerHTML = `<span>「${key}」 ➔ ${icon}</span><button class="dict-btn-del" onclick="removeDictItem('${key}')">×</button>`; container.appendChild(item);
-            }
-        }
-        function addDictItem() {
-            const keyInput = document.getElementById('dict-new-key'); const iconInput = document.getElementById('dict-new-icon');
-            const key = keyInput.value.trim(); const icon = iconInput.value.trim();
-            if(!key || !icon) { showToast('キーワードと絵文字の両方を入力してくれ。'); return; }
-            semanticMap[key] = icon; keyInput.value = ''; iconInput.value = ''; saveDict(); showToast('辞書を更新した。');
-        }
-        function removeDictItem(key) { delete semanticMap[key]; saveDict(); showToast('削除した。'); }
-        function compressText(text) {
-            if (!text) return ""; let res = text;
-            for (const [key, icon] of Object.entries(semanticMap)) { res = res.split(key).join(icon); }
-            return res;
+            if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; }
+            
+            advancedDict.forEach((item, idx) => {
+                const el = document.createElement('div'); el.className = 'dict-item';
+                const keyStr = item.keys.join(', ');
+                el.innerHTML = `
+                    <div class="dict-info">
+                        <div>${item.icon} <span style="font-weight:bold;">${keyStr}</span></div>
+                        <div>
+                            <span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button>
+                        <button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
         }
 
-        // --- タスクカラー・ハック (v5.5) ---
-        // notesの末尾にある [c:X] を抽出して色IDとクリーンなテキストを分離する
+        function openDictEditor(idx = -1) {
+            document.getElementById('dict-editor-modal').classList.add('active');
+            if (idx >= 0) {
+                const item = advancedDict[idx];
+                document.getElementById('dict-edit-idx').value = idx;
+                document.getElementById('dict-edit-keys').value = item.keys.join(', ');
+                document.getElementById('dict-edit-icon').value = item.icon;
+                document.getElementById('dict-edit-bg').value = item.bg;
+                document.getElementById('dict-edit-txt').value = item.txt;
+                document.getElementById('dict-editor-title').innerText = '辞書の編集';
+            } else {
+                document.getElementById('dict-edit-idx').value = -1;
+                document.getElementById('dict-edit-keys').value = '';
+                document.getElementById('dict-edit-icon').value = '';
+                document.getElementById('dict-edit-bg').value = '#0a84ff';
+                document.getElementById('dict-edit-txt').value = '#ffffff';
+                document.getElementById('dict-editor-title').innerText = '辞書の新規追加';
+            }
+        }
+        function closeDictEditor() { document.getElementById('dict-editor-modal').classList.remove('active'); }
+
+        function saveDictItem() {
+            const idx = parseInt(document.getElementById('dict-edit-idx').value);
+            const keysRaw = document.getElementById('dict-edit-keys').value;
+            const icon = document.getElementById('dict-edit-icon').value.trim();
+            const bg = document.getElementById('dict-edit-bg').value;
+            const txt = document.getElementById('dict-edit-txt').value;
+
+            if(!keysRaw || !icon) { showToast('キーワードとアイコンは必須だ。'); return; }
+            
+            const keys = keysRaw.split(',').map(k => k.trim()).filter(k => k);
+            const newItem = { keys, icon, bg, txt };
+
+            if(idx >= 0) advancedDict[idx] = newItem;
+            else advancedDict.push(newItem);
+
+            saveDict(); closeDictEditor(); showToast('辞書を更新した。');
+        }
+        function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); showToast('削除した。'); }
+
+        // テキスト圧縮と同時に、色情報（マッチした場合）を返す
+        function processSemanticText(text) {
+            if (!text) return { text: "", style: null };
+            let resText = text; let matchStyle = null;
+
+            for (const item of advancedDict) {
+                let matched = false;
+                for (const key of item.keys) {
+                    if (resText.includes(key)) {
+                        resText = resText.split(key).join(item.icon);
+                        matched = true;
+                    }
+                }
+                if(matched && !matchStyle) {
+                    // 最初にマッチした辞書のスタイルを採用
+                    matchStyle = { bg: item.bg, txt: item.txt };
+                }
+            }
+            return { text: resText, style: matchStyle };
+        }
+
+        // --- Task Color Hack ---
         function extractTaskColor(notes) {
             if(!notes) return { colorId: "", cleanNotes: "" };
             const match = notes.match(/\[c:(\d+)\]$/);
@@ -310,6 +450,26 @@
             document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = [];
             const today = new Date(); const y = today.getFullYear(); const m = today.getMonth();
             renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append');
+        }
+
+        // --- I/O Port (設定のインポート・エクスポート) ---
+        function exportSettings() {
+            const data = { dict: advancedDict, settings: JSON.parse(localStorage.getItem('jero_settings') || '{}') };
+            const str = JSON.stringify(data);
+            navigator.clipboard.writeText(str).then(() => showToast('設定データをクリップボードにコピーした。')).catch(() => {
+                prompt('以下の文字列をコピーしてくれ:', str);
+            });
+        }
+        function importSettings() {
+            const str = prompt('バックアップした設定文字列を貼り付けてくれ:');
+            if(!str) return;
+            try {
+                const data = JSON.parse(str);
+                if(data.dict) { advancedDict = data.dict; localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); }
+                if(data.settings) { localStorage.setItem('jero_settings', JSON.stringify(data.settings)); }
+                showToast('設定を復元した。再読み込みする。');
+                setTimeout(() => location.reload(), 1500);
+            } catch(e) { showToast('文字列の形式が不正だ。'); }
         }
 
         function loadSettings() {
@@ -370,8 +530,7 @@
 
         async function loadNextMonth() {
             if(renderedMonths.length === 0 || isFetching || isAuthError) return;
-            isFetching = true; 
-            document.getElementById('bottom-trigger').classList.remove('hidden'); // スピナー表示
+            isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden');
             try {
                 const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1;
                 if(nextM > 11) { nextM = 0; nextY++; }
@@ -381,8 +540,7 @@
 
         async function loadPrevMonth() {
             if(renderedMonths.length === 0 || isFetching || isAuthError) return;
-            isFetching = true; 
-            document.getElementById('top-trigger').classList.remove('hidden'); // スピナー表示
+            isFetching = true; document.getElementById('top-trigger').classList.remove('hidden');
             try {
                 const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight;
                 const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1;
@@ -426,6 +584,21 @@
             updateHeaderDisplay();
         }
 
+        function isEventSpanning(eventObj, dateStr) {
+            if(!eventObj.start.date || !eventObj.end.date) return 'single'; // 時間指定は単日
+            const st = new Date(eventObj.start.date);
+            const ed = new Date(eventObj.end.date); 
+            ed.setDate(ed.getDate() - 1); // 終了日は翌日表記なので-1
+            
+            const tgt = new Date(dateStr);
+            if(st.getTime() === ed.getTime()) return 'single';
+            
+            if(tgt.getTime() === st.getTime()) return 'span-start';
+            if(tgt.getTime() === ed.getTime()) return 'span-end';
+            if(tgt > st && tgt < ed) return 'span-mid';
+            return 'single';
+        }
+
         function renderMonthDOM(year, month, data, position) {
             if(!data) return;
             const wrapper = document.createElement('div'); wrapper.className = 'month-wrapper'; wrapper.id = `month-${year}-${month}`;
@@ -434,6 +607,14 @@
 
             const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay();
             for (let i = 0; i < firstDay; i++) { const empty = document.createElement('div'); empty.className = 'day empty'; empty.style.backgroundColor = 'var(--head-bg)'; grid.appendChild(empty); }
+
+            // 重力ソート: 終日予定（特に複数日）を配列の先頭に持ってくることで、グリッド内での高さを極力揃える
+            const sortedEvents = [...data.events].sort((a, b) => {
+                const aAllDay = a.start.date ? 1 : 0;
+                const bAllDay = b.start.date ? 1 : 0;
+                if(aAllDay !== bAllDay) return bAllDay - aAllDay; // 終日優先
+                return 0; // 時間順はAPI側でソート済
+            });
 
             const today = new Date();
             for (let i = 1; i <= daysInMonth; i++) {
@@ -447,24 +628,48 @@
                 dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`);
                 dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
-                data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr); }).forEach(e => {
-                    const div = document.createElement('div'); div.className = 'event'; let timeStr = "";
+                sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => {
+                    const div = document.createElement('div'); div.className = 'event'; 
+                    let timeStr = "";
                     if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `; }
-                    // 繰り返しアイコン表示 (v5.5)
+                    
+                    // 複数日判定とCSSハッククラス付与 (v5.6)
+                    const spanType = isEventSpanning(e, dateStr);
+                    if(spanType !== 'single') div.classList.add(spanType);
+
                     const recurIcon = e.recurrence ? '🔁 ' : '';
-                    div.innerText = timeStr + recurIcon + compressText(e.summary);
-                    if(e.colorId && GOOGLE_COLORS[e.colorId]) div.style.backgroundColor = GOOGLE_COLORS[e.colorId];
+                    
+                    // 視覚圧縮・辞書カラー適用
+                    const pData = processSemanticText(e.summary);
+                    div.innerText = timeStr + recurIcon + pData.text;
+
+                    // カラー適用の優先順位：辞書指定 ＞ Google色 ＞ デフォルト
+                    if(pData.style) {
+                        div.style.backgroundColor = pData.style.bg;
+                        div.style.color = pData.style.txt;
+                    } else if(e.colorId && GOOGLE_COLORS[e.colorId]) {
+                        div.style.backgroundColor = GOOGLE_COLORS[e.colorId];
+                    }
+                    
+                    // 連続帯の中間日は文字を消して線を繋げるだけにする（UIの洗練）
+                    if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent';
+
                     dayEl.appendChild(div);
                 });
 
                 data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
                     const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
-                    div.innerHTML = `<span style="opacity:0.8;">☑</span> ${compressText(t.title)}`; 
                     
-                    // Task Color Hack 反映
-                    const tColor = extractTaskColor(t.notes).colorId;
-                    if(tColor && GOOGLE_COLORS[tColor]) div.style.backgroundColor = GOOGLE_COLORS[tColor];
-
+                    const tData = extractTaskColor(t.notes);
+                    const pData = processSemanticText(t.title);
+                    
+                    div.innerHTML = `<span style="opacity:0.8;">☑</span> ${pData.text}`; 
+                    
+                    if(pData.style) {
+                        div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt;
+                    } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) {
+                        div.style.backgroundColor = GOOGLE_COLORS[tData.colorId];
+                    }
                     dayEl.appendChild(div);
                 });
                 grid.appendChild(dayEl);
@@ -502,17 +707,25 @@
             const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
 
             if(data) {
-                data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr); }).forEach(e => {
+                // 帯表示用にソートしたロジックと同様、複数日予定を拾う
+                data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => {
                     hasItems = true; let timeStr = "終日";
                     if(e.start.dateTime) {
                         const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime);
                         timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`;
                     }
-                    const color = (e.colorId && GOOGLE_COLORS[e.colorId]) ? GOOGLE_COLORS[e.colorId] : 'var(--accent)';
-                    const item = document.createElement('div'); item.className = 'list-item';
+                    
+                    const spanType = isEventSpanning(e, dateStr);
+                    if (spanType !== 'single') timeStr = '帯(連続)予定';
+
                     const recurIcon = e.recurrence ? '🔁 ' : '';
-                    const compressedSummary = compressText(e.summary);
-                    item.innerHTML = `<div class="li-title"><span class="color-dot" style="background:${color}"></span> ${recurIcon}${compressedSummary}</div><div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
+                    const pData = processSemanticText(e.summary);
+                    let color = 'var(--accent)';
+                    if(pData.style) color = pData.style.bg;
+                    else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId];
+
+                    const item = document.createElement('div'); item.className = 'list-item';
+                    item.innerHTML = `<div class="li-title" style="color:${pData.style ? pData.style.txt : 'var(--txt)'}"><span class="color-dot" style="background:${color}"></span> ${recurIcon}${pData.text}</div><div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
                     item.onclick = () => openEditor(e); list.appendChild(item);
                 });
                 
@@ -520,15 +733,18 @@
                     hasItems = true; const isComp = t.status === 'completed'; const item = document.createElement('div'); item.className = 'list-item';
                     
                     const tData = extractTaskColor(t.notes);
-                    const color = (tData.colorId && GOOGLE_COLORS[tData.colorId]) ? GOOGLE_COLORS[tData.colorId] : '#34c759';
-                    const compressedTitle = compressText(t.title);
+                    const pData = processSemanticText(t.title);
+                    
+                    let color = '#34c759';
+                    if(pData.style) color = pData.style.bg;
+                    else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId];
 
-                    item.innerHTML = `<div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : ''}"><span class="task-check" style="color:${color}; font-size:18px; padding-right:8px;">${isComp ? '☑' : '☐'}</span><span class="task-title-text">${compressedTitle}</span></div><div class="li-meta" style="padding-left: 26px;">${tData.cleanNotes ? `📝 ${tData.cleanNotes}` : ''}</div>`;
+                    item.innerHTML = `<div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : (pData.style ? 'color:'+pData.style.txt : 'color:var(--txt)')}"><span class="task-check" style="color:${color}; font-size:18px; padding-right:8px;">${isComp ? '☑' : '☐'}</span><span class="task-title-text">${pData.text}</span></div><div class="li-meta" style="padding-left: 26px;">${tData.cleanNotes ? `📝 ${tData.cleanNotes}` : ''}</div>`;
                     
                     item.querySelector('.task-check').onclick = async (ev) => {
                         ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed';
-                        try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; openDailyModal(dateStr, dow); fetchAndRenderMonth(y, parseInt(m)-1, 'replace'); showToast(newStatus === 'completed' ? 'タスクを完了した。' : 'タスクを未完了に戻した。'); } 
-                        catch(err) { showToast('タスクの更新に失敗した。'); console.error(err); } setProgress(100);
+                        try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; openDailyModal(dateStr, dow); fetchAndRenderMonth(y, parseInt(m)-1, 'replace'); showToast(newStatus === 'completed' ? '完了。' : '未完了に戻した。'); } 
+                        catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100);
                     };
                     item.onclick = () => openTaskEditor(t); list.appendChild(item);
                 });
@@ -536,6 +752,63 @@
 
             if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
             document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
+        }
+
+        // --- Recurrence Editor (v5.6 RRULE生成) ---
+        function openRecurrenceEditor() {
+            document.getElementById('recurrence-modal').classList.add('active');
+            
+            // 既存のルール文字列をパースしてUIに反映
+            const rrule = document.getElementById('edit-recurrence-rule').value;
+            const freqEl = document.getElementById('rec-freq');
+            const hasUntilEl = document.getElementById('rec-has-until');
+            const untilDateEl = document.getElementById('rec-until-date');
+
+            freqEl.value = ""; hasUntilEl.checked = false; untilDateEl.value = "";
+
+            if (rrule.includes('FREQ=')) {
+                if(rrule.includes('FREQ=DAILY')) freqEl.value = "DAILY";
+                if(rrule.includes('FREQ=WEEKLY')) freqEl.value = "WEEKLY";
+                if(rrule.includes('FREQ=MONTHLY')) freqEl.value = "MONTHLY";
+                if(rrule.includes('FREQ=YEARLY')) freqEl.value = "YEARLY";
+                
+                const untilMatch = rrule.match(/UNTIL=([0-9]{8})/);
+                if (untilMatch) {
+                    hasUntilEl.checked = true;
+                    const dStr = untilMatch[1]; // YYYYMMDD
+                    untilDateEl.value = `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`;
+                }
+            }
+            updateRecDisplay();
+        }
+        function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); }
+        function updateRecDisplay() {
+            const freq = document.getElementById('rec-freq').value;
+            const untilRow = document.getElementById('rec-until-row');
+            if(freq) untilRow.style.display = 'flex';
+            else untilRow.style.display = 'none';
+        }
+        function applyRecurrence() {
+            const freq = document.getElementById('rec-freq').value;
+            const hasUntil = document.getElementById('rec-has-until').checked;
+            const untilDate = document.getElementById('rec-until-date').value;
+            
+            let rrule = ""; let dispText = "なし";
+            if (freq) {
+                rrule = `RRULE:FREQ=${freq}`;
+                dispText = document.querySelector(`#rec-freq option[value="${freq}"]`).innerText;
+                if(hasUntil && untilDate) {
+                    const d = new Date(untilDate);
+                    // RRULEのUNTILは UTCの YYYYMMDDThhmmssZ フォーマットを要求される場合があるが、終日予定なら YYYYMMDD でも通る。安全のためISOで処理。
+                    const untilStr = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}T235959Z`;
+                    rrule += `;UNTIL=${untilStr}`;
+                    dispText += ` (~${untilDate})`;
+                }
+            }
+            
+            document.getElementById('edit-recurrence-rule').value = rrule;
+            document.getElementById('edit-recurrence-display').innerText = dispText;
+            closeRecurrenceEditor();
         }
 
         // --- Event Editor ---
@@ -552,23 +825,19 @@
             document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null;
             document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定';
             document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none';
-            document.getElementById('btn-duplicate').style.display = isEdit ? 'block' : 'none'; // 複製ボタン制御
+            document.getElementById('btn-duplicate').style.display = isEdit ? 'block' : 'none';
             
             const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc');
             const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end');
-            const recurEl = document.getElementById('edit-recurrence');
+            const ruleEl = document.getElementById('edit-recurrence-rule'); const dispEl = document.getElementById('edit-recurrence-display');
             
             if (isEdit) {
                 document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = eventObj.description || "";
                 
-                // 繰り返しルールの復元（簡易的）
-                recurEl.value = "";
                 if(eventObj.recurrence && eventObj.recurrence.length > 0) {
-                    const rrule = eventObj.recurrence[0];
-                    if(rrule.includes("DAILY")) recurEl.value = "RRULE:FREQ=DAILY";
-                    else if(rrule.includes("WEEKLY")) recurEl.value = "RRULE:FREQ=WEEKLY";
-                    else if(rrule.includes("MONTHLY")) recurEl.value = "RRULE:FREQ=MONTHLY";
-                    else if(rrule.includes("YEARLY")) recurEl.value = "RRULE:FREQ=YEARLY";
+                    ruleEl.value = eventObj.recurrence[0]; dispEl.innerText = "設定済 (タップで確認)";
+                } else {
+                    ruleEl.value = ""; dispEl.innerText = "なし";
                 }
 
                 if (eventObj.start.date) {
@@ -581,7 +850,7 @@
                 const colorOpts = document.querySelectorAll('#color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected'));
                 if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } else { colorOpts[0].classList.add('selected'); selectedColorId = ""; }
             } else {
-                document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; recurEl.value = "";
+                document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; ruleEl.value = ""; dispEl.innerText = "なし";
                 allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = selectedDateStr; endEl.value = selectedDateStr;
                 selectColor(document.querySelector('#color-picker .color-opt'), "");
             }
@@ -595,9 +864,7 @@
 
         function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); }
 
-        // ジェロ流・複製ロジック
         function duplicateEvent() {
-            // IDをクリアして「新規」扱いにし、日付を「今日」または「選択中」にリセットして保存フローへ移行する
             document.getElementById('edit-id').value = "";
             document.getElementById('editor-title').innerText = "複製して新規保存";
             showToast('予定を複製した。別の日付を指定して保存してくれ。');
@@ -608,11 +875,11 @@
             setProgress(30); closeAllModals();
             const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const desc = document.getElementById('edit-desc').value;
             const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value;
-            const recurVal = document.getElementById('edit-recurrence').value;
+            const recurVal = document.getElementById('edit-recurrence-rule').value;
 
             const resource = { summary: title, location: loc, description: desc };
             if(selectedColorId) resource.colorId = selectedColorId;
-            if(recurVal) resource.recurrence = [recurVal]; // 繰り返しルールを付与
+            if(recurVal) resource.recurrence = [recurVal];
 
             if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } 
             else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
@@ -634,7 +901,7 @@
             } catch(e) { console.error(e); showToast('削除に失敗した。'); } setProgress(100);
         }
 
-        // --- Task Editor (Color Hack 対応) ---
+        // --- Task Editor ---
         function initTaskColorPicker() {
             const picker = document.getElementById('task-color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`;
             Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; });
@@ -652,8 +919,7 @@
             if (isEdit) {
                 document.getElementById('task-edit-id').value = taskObj.id; titleEl.value = taskObj.title || ""; 
                 const tData = extractTaskColor(taskObj.notes);
-                notesEl.value = tData.cleanNotes || "";
-                dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : "";
+                notesEl.value = tData.cleanNotes || ""; dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : "";
                 
                 const colorOpts = document.querySelectorAll('#task-color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected'));
                 if(tData.colorId) { colorOpts[parseInt(tData.colorId)].classList.add('selected'); selectedTaskColorId = tData.colorId; } else { colorOpts[0].classList.add('selected'); selectedTaskColorId = ""; }
@@ -670,9 +936,7 @@
             setProgress(30); closeAllModals();
             const id = document.getElementById('task-edit-id').value; const baseNotes = document.getElementById('task-edit-notes').value; const dueVal = document.getElementById('task-edit-due').value;
 
-            // Color Hack: 色が選択されていれば、notesの末尾に隠しタグを埋め込む
             const finalNotes = selectedTaskColorId ? `${baseNotes}\n[c:${selectedTaskColorId}]` : baseNotes;
-
             const resource = { title, notes: finalNotes };
             if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
 
@@ -691,11 +955,11 @@
             catch(e) { console.error(e); showToast('削除に失敗した。'); } setProgress(100);
         }
 
-        // --- Settings & Utils ---
+        // --- Utils ---
         function openSettings() { document.getElementById('overlay').classList.add('active'); document.getElementById('settings-modal').classList.add('active'); }
         function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
         function executeEmergencyReset() { closeSettings(); showToast('🔄 データを完全初期化しています...'); setTimeout(() => { localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); location.reload(); }, 1500); }
-        function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
+        function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); closeDictEditor(); closeRecurrenceEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
 
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
