@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v5.3</title>
+    <title>JeroCalendar v5.4</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -79,8 +79,10 @@
             transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1), background 0.3s; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
         }
         .bottom-modal.active { bottom: 0; }
-        .modal-drag { width: 36px; height: 5px; background: #ccc; border-radius: 3px; margin: 10px auto; }
-        .modal-header { padding: 5px 20px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; transition: border-color 0.3s;}
+        /* ドラッグハンドル領域（タップで閉じる機能追加） */
+        .modal-drag-area { padding: 10px 0; cursor: pointer; }
+        .modal-drag { width: 40px; height: 5px; background: #ccc; border-radius: 3px; margin: 0 auto; }
+        .modal-header { padding: 0 20px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; transition: border-color 0.3s;}
         .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--txt); transition: color 0.3s;}
         .close-btn { background: var(--head-bg); border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; color: var(--txt); cursor: pointer; transition: background 0.3s, color 0.3s;}
         
@@ -105,9 +107,19 @@
         .form-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 500; color: var(--txt); transition: border-color 0.3s, color 0.3s;}
         .form-row input[type="datetime-local"], .form-row input[type="date"] { background: transparent; border: none; color: var(--accent); font-size: 16px; font-weight: bold;}
         
+        /* 設定パネル特有のUI */
         .setting-row { display: flex; flex-direction: column; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--border); color: var(--txt); font-weight: 600;}
         .setting-row select { padding: 8px; font-size: 16px; border-radius: 8px; background: var(--head-bg); color: var(--txt); border: 1px solid var(--border); outline: none;}
         .setting-row input[type="range"] { accent-color: var(--accent); }
+
+        /* 辞書管理UI */
+        .dict-container { background: var(--head-bg); border-radius: 10px; padding: 10px; margin-top: 10px; max-height: 200px; overflow-y: auto; }
+        .dict-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        .dict-item:last-child { border-bottom: none; }
+        .dict-add-row { display: flex; gap: 8px; margin-top: 10px; }
+        .dict-input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--txt); }
+        .dict-btn-add { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 0 15px; font-weight: bold; cursor: pointer; }
+        .dict-btn-del { background: transparent; border: none; color: #ff3b30; font-weight: bold; font-size: 18px; cursor: pointer; }
 
         .color-palette { display: flex; gap: 12px; padding: 15px 20px; overflow-x: auto; scrollbar-width: none;}
         .color-opt { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
@@ -149,7 +161,7 @@
     <div id="overlay" onclick="closeAllModals()"></div>
 
     <div id="settings-modal" class="bottom-modal" style="z-index: 104;">
-        <div class="modal-drag"></div>
+        <div class="modal-drag-area" onclick="closeSettings()"><div class="modal-drag"></div></div>
         <div class="modal-header">
             <h2 id="settings-title">設定・管理</h2>
             <button class="close-btn" onclick="closeSettings()">✕</button>
@@ -163,11 +175,23 @@
                 </select>
             </div>
             <div class="setting-row">
-                <label>カレンダー文字サイズ: <span id="fs-val">10</span>px</label>
+                <label>文字サイズ: <span id="fs-val">10</span>px</label>
                 <input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()">
             </div>
+            
+            <div class="setting-row">
+                <label>視覚圧縮辞書 (自動アイコン化)</label>
+                <div class="dict-container" id="dict-list">
+                    </div>
+                <div class="dict-add-row">
+                    <input type="text" id="dict-new-key" class="dict-input" placeholder="例: 病院">
+                    <input type="text" id="dict-new-icon" class="dict-input" placeholder="例: 🏥" style="flex: 0.5;">
+                    <button class="dict-btn-add" onclick="addDictItem()">追加</button>
+                </div>
+            </div>
+
             <div class="setting-row" style="border-bottom: none; padding-bottom: 0;">
-                <label>緊急操作</label>
+                <label>システム</label>
             </div>
         </div>
         <div class="action-bar" style="flex-direction: column;">
@@ -176,7 +200,7 @@
     </div>
 
     <div id="daily-modal" class="bottom-modal" style="z-index: 105;">
-        <div class="modal-drag"></div>
+        <div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div>
         <div class="modal-header">
             <h2 id="daily-date-title"></h2>
             <button class="close-btn" onclick="closeAllModals()">✕</button>
@@ -189,7 +213,7 @@
     </div>
 
     <div id="editor-modal" class="bottom-modal" style="z-index: 106;">
-        <div class="modal-drag"></div>
+        <div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div>
         <div class="modal-header">
             <h2 id="editor-title">新規予定</h2>
             <button class="close-btn" onclick="closeEditor()">✕</button>
@@ -212,7 +236,7 @@
     </div>
 
     <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;">
-        <div class="modal-drag"></div>
+        <div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div>
         <div class="modal-header">
             <h2 id="task-editor-title">新規タスク</h2>
             <button class="close-btn" onclick="closeTaskEditor()">✕</button>
@@ -243,9 +267,9 @@
 
         const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
 
-        // --- v5.3 Semantic Compression (視覚圧縮辞書) ---
-        // 接頭辞やキーワードを瞬時にアイコン化する
-        const SEMANTIC_MAP = {
+        // --- 視覚圧縮辞書 (v5.4 動的化) ---
+        let semanticMap = {};
+        const DEFAULT_SEMANTIC_MAP = {
             "【誕】": "🎂", "誕生日": "🎂",
             "【学】": "🏫", "学校": "🏫",
             "【プ】": "☕", "プライベート": "☕",
@@ -256,14 +280,87 @@
             "【生】": "🎓", "生徒": "🎓"
         };
 
+        function loadDict() {
+            const savedDict = localStorage.getItem('jero_dict');
+            if (savedDict) {
+                try { semanticMap = JSON.parse(savedDict); } 
+                catch(e) { semanticMap = Object.assign({}, DEFAULT_SEMANTIC_MAP); }
+            } else {
+                semanticMap = Object.assign({}, DEFAULT_SEMANTIC_MAP);
+            }
+            renderDictUI();
+        }
+
+        function saveDict() {
+            localStorage.setItem('jero_dict', JSON.stringify(semanticMap));
+            renderDictUI();
+            triggerFullReRender(); // 辞書が変わったら即座にカレンダーを再描画
+        }
+
+        function renderDictUI() {
+            const container = document.getElementById('dict-list');
+            container.innerHTML = '';
+            
+            if(Object.keys(semanticMap).length === 0) {
+                container.innerHTML = '<div style="color:#888; text-align:center; padding:10px;">辞書は空だ。</div>';
+                return;
+            }
+
+            for (const [key, icon] of Object.entries(semanticMap)) {
+                const item = document.createElement('div');
+                item.className = 'dict-item';
+                item.innerHTML = `
+                    <span>「${key}」 ➔ ${icon}</span>
+                    <button class="dict-btn-del" onclick="removeDictItem('${key}')">×</button>
+                `;
+                container.appendChild(item);
+            }
+        }
+
+        function addDictItem() {
+            const keyInput = document.getElementById('dict-new-key');
+            const iconInput = document.getElementById('dict-new-icon');
+            const key = keyInput.value.trim();
+            const icon = iconInput.value.trim();
+            
+            if(!key || !icon) {
+                showToast('キーワードと絵文字の両方を入力してくれ。');
+                return;
+            }
+            
+            semanticMap[key] = icon;
+            keyInput.value = ''; iconInput.value = '';
+            saveDict();
+            showToast('辞書を更新した。');
+        }
+
+        function removeDictItem(key) {
+            delete semanticMap[key];
+            saveDict();
+            showToast('削除した。');
+        }
+
         function compressText(text) {
             if (!text) return "";
             let res = text;
-            for (const [key, icon] of Object.entries(SEMANTIC_MAP)) {
-                // 文字列の中にキーワードが含まれていれば置換
+            // 辞書のキーを元に置換を実行
+            for (const [key, icon] of Object.entries(semanticMap)) {
                 res = res.split(key).join(icon);
             }
             return res;
+        }
+
+        // 辞書更新時の強制再描画ロジック
+        function triggerFullReRender() {
+            if (!localStorage.getItem('jero_token')) return;
+            document.getElementById('calendar-wrapper').innerHTML = '';
+            renderedMonths = [];
+            // キャッシュは消さず、DOMだけ再生成する（APIを叩き直さないため高速）
+            const today = new Date(); 
+            const y = today.getFullYear(); 
+            const m = today.getMonth();
+            renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append');
+            renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append');
         }
 
         // --- 設定 (GUI) 管理 ---
@@ -281,7 +378,6 @@
                     document.getElementById('fs-val').innerText = settings.fs;
                 }
             } else {
-                // OSのダークモード設定を初期反映
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     document.getElementById('st-theme').value = 'dark';
                     document.documentElement.setAttribute('data-theme', 'dark');
@@ -300,9 +396,10 @@
             localStorage.setItem('jero_settings', JSON.stringify({ theme, fs }));
         }
 
-        // 初期ロード時に設定を適用
-        document.addEventListener('DOMContentLoaded', loadSettings);
-
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            loadDict(); // 辞書もロード
+        });
 
         // --- Toast 通知機能 ---
         function showToast(msg) {
@@ -416,7 +513,6 @@
                     const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 });
                     events = eResp.result.items || [];
                 } catch(e) { 
-                    console.error('Calendar Fetch Error:', e);
                     const code = e.status || (e.result && e.result.error && e.result.error.code);
                     if (code === 401 || code === 403) authErrorDetected = true;
                 }
@@ -425,17 +521,16 @@
                     const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true });
                     tasks = tResp.result.items || [];
                 } catch(e) { 
-                    console.error('Tasks Fetch Error:', e);
                     const code = e.status || (e.result && e.result.error && e.result.error.code);
                     if (code === 401 || code === 403) authErrorDetected = true;
                 }
 
-                if (authErrorDetected) {
-                    notifyAuthError();
-                }
-
+                if (authErrorDetected) { notifyAuthError(); }
                 dataCache[monthKey] = { events, tasks };
             }
+
+            // 万が一データが存在しない場合はスキップ（初期ロード対策）
+            if (!dataCache[monthKey]) return;
 
             const existing = document.getElementById(`month-${year}-${month}`);
             if(existing) existing.remove();
@@ -450,6 +545,8 @@
         }
 
         function renderMonthDOM(year, month, data, position) {
+            if(!data) return; // セーフティネット
+            
             const wrapper = document.createElement('div');
             wrapper.className = 'month-wrapper'; wrapper.id = `month-${year}-${month}`;
             wrapper.innerHTML = `<div class="month-title">${year}年 ${month + 1}月</div><div class="calendar-grid"></div>`;
@@ -488,7 +585,6 @@
                     if(e.start.dateTime) {
                         const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `;
                     }
-                    // 視覚圧縮（compressText）を適用
                     div.innerText = timeStr + compressText(e.summary);
                     if(e.colorId && GOOGLE_COLORS[e.colorId]) div.style.backgroundColor = GOOGLE_COLORS[e.colorId];
                     dayEl.appendChild(div);
@@ -496,7 +592,6 @@
 
                 data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
                     const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
-                    // 視覚圧縮（compressText）を適用
                     div.innerText = '√ ' + compressText(t.title); dayEl.appendChild(div);
                 });
                 grid.appendChild(dayEl);
@@ -560,7 +655,6 @@
                     const color = (e.colorId && GOOGLE_COLORS[e.colorId]) ? GOOGLE_COLORS[e.colorId] : 'var(--accent)';
                     const item = document.createElement('div'); item.className = 'list-item';
                     
-                    // モーダル内でも視覚圧縮を適用
                     const compressedSummary = compressText(e.summary);
                     item.innerHTML = `<div class="li-title"><span class="color-dot" style="background:${color}"></span> ${compressedSummary}</div><div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
                     item.onclick = () => openEditor(e);
@@ -737,7 +831,6 @@
             setProgress(100);
         }
 
-        // --- 設定モーダル関連 ---
         function openSettings() {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('settings-modal').classList.add('active');
