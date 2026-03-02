@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v5.2.4</title>
+    <title>JeroCalendar v5.3</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -15,7 +15,7 @@
             --bg: #000; --txt: #fff; --border: #333; --head-bg: #1c1c1e; 
             --today: #333300; --sat: #00152b; --sun: #2b0000; 
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s, color 0.3s; }
 
         /* トップバー */
         #top-bar { 
@@ -24,7 +24,7 @@
             background: rgba(255,255,255,0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
             color: var(--txt); display: flex; justify-content: space-between; align-items: center; 
             box-sizing: border-box; height: calc(44px + env(safe-area-inset-top)); 
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--border); transition: background 0.3s, color 0.3s;
         }
         [data-theme="dark"] #top-bar { background: rgba(30,30,30,0.85); color: white; }
         #progress-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); width: 0%; transition: width 0.3s; }
@@ -36,7 +36,7 @@
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.3); color: #ff3b30; } 100% { transform: scale(1); } }
         .auth-pulse { display: block !important; animation: pulse 1.5s infinite; color: #ff3b30 !important; }
 
-        /* Toast通知 (PWAライクな洗練されたフィードバック) */
+        /* Toast通知 */
         #toast {
             position: fixed; top: -100px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.8); color: white; padding: 12px 24px;
@@ -47,20 +47,19 @@
         #toast.show { top: calc(env(safe-area-inset-top) + 60px); }
 
         /* カレンダー基盤 */
-        #weekdays { position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; z-index: 40; height: 24px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; }
+        #weekdays { position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; z-index: 40; height: 24px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; transition: background 0.3s, border-color 0.3s; }
         .wd { text-align: center; font-weight: bold; font-size: 10px; color: #888; }
         
         #scroll-container { position: fixed; top: calc(68px + env(safe-area-inset-top)); width: 100%; height: calc(100vh - 68px - env(safe-area-inset-top)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
-        .month-title { padding: 6px; font-size: 12px; font-weight: bold; background: var(--head-bg); border-bottom: 1px solid var(--border); text-align: center; color: #666; }
-        /* 【重要】minmax(0, 1fr)で列の膨張を完全に阻止 */
+        .month-title { padding: 6px; font-size: 12px; font-weight: bold; background: var(--head-bg); border-bottom: 1px solid var(--border); text-align: center; color: #666; transition: background 0.3s, border-color 0.3s;}
         .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(90px, auto); }
         
-        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; padding-top: 20px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; /* 列膨張阻止の要 */ }
+        .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; padding-top: 20px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; transition: border-color 0.3s, background 0.3s;}
         .day:active { background: rgba(128,128,128,0.15); }
-        .day-num { position: absolute; top: 4px; left: 4px; font-weight: 600; font-size: 11px; z-index: 1; color: var(--txt); }
+        .day-num { position: absolute; top: 4px; left: 4px; font-weight: 600; font-size: 11px; z-index: 1; color: var(--txt); transition: color 0.3s;}
         .today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; top: 2px; left: 2px; }
 
-        /* 予定・タスクの帯（優しいデザインへ最適化） */
+        /* 予定・タスクの帯 */
         .event, .task { 
             font-size: var(--fs); border-radius: 4px; padding: 2px 4px; 
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
@@ -68,46 +67,48 @@
             box-sizing: border-box; width: calc(100% - 4px);
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
-        /* 【重要】デフォルトカラーを設定し不可視化を防止 */
         .event { background-color: var(--accent); } 
-        .task { background-color: #34c759; font-style: italic; border-left: 3px solid #248a3d; }
+        .task { background-color: #34c759; border-left: 3px solid #248a3d; }
         .task.completed { text-decoration: line-through; opacity: 0.5; background-color: #8e8e93; border-left-color: #636366;}
 
-        /* 統合モーダル基盤 */
+        /* モーダル共通基盤 */
         .bottom-modal { 
             position: fixed; bottom: -100%; left: 0; width: 100%; max-height: 90vh; 
             background: var(--bg); border-top-left-radius: 20px; border-top-right-radius: 20px; 
             box-shadow: 0 -10px 25px rgba(0,0,0,0.3); z-index: 100; 
-            transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1); display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
+            transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1), background 0.3s; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
         }
         .bottom-modal.active { bottom: 0; }
         .modal-drag { width: 36px; height: 5px; background: #ccc; border-radius: 3px; margin: 10px auto; }
-        .modal-header { padding: 5px 20px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
-        .close-btn { background: var(--head-bg); border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; color: var(--txt); cursor: pointer; }
+        .modal-header { padding: 5px 20px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; transition: border-color 0.3s;}
+        .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--txt); transition: color 0.3s;}
+        .close-btn { background: var(--head-bg); border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; color: var(--txt); cursor: pointer; transition: background 0.3s, color 0.3s;}
         
         .modal-body { padding: 0; overflow-y: auto; flex: 1; }
         
-        /* デイリーリストUI */
-        .list-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+        /* リスト・アクションUI */
+        .list-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.3s;}
         .list-item:active { background: rgba(128,128,128,0.1); }
-        .li-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .li-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--txt); transition: color 0.3s;}
         .li-meta { font-size: 13px; color: #888; display: flex; gap: 12px; flex-wrap: wrap; }
         .color-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
         
-        .action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--head-bg); }
+        .action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--head-bg); transition: background 0.3s, border-color 0.3s;}
         .btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; color: white; cursor: pointer; transition: transform 0.1s;}
         .btn:active { transform: scale(0.96); }
         .btn-blue { background: var(--accent); } .btn-green { background: #34c759; } .btn-red { background: #ff3b30; } .btn-gray { background: #8e8e93; }
 
-        /* エディタ専用UI */
-        .form-group { padding: 12px 20px; border-bottom: 1px solid var(--border); }
-        .form-group input[type="text"], .form-group textarea { width: 100%; border: none; background: transparent; color: var(--txt); font-size: 16px; outline: none; }
+        /* エディタ・設定UI */
+        .form-group { padding: 12px 20px; border-bottom: 1px solid var(--border); transition: border-color 0.3s;}
+        .form-group input[type="text"], .form-group textarea, .form-group select { width: 100%; border: none; background: transparent; color: var(--txt); font-size: 16px; outline: none; transition: color 0.3s;}
         .form-group textarea { resize: none; height: 80px; margin-top: 8px; }
-        .form-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 500;}
+        .form-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 500; color: var(--txt); transition: border-color 0.3s, color 0.3s;}
         .form-row input[type="datetime-local"], .form-row input[type="date"] { background: transparent; border: none; color: var(--accent); font-size: 16px; font-weight: bold;}
         
-        /* カラーパレット */
+        .setting-row { display: flex; flex-direction: column; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--border); color: var(--txt); font-weight: 600;}
+        .setting-row select { padding: 8px; font-size: 16px; border-radius: 8px; background: var(--head-bg); color: var(--txt); border: 1px solid var(--border); outline: none;}
+        .setting-row input[type="range"] { accent-color: var(--accent); }
+
         .color-palette { display: flex; gap: 12px; padding: 15px 20px; overflow-x: auto; scrollbar-width: none;}
         .color-opt { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
         .color-opt.selected { border-color: var(--txt); transform: scale(1.15); }
@@ -116,7 +117,6 @@
         #overlay.active { display: block; opacity: 1; }
         .loader { text-align: center; padding: 30px; color: #888; font-size: 14px; font-weight: 500;}
 
-        /* トグルスイッチ */
         .toggle { appearance: none; width: 44px; height: 26px; background: #e0e0e0; border-radius: 13px; position: relative; outline: none; cursor: pointer; transition: 0.3s;}
         .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);}
         .toggle:checked { background: #34c759; }
@@ -155,14 +155,23 @@
             <button class="close-btn" onclick="closeSettings()">✕</button>
         </div>
         <div class="modal-body">
-            <div class="form-group" style="padding-top: 20px; text-align: center; color: #666; font-size: 14px;">
-                <p>JeroCalendar v5.2</p>
-                <p>UIカラーテーマ変更機能は次期実装予定</p>
+            <div class="setting-row">
+                <label>UIテーマ</label>
+                <select id="st-theme" onchange="saveAndApplySettings()">
+                    <option value="light">ライトモード</option>
+                    <option value="dark">ダークモード</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label>カレンダー文字サイズ: <span id="fs-val">10</span>px</label>
+                <input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()">
+            </div>
+            <div class="setting-row" style="border-bottom: none; padding-bottom: 0;">
+                <label>緊急操作</label>
             </div>
         </div>
         <div class="action-bar" style="flex-direction: column;">
             <button class="btn btn-red" onclick="executeEmergencyReset()">🚨 データ連携を完全リセット</button>
-            <button class="btn btn-gray" onclick="closeSettings()">閉じる</button>
         </div>
     </div>
 
@@ -233,6 +242,67 @@
         let selectedColorId = "";
 
         const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
+
+        // --- v5.3 Semantic Compression (視覚圧縮辞書) ---
+        // 接頭辞やキーワードを瞬時にアイコン化する
+        const SEMANTIC_MAP = {
+            "【誕】": "🎂", "誕生日": "🎂",
+            "【学】": "🏫", "学校": "🏫",
+            "【プ】": "☕", "プライベート": "☕",
+            "【病】": "🏥", "病院": "🏥",
+            "【会】": "👥", "会議": "👥",
+            "【休】": "🏖️", "休日": "🏖️",
+            "【重】": "⚠️", "重要": "⚠️",
+            "【生】": "🎓", "生徒": "🎓"
+        };
+
+        function compressText(text) {
+            if (!text) return "";
+            let res = text;
+            for (const [key, icon] of Object.entries(SEMANTIC_MAP)) {
+                // 文字列の中にキーワードが含まれていれば置換
+                res = res.split(key).join(icon);
+            }
+            return res;
+        }
+
+        // --- 設定 (GUI) 管理 ---
+        function loadSettings() {
+            const saved = localStorage.getItem('jero_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                if (settings.theme) {
+                    document.getElementById('st-theme').value = settings.theme;
+                    document.documentElement.setAttribute('data-theme', settings.theme);
+                }
+                if (settings.fs) {
+                    document.getElementById('st-fs').value = settings.fs;
+                    document.documentElement.style.setProperty('--fs', settings.fs + 'px');
+                    document.getElementById('fs-val').innerText = settings.fs;
+                }
+            } else {
+                // OSのダークモード設定を初期反映
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.getElementById('st-theme').value = 'dark';
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                }
+            }
+        }
+
+        function saveAndApplySettings() {
+            const theme = document.getElementById('st-theme').value;
+            const fs = document.getElementById('st-fs').value;
+            
+            document.documentElement.setAttribute('data-theme', theme);
+            document.documentElement.style.setProperty('--fs', fs + 'px');
+            document.getElementById('fs-val').innerText = fs;
+            
+            localStorage.setItem('jero_settings', JSON.stringify({ theme, fs }));
+        }
+
+        // 初期ロード時に設定を適用
+        document.addEventListener('DOMContentLoaded', loadSettings);
+
 
         // --- Toast 通知機能 ---
         function showToast(msg) {
@@ -418,15 +488,16 @@
                     if(e.start.dateTime) {
                         const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `;
                     }
-                    div.innerText = timeStr + e.summary;
-                    // 色指定があれば上書き、なければCSSのデフォルト(--accent)が適用される
+                    // 視覚圧縮（compressText）を適用
+                    div.innerText = timeStr + compressText(e.summary);
                     if(e.colorId && GOOGLE_COLORS[e.colorId]) div.style.backgroundColor = GOOGLE_COLORS[e.colorId];
                     dayEl.appendChild(div);
                 });
 
                 data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
                     const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
-                    div.innerText = '√ ' + t.title; dayEl.appendChild(div);
+                    // 視覚圧縮（compressText）を適用
+                    div.innerText = '√ ' + compressText(t.title); dayEl.appendChild(div);
                 });
                 grid.appendChild(dayEl);
             }
@@ -488,7 +559,10 @@
                     }
                     const color = (e.colorId && GOOGLE_COLORS[e.colorId]) ? GOOGLE_COLORS[e.colorId] : 'var(--accent)';
                     const item = document.createElement('div'); item.className = 'list-item';
-                    item.innerHTML = `<div class="li-title"><span class="color-dot" style="background:${color}"></span> ${e.summary}</div><div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
+                    
+                    // モーダル内でも視覚圧縮を適用
+                    const compressedSummary = compressText(e.summary);
+                    item.innerHTML = `<div class="li-title"><span class="color-dot" style="background:${color}"></span> ${compressedSummary}</div><div class="li-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>`;
                     item.onclick = () => openEditor(e);
                     list.appendChild(item);
                 });
@@ -497,7 +571,9 @@
                     hasItems = true;
                     const isComp = t.status === 'completed';
                     const item = document.createElement('div'); item.className = 'list-item';
-                    item.innerHTML = `<div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : ''}"><span class="task-check" style="color:#34c759; font-size:18px; padding-right:8px;">${isComp ? '☑' : '☐'}</span><span class="task-title-text">${t.title}</span></div><div class="li-meta" style="padding-left: 26px;">${t.notes ? `📝 ${t.notes}` : ''}</div>`;
+                    
+                    const compressedTitle = compressText(t.title);
+                    item.innerHTML = `<div class="li-title" style="${isComp ? 'text-decoration:line-through; color:#888;' : ''}"><span class="task-check" style="color:#34c759; font-size:18px; padding-right:8px;">${isComp ? '☑' : '☐'}</span><span class="task-title-text">${compressedTitle}</span></div><div class="li-meta" style="padding-left: 26px;">${t.notes ? `📝 ${t.notes}` : ''}</div>`;
                     
                     item.querySelector('.task-check').onclick = async (ev) => {
                         ev.stopPropagation(); 
@@ -661,7 +737,7 @@
             setProgress(100);
         }
 
-        // --- 設定パネル・リセット関連 ---
+        // --- 設定モーダル関連 ---
         function openSettings() {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('settings-modal').classList.add('active');
@@ -677,8 +753,8 @@
             setTimeout(() => {
                 localStorage.removeItem('jero_token');
                 localStorage.removeItem('jero_token_time');
-                location.reload(); // キャッシュクリア後に強制リロード
-            }, 1500); // Toastを見せるためのラグ
+                location.reload(); 
+            }, 1500);
         }
 
         function closeAllModals() {
