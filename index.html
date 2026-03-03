@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v6.4</title>
+    <title>JeroCalendar v6.5</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -140,7 +140,7 @@
     <script>
         window.onerror = function(msg, url, line) {
             const t = document.getElementById('toast');
-            if(t) { t.innerText = "🚨システムエラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); }
+            if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); }
         };
         window.onunhandledrejection = function(event) {
             const t = document.getElementById('toast');
@@ -199,6 +199,7 @@
             <div class="setting-row"><label>カレンダー文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
             <div class="setting-row">
                 <label style="color: var(--accent);">Jero Core 思考エンジン</label>
+                <div style="font-size: 12px; color: #888; margin-bottom: 4px;">Google AI StudioのAPIキー</div>
                 <input type="password" id="st-gemini-key" placeholder="APIキーを入力" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); margin-bottom: 10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size: 12px; font-weight: bold;">AI マニュアル (System Prompt)</span><button class="btn-gray" style="padding:2px 6px; border-radius:4px; font-size:10px; border:none; cursor:pointer; color:white;" onclick="resetPrompt()">初期化</button></div>
                 <textarea id="st-gemini-prompt" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); height: 150px; font-size: 11px; resize: none; margin-top: 5px;"></textarea>
@@ -216,10 +217,15 @@
     </div>
 
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;"><div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="dict-edit-idx"><div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div><div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div></div>
+    
     <div id="daily-modal" class="bottom-modal" style="z-index: 105;"><div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div><div class="modal-body"><div class="card-list" id="daily-list"></div></div><div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div></div>
-    <div id="editor-modal" class="bottom-modal" style="z-index: 106;"><div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="edit-id"><div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div><div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div><div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div><div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div><input type="hidden" id="edit-recurrence-rule"><div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div><div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div><div class="color-palette" id="color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div></div>
+    
+    <div id="editor-modal" class="bottom-modal" style="z-index: 106;"><div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="edit-id"><div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div><div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div><div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div><div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div><input type="hidden" id="edit-recurrence-rule"><div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div><div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div><div class="color-palette" id="color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button><button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div></div>
+    
     <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;"><div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div><div class="modal-body"><div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div><div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div></div><div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div></div>
+    
     <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;"><div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="task-edit-id"><div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div><div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div><div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div><div class="color-palette" id="task-color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="deleteTask()">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div></div>
+    
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""></div>
 
     <script>
@@ -233,21 +239,17 @@
         let advancedDict = [];
         const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
-        // UI Helpers
+        // UI & Utils
         function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
         function hideGlobalLoader() { document.getElementById('global-loader').classList.remove('active'); }
         const yieldUI = () => new Promise(r => setTimeout(r, 30));
         function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
-        // v6.4: IndexedDB 初期化 (タイムアウト・バイパス搭載)
+        // --- IDB Image Storage ---
         let idb;
         function initIDB() {
             return new Promise((resolve) => {
-                const timeout = setTimeout(() => {
-                    console.warn("JeroCore: IDB initialization timed out. Bypassing...");
-                    resolve(); // iPhoneがフリーズしたら諦めてカレンダー描画を優先する
-                }, 2000);
-
+                const timeout = setTimeout(() => { resolve(); }, 2000);
                 try {
                     const req = indexedDB.open('JeroDB_v6', 1);
                     req.onupgradeneeded = (e) => {
@@ -255,14 +257,13 @@
                         if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
                     };
                     req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); };
-                    req.onerror = (e) => { clearTimeout(timeout); console.error("IDB Error", e); resolve(); };
+                    req.onerror = (e) => { clearTimeout(timeout); resolve(); };
                 } catch(e) { clearTimeout(timeout); resolve(); }
             });
         }
-        
         function saveImageToIDB(id, dataUrl) {
             return new Promise((resolve, reject) => {
-                if(!idb) return resolve(); // DBが死んでたら何もしない
+                if(!idb) return resolve();
                 try {
                     const tx = idb.transaction('images', 'readwrite');
                     tx.oncomplete = () => resolve();
@@ -302,6 +303,7 @@
             });
         }
 
+        // --- Attachments Engine ---
         let currentAttachments = []; 
         function renderAttachPreviews(containerId) {
             const container = document.getElementById(containerId); container.innerHTML = '';
@@ -321,7 +323,6 @@
             catch(err) { showToast('画像処理に失敗しました。'); }
             hideGlobalLoader(); e.target.value = '';
         }
-
         function addUrlPrompt() { const url = prompt("共有リンクURLを入力:"); if(url) { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); renderAttachPreviews('edit-attach-preview'); } }
         function addTaskUrlPrompt() { const url = prompt("共有リンクURLを入力:"); if(url) { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); renderAttachPreviews('task-attach-preview'); } }
 
@@ -346,10 +347,9 @@
             cleanTextForUI = cleanTextForUI.replace(urlRegex, '[Link]').trim();
             return { cleanTextForUI, html: html ? `<div class="attach-container">${html}</div>` : "" };
         }
-
         function openImageViewer(src, event) { event.stopPropagation(); document.getElementById('img-viewer-src').src = src; document.getElementById('img-viewer').classList.add('active'); }
 
-        // v6.4: AIプロンプトの調整と空白自動削除
+        // --- Jero AI Engine ---
         const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。明日チュールを貰える可能性を常に期待している。
 ユーザーの入力から予定やタスクを推論し、必ず以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
 
@@ -384,7 +384,6 @@
             const inputEl = document.getElementById('chat-input'); const text = inputEl.value.trim(); if(!text) return;
             appendChatMessage('user', text); inputEl.value = '';
             
-            // APIキーの前後の空白を自動で削除して事故を防ぐ
             const apiKey = (localStorage.getItem('jero_gemini_key') || "").trim();
             if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
 
@@ -409,6 +408,9 @@
                 let aiText = data.candidates[0].content.parts[0].text;
                 
                 let cleanJsonStr = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const matchObj = cleanJsonStr.match(/\{[\s\S]*\}/);
+                if (matchObj) cleanJsonStr = matchObj[0];
+                cleanJsonStr = cleanJsonStr.replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
 
                 let result;
                 try { result = JSON.parse(cleanJsonStr); } 
@@ -435,69 +437,15 @@
                         }
                     }
                     const td = new Date(); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true);
-                    hideGlobalLoader();
-                    showToast('Jero Core: 予定の同期完了');
+                    hideGlobalLoader(); showToast('Jero Core: 予定の同期完了');
                 }
             } catch (err) { 
                 console.error(err); thinkingEl.classList.remove('pulse-think'); 
-                thinkingEl.innerText = `【通信エラー】\n${err.message}`; 
-                hideGlobalLoader();
+                thinkingEl.innerText = `【通信エラー】\n${err.message}`; hideGlobalLoader();
             }
         }
 
-        async function saveEvent() {
-            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; }
-            showGlobalLoader('保存中...'); await yieldUI();
-            const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value; const recurVal = document.getElementById('edit-recurrence-rule').value;
-            let finalDesc = document.getElementById('edit-desc').value.trim();
-            for (const att of currentAttachments) {
-                if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); finalDesc += `\n[img:${att.id}]`; }
-                else if (att.type === 'link') { finalDesc += `\n${att.id}`; }
-            }
-            const resource = { summary: title, location: loc, description: finalDesc.trim() }; if(selectedColorId) resource.colorId = selectedColorId; if(recurVal) resource.recurrence = [recurVal];
-            if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
-            try { 
-                if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); } 
-                else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); } 
-                const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
-                closeAllModals(); showToast('予定を保存した。');
-            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
-            hideGlobalLoader();
-        }
-
-        async function saveTask() {
-            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; }
-            showGlobalLoader('保存中...'); await yieldUI();
-            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; const recVal = document.getElementById('task-edit-recurrence').value;
-            let baseNotes = document.getElementById('task-edit-notes').value.trim();
-            for (const att of currentAttachments) {
-                if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); baseNotes += `\n[img:${att.id}]`; }
-                else if (att.type === 'link') { baseNotes += `\n${att.id}`; }
-            }
-            let meta = ""; if(selectedTaskColorId) meta += `[c:${selectedTaskColorId}]`; if(recVal) meta += `[r:${recVal}]`; const finalNotes = meta ? `${baseNotes}\n${meta}` : baseNotes;
-            const resource = { title, notes: finalNotes.trim() }; if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
-            try { 
-                if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); } 
-                else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); } 
-                const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
-                closeAllModals(); showToast('タスクを保存した。');
-            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
-            hideGlobalLoader();
-        }
-
-        // --- 起動ロジック (同期化とエラーハンドリング) ---
-        document.addEventListener('DOMContentLoaded', async () => { 
-            try {
-                await initIDB(); 
-                loadSettings(); 
-                loadDict(); 
-                initTaskColorPicker(); 
-            } catch (err) {
-                showToast("致命的な初期化エラー: " + err.message);
-            }
-        });
-
-        // 既存の基本関数群
+        // --- Core Application Logic ---
         function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
         function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
         function renderDictUI() { const container = document.getElementById('dict-list'); container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${item.keys.join(', ')}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
@@ -511,20 +459,15 @@
         function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return; document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append'); if(currentView === 'agenda') renderAgendaView(); }
         function toggleView() { const calView = document.getElementById('calendar-view'); const agendaView = document.getElementById('agenda-view'); const btn = document.getElementById('view-toggle-btn'); if(currentView === 'calendar') { currentView = 'agenda'; calView.style.display = 'none'; agendaView.style.display = 'block'; btn.innerText = '📅'; renderAgendaView(); } else { currentView = 'calendar'; calView.style.display = 'block'; agendaView.style.display = 'none'; btn.innerText = '📝'; scrollToToday(); } }
 
-        // V6.4: forEach(async) の破壊的挙動を for...of で完全に同期化
         async function renderAgendaView() { 
             const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = []; 
             for (const monthKey in dataCache) { const data = dataCache[monthKey]; data.events.forEach(e => { const stDate = e.start.date ? new Date(e.start.date) : new Date(e.start.dateTime); if(stDate >= today || isEventSpanning(e, today.toISOString().split('T')[0]) !== 'single') { allItems.push({ type: 'event', dateObj: stDate, data: e }); } }); data.tasks.filter(t => t.due).forEach(t => { const dDate = new Date(t.due); if(dDate >= today) allItems.push({ type: 'task', dateObj: dDate, data: t }); }); } 
             allItems.sort((a, b) => a.dateObj - b.dateObj); const grouped = {}; allItems.forEach(item => { const dStr = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}-${String(item.dateObj.getDate()).padStart(2,'0')}`; if(!grouped[dStr]) grouped[dStr] = []; grouped[dStr].push(item); }); const days = ['日','月','火','水','木','金','土']; 
             if(Object.keys(grouped).length === 0) { container.innerHTML = '<div style="padding: 30px; text-align: center; color: #888;">予定はありません。</div>'; return; } 
-            
             for (const [dStr, items] of Object.entries(grouped)) { 
                 const dObj = new Date(dStr); const isToday = dObj.getTime() === today.getTime(); const dayHeader = document.createElement('div'); dayHeader.className = 'agenda-day-header'; dayHeader.innerText = `${dObj.getMonth()+1}月${dObj.getDate()}日 (${days[dObj.getDay()]}) ${isToday ? ' - 今日' : ''}`; if(isToday) dayHeader.style.color = '#ff3b30'; 
                 const listCont = document.createElement('div'); listCont.className = 'agenda-list-container card-list'; 
-                for(const item of items) { 
-                    if(item.type === 'event') listCont.appendChild(await createEventCard(item.data, dStr)); 
-                    else listCont.appendChild(await createTaskCard(item.data, dStr, dObj.getDay())); 
-                } 
+                for(const item of items) { if(item.type === 'event') listCont.appendChild(await createEventCard(item.data, dStr)); else listCont.appendChild(await createTaskCard(item.data, dStr, dObj.getDay())); } 
                 container.appendChild(dayHeader); container.appendChild(listCont); 
             } 
         }
@@ -540,6 +483,43 @@
             }
             if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
             document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
+        }
+
+        // ★ 完全復活させた設定管理群 ★
+        async function openSettings() { 
+            document.getElementById('overlay').classList.add('active'); 
+            document.getElementById('settings-modal').classList.add('active'); 
+            const infoEl = document.getElementById('account-info'); 
+            const cachedEmail = sessionStorage.getItem('jero_account_email'); 
+            if (cachedEmail) { 
+                infoEl.innerText = `連携中: ${cachedEmail}`; 
+            } else { 
+                try { 
+                    const resp = await gapi.client.calendar.calendars.get({ calendarId: 'primary' }); 
+                    sessionStorage.setItem('jero_account_email', resp.result.id); 
+                    infoEl.innerText = `連携中: ${resp.result.id}`; 
+                } catch (e) { 
+                    infoEl.innerText = 'アカウント情報取得失敗'; 
+                } 
+            } 
+        }
+        function closeSettings() { 
+            document.getElementById('settings-modal').classList.remove('active'); 
+            document.getElementById('overlay').classList.remove('active'); 
+        }
+        function switchAccount() { 
+            if(!confirm('連携を解除しログイン画面に戻るか？')) return; 
+            closeSettings(); 
+            localStorage.removeItem('jero_token'); 
+            localStorage.removeItem('jero_token_time'); 
+            sessionStorage.removeItem('jero_account_email'); 
+            showToast('連携解除中...'); 
+            setTimeout(() => location.reload(), 1500); 
+        }
+        function executeEmergencyReset() { 
+            closeSettings(); 
+            showToast('🚨 キャッシュ完全初期化中...'); 
+            setTimeout(() => { localStorage.clear(); location.reload(); }, 1500); 
         }
 
         function exportSettings() { const data = { dict: advancedDict, settings: JSON.parse(localStorage.getItem('jero_settings') || '{}') }; const str = JSON.stringify(data); navigator.clipboard.writeText(str).then(() => showToast('コピー完了。')).catch(() => { prompt('コピー:', str); }); }
@@ -601,16 +581,60 @@
         
         async function extractAttachmentsFromText(text) { currentAttachments = []; const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match; while ((match = imgRegex.exec(text)) !== null) { const data = await getImageFromIDB(match[1]); if(data) currentAttachments.push({ id: match[1], dataUrl: data, type: 'img' }); } const cleanText = text.replace(imgRegex, '').trim(); const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g; const urls = cleanText.match(urlRegex) || []; urls.forEach(url => { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); }); return cleanText.replace(urlRegex, '').trim(); }
 
-        async function openEditor(eventObj = null) { document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none'; const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc'); const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const ruleEl = document.getElementById('edit-recurrence-rule'); const dispEl = document.getElementById('edit-recurrence-display'); if (isEdit) { document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = await extractAttachmentsFromText(eventObj.description || ""); renderAttachPreviews('edit-attach-preview'); if(eventObj.recurrence && eventObj.recurrence.length > 0) { ruleEl.value = eventObj.recurrence[0]; dispEl.innerText = "設定済"; } else { ruleEl.value = ""; dispEl.innerText = "なし"; } if (eventObj.start.date) { allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = eventObj.start.date; const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); endEl.value = ed.toISOString().split('T')[0]; } else { allDayEl.checked = false; startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; startEl.value = eventObj.start.dateTime.slice(0,16); endEl.value = eventObj.end.dateTime.slice(0,16); } const colorOpts = document.querySelectorAll('#color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } else { colorOpts[0].classList.add('selected'); selectedColorId = ""; } } else { document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; ruleEl.value = ""; dispEl.innerText = "なし"; allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = selectedDateStr; endEl.value = selectedDateStr; selectColor(document.querySelector('#color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('edit-attach-preview'); } }
+        async function openEditor(eventObj = null) { document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none'; document.getElementById('btn-duplicate').style.display = isEdit ? 'block' : 'none'; const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc'); const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const ruleEl = document.getElementById('edit-recurrence-rule'); const dispEl = document.getElementById('edit-recurrence-display'); if (isEdit) { document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = await extractAttachmentsFromText(eventObj.description || ""); renderAttachPreviews('edit-attach-preview'); if(eventObj.recurrence && eventObj.recurrence.length > 0) { ruleEl.value = eventObj.recurrence[0]; dispEl.innerText = "設定済"; } else { ruleEl.value = ""; dispEl.innerText = "なし"; } if (eventObj.start.date) { allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = eventObj.start.date; const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); endEl.value = ed.toISOString().split('T')[0]; } else { allDayEl.checked = false; startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; startEl.value = eventObj.start.dateTime.slice(0,16); endEl.value = eventObj.end.dateTime.slice(0,16); } const colorOpts = document.querySelectorAll('#color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } else { colorOpts[0].classList.add('selected'); selectedColorId = ""; } } else { document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; ruleEl.value = ""; dispEl.innerText = "なし"; allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = selectedDateStr; endEl.value = selectedDateStr; selectColor(document.querySelector('#color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('edit-attach-preview'); } }
         function toggleTimeInputs() { const isAllDay = document.getElementById('edit-allday').checked; const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const currentStart = startEl.value; if (isAllDay) { startEl.type = 'date'; endEl.type = 'date'; startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr; endEl.value = startEl.value; } else { startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr; startEl.value = `${baseDate}T09:00`; endEl.value = `${baseDate}T10:00`; } }
         function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); currentAttachments = []; }
+        function duplicateEvent() { document.getElementById('edit-id').value = ""; document.getElementById('editor-title').innerText = "複製して新規保存"; showToast('複製した。日付を変更して保存してくれ。'); }
+
+        async function saveEvent() {
+            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; }
+            showGlobalLoader('保存中...'); await yieldUI();
+            const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value; const recurVal = document.getElementById('edit-recurrence-rule').value;
+            let finalDesc = document.getElementById('edit-desc').value.trim();
+            try { for (const att of currentAttachments) { if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); finalDesc += `\n[img:${att.id}]`; } else if (att.type === 'link') { finalDesc += `\n${att.id}`; } } } catch (idbErr) { console.error(idbErr); hideGlobalLoader(); showToast('画像保存に失敗した。'); return; }
+            const resource = { summary: title, location: loc, description: finalDesc.trim() }; if(selectedColorId) resource.colorId = selectedColorId; if(recurVal) resource.recurrence = [recurVal];
+            if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
+            try { 
+                if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); } 
+                else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); } 
+                const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
+                closeAllModals(); showToast('予定を保存した。');
+            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
+            hideGlobalLoader();
+        }
+        async function deleteEvent() { if(!confirm('予定を削除してよいか？')) return; const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; setProgress(30); closeAllModals(); try { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
 
         function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
         function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedTaskColorId = id; }
         
         async function openTaskEditor(taskObj = null) { document.getElementById('task-editor-modal').classList.add('active'); const isEdit = taskObj !== null; document.getElementById('task-editor-title').innerText = isEdit ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = isEdit ? 'block' : 'none'; const titleEl = document.getElementById('task-edit-title'); const notesEl = document.getElementById('task-edit-notes'); const dueEl = document.getElementById('task-edit-due'); const recEl = document.getElementById('task-edit-recurrence'); if (isEdit) { document.getElementById('task-edit-id').value = taskObj.id; titleEl.value = taskObj.title || ""; const tData = extractTaskData(taskObj.notes); dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : ""; recEl.value = tData.recurrence || ""; notesEl.value = await extractAttachmentsFromText(tData.cleanNotes); renderAttachPreviews('task-attach-preview'); const colorOpts = document.querySelectorAll('#task-color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(tData.colorId) { colorOpts[parseInt(tData.colorId)].classList.add('selected'); selectedTaskColorId = tData.colorId; } else { colorOpts[0].classList.add('selected'); selectedTaskColorId = ""; } } else { document.getElementById('task-edit-id').value = ""; titleEl.value = ""; notesEl.value = ""; dueEl.value = selectedDateStr; recEl.value = ""; selectTaskColor(document.querySelector('#task-color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('task-attach-preview'); } }
         function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); currentAttachments = []; }
+
+        async function saveTask() {
+            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; }
+            showGlobalLoader('保存中...'); await yieldUI();
+            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; const recVal = document.getElementById('task-edit-recurrence').value;
+            let baseNotes = document.getElementById('task-edit-notes').value.trim();
+            try { for (const att of currentAttachments) { if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); baseNotes += `\n[img:${att.id}]`; } else if (att.type === 'link') { baseNotes += `\n${att.id}`; } } } catch (idbErr) { console.error(idbErr); hideGlobalLoader(); showToast('画像保存に失敗した。'); return; }
+            let meta = ""; if(selectedTaskColorId) meta += `[c:${selectedTaskColorId}]`; if(recVal) meta += `[r:${recVal}]`; const finalNotes = meta ? `${baseNotes}\n${meta}` : baseNotes;
+            const resource = { title, notes: finalNotes.trim() }; if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
+            try { 
+                if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); } 
+                else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); } 
+                const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
+                closeAllModals(); showToast('タスクを保存した。');
+            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
+            hideGlobalLoader();
+        }
+        async function deleteTask() { if(!confirm('完全に削除してよいか？')) return; const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; setProgress(30); closeAllModals(); try { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
+
         function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); closeDictEditor(); closeRecurrenceEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
+
+        // --- 起動ロジック ---
+        document.addEventListener('DOMContentLoaded', async () => { 
+            try { await initIDB(); loadSettings(); loadDict(); initTaskColorPicker(); } 
+            catch (err) { showToast("致命的な初期化エラー: " + err.message); }
+        });
 
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
