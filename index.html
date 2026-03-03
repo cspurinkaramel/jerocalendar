@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v6.5</title>
+    <title>JeroCalendar v6.6</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -388,8 +388,8 @@
             const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
 
             try {
-                // v6.5: APIエンドポイントを "gemini-1.5-flash-latest" に修正。これにより404エラーを完全に回避する。
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+                // v6.6: 最新のGemini 2.5 Flashエンドポイントへ接続！ 1.5は完全に捨てた。
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: [{ parts: [{ text: text }] }], generationConfig: { response_mime_type: "application/json" } })
                 });
@@ -441,6 +441,7 @@
             }
         }
 
+        // --- Core Application Logic ---
         function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
         function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
         function renderDictUI() { const container = document.getElementById('dict-list'); container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${item.keys.join(', ')}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
