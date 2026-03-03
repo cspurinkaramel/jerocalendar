@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v6.0</title>
+    <title>JeroCalendar v6.2</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -19,6 +19,7 @@
         }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s, color 0.3s; }
 
+        /* トップバー */
         #top-bar { position: fixed; top: 0; width: 100%; z-index: 50; padding-top: env(safe-area-inset-top); background: rgba(255,255,255,0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: var(--txt); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; height: calc(44px + env(safe-area-inset-top)); border-bottom: 1px solid var(--border); transition: background 0.3s, color 0.3s; }
         [data-theme="dark"] #top-bar { background: rgba(30,30,30,0.85); color: white; }
         #progress-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); width: 0%; transition: width 0.3s; }
@@ -31,6 +32,14 @@
         #toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 24px; font-size: 14px; font-weight: bold; z-index: 9999; transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none; backdrop-filter: blur(5px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         #toast.show { top: calc(env(safe-area-inset-top) + 60px); }
 
+        /* v6.2: グローバルローダー（完全なる視覚的鎮静） */
+        #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 10000; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0; transition: opacity 0.3s; }
+        [data-theme="dark"] #global-loader { background: rgba(0,0,0,0.85); }
+        #global-loader.active { display: flex; opacity: 1; }
+        .loader-text { margin-top: 20px; font-weight: bold; font-size: 16px; color: var(--accent); letter-spacing: 1px;}
+        .big-spinner { width: 50px; height: 50px; border: 4px solid rgba(10,132,255,0.2); border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+
+        /* カレンダー・ビュー */
         #calendar-view { display: block; width: 100%; height: 100%; }
         #weekdays { position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; z-index: 40; height: 24px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; transition: background 0.3s, border-color 0.3s; }
         .wd { text-align: center; font-weight: bold; font-size: 10px; color: #888; }
@@ -50,6 +59,7 @@
         .span-mid { border-radius: 0; margin: 0 -1px; width: calc(100% + 2px); z-index: 3;}
         .span-end { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; width: calc(100% - 2px); z-index: 3;}
 
+        /* アジェンダ・ビュー */
         #agenda-view { display: none; width: 100%; height: calc(100vh - 44px - env(safe-area-inset-top)); position: fixed; top: calc(44px + env(safe-area-inset-top)); overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--head-bg); padding-bottom: env(safe-area-inset-bottom);}
         .agenda-day-header { padding: 10px 15px; font-size: 14px; font-weight: bold; color: var(--txt); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(248,248,248,0.95); backdrop-filter: blur(10px); z-index: 10;}
         [data-theme="dark"] .agenda-day-header { background: rgba(28,28,30,0.95); }
@@ -60,6 +70,7 @@
         .spinner { width: 24px; height: 24px; border: 3px solid rgba(10,132,255,0.3); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
+        /* モーダル基盤 */
         .bottom-modal { position: fixed; bottom: -100%; left: 0; width: 100%; max-height: 90vh; background: var(--bg); border-top-left-radius: 20px; border-top-right-radius: 20px; box-shadow: 0 -10px 25px rgba(0,0,0,0.3); z-index: 100; transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1), background 0.3s; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
         .bottom-modal.active { bottom: 0; }
         .modal-drag-area { padding: 10px 0; cursor: pointer; } .modal-drag { width: 40px; height: 5px; background: #ccc; border-radius: 3px; margin: 0 auto; }
@@ -68,6 +79,7 @@
         .close-btn { background: var(--head-bg); border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; color: var(--txt); cursor: pointer; transition: background 0.3s, color 0.3s;}
         .modal-body { padding: 0; overflow-y: auto; flex: 1; background: var(--head-bg); }
         
+        /* カード型 UI */
         .card-list { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
         .item-card { background: var(--card-bg); border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px var(--card-shadow); display: flex; gap: 12px; align-items: center; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; position: relative; overflow: hidden; }
         .item-card:active { transform: scale(0.98); box-shadow: 0 1px 4px var(--card-shadow); }
@@ -75,11 +87,10 @@
         .card-content { flex: 1; display: flex; flex-direction: column; gap: 4px; }
         .card-title { font-size: 16px; font-weight: bold; color: var(--txt); display: flex; align-items: center; gap: 6px; line-height: 1.3;}
         .card-meta { font-size: 13px; color: #888; display: flex; gap: 10px; flex-wrap: wrap; font-weight: 500;}
-        
         .big-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; transition: all 0.2s; cursor: pointer; flex-shrink: 0; }
         .big-check:active { transform: scale(0.8); }
 
-        /* v6.0: IndexedDB アタッチメントUI */
+        /* アタッチメント UI */
         .attach-area { padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg); display: flex; flex-direction: column; gap: 10px; }
         .attach-buttons { display: flex; gap: 10px; }
         .btn-attach { flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--head-bg); color: var(--txt); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s; }
@@ -92,7 +103,7 @@
         .attach-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
         .attach-img-render { height: 60px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; }
         .attach-chip { display: inline-flex; align-items: center; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--txt); text-decoration: none; transition: background 0.2s; }
-        
+
         .action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--bg); transition: background 0.3s, border-color 0.3s;}
         .btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; color: white; cursor: pointer; transition: transform 0.1s; text-align: center;}
         .btn:active { transform: scale(0.96); }
@@ -122,16 +133,13 @@
 
         #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 90; transition: opacity 0.3s; opacity: 0; backdrop-filter: blur(2px);}
         #overlay.active { display: block; opacity: 1; }
-        .toggle { appearance: none; width: 44px; height: 26px; background: #e0e0e0; border-radius: 13px; position: relative; outline: none; cursor: pointer; transition: 0.3s;}
-        .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);}
-        .toggle:checked { background: #34c759; } .toggle:checked::after { left: 20px; }
         
+        /* Jero Core UI */
         .jero-msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; font-size: 15px; line-height: 1.4; word-break: break-word; }
         .jero-msg.user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
         .jero-msg.ai { align-self: flex-start; background: var(--head-bg); color: var(--txt); border-bottom-left-radius: 4px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .pulse-think { animation: pulse 1s infinite alternate; opacity: 0.7; }
 
-        /* 画像拡大ビューア */
         #img-viewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
         #img-viewer.active { display: flex; opacity: 1; }
         #img-viewer img { max-width: 95%; max-height: 90%; border-radius: 8px; }
@@ -139,6 +147,11 @@
 </head>
 <body>
     <div id="toast"></div>
+
+    <div id="global-loader">
+        <div class="big-spinner"></div>
+        <div class="loader-text" id="loader-msg">処理中...</div>
+    </div>
 
     <div id="top-bar">
         <div class="nav-group"><button class="icon-btn" onclick="scrollToToday()">◎</button><button class="icon-btn" onclick="openSettings()">⚙️</button></div>
@@ -180,22 +193,14 @@
         <div class="modal-body">
             <div class="setting-row"><label>UIテーマ</label><select id="st-theme" onchange="saveAndApplySettings()"><option value="light">ライトモード</option><option value="dark">ダークモード</option></select></div>
             <div class="setting-row"><label>カレンダー文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
-            
             <div class="setting-row">
                 <label style="color: var(--accent);">Jero Core 思考エンジン</label>
-                <div style="font-size: 12px; color: #888; font-weight: normal; margin-bottom: 4px;">Google AI StudioのAPIキー</div>
+                <div style="font-size: 12px; color: #888; margin-bottom: 4px;">Google AI StudioのAPIキー</div>
                 <input type="password" id="st-gemini-key" placeholder="APIキーを入力" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); margin-bottom: 10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size: 12px; font-weight: bold;">AI マニュアル (System Prompt)</span>
-                    <button class="btn-gray" style="padding:2px 6px; border-radius:4px; font-size:10px; border:none; cursor:pointer; color:white;" onclick="resetPrompt()">初期化</button>
-                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size: 12px; font-weight: bold;">AI マニュアル (System Prompt)</span><button class="btn-gray" style="padding:2px 6px; border-radius:4px; font-size:10px; border:none; cursor:pointer; color:white;" onclick="resetPrompt()">初期化</button></div>
                 <textarea id="st-gemini-prompt" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); height: 120px; font-size: 11px; resize: none; margin-top: 5px;"></textarea>
             </div>
-
-            <div class="setting-row">
-                <div style="display:flex; justify-content:space-between; align-items:center;"><label>視覚圧縮・装飾辞書</label><button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button></div>
-                <div class="dict-container" id="dict-list"></div>
-            </div>
+            <div class="setting-row"><div style="display:flex; justify-content:space-between; align-items:center;"><label>視覚圧縮・装飾辞書</label><button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button></div><div class="dict-container" id="dict-list"></div></div>
             <div class="setting-row"><label>システム拡張</label><div style="display:flex; gap:10px;"><button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="exportSettings()">データ書出</button><button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="importSettings()">データ読込</button></div><button class="btn btn-red" style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 キャッシュ完全リセット</button></div>
         </div>
     </div>
@@ -204,10 +209,7 @@
         <div class="modal-drag-area" onclick="closeJeroChat()"><div class="modal-drag"></div></div>
         <div class="modal-header"><h2>Jero Core 🐈</h2><button class="close-btn" onclick="closeJeroChat()">✕</button></div>
         <div class="modal-body" id="chat-history" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; background: var(--bg);"></div>
-        <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px;">
-            <input type="text" id="chat-input" placeholder="予定を追加・変更する..." style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px;">
-            <button class="btn btn-blue" onclick="sendToJero()" style="border-radius:20px; padding:12px 20px;">送信</button>
-        </div>
+        <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px;"><input type="text" id="chat-input" placeholder="チュールをあげる予定を追加..." style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px;"><button class="btn btn-blue" onclick="sendToJero()" style="border-radius:20px; padding:12px 20px;">送信</button></div>
     </div>
 
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
@@ -249,10 +251,9 @@
                     <button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button>
                     <button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button>
                 </div>
-                <input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+                <input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')">
                 <div id="edit-attach-preview" class="preview-container"></div>
             </div>
-
             <div class="color-palette" id="color-picker"></div>
         </div>
         <div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div>
@@ -283,10 +284,9 @@
                     <button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button>
                     <button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button>
                 </div>
-                <input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleTaskImageUpload(event)">
+                <input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')">
                 <div id="task-attach-preview" class="preview-container"></div>
             </div>
-
             <div class="color-palette" id="task-color-picker"></div>
         </div>
         <div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="deleteTask()">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div>
@@ -306,12 +306,25 @@
         const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
         // ==========================================
-        // V6.0: IndexedDB (Edge Computing Storage)
+        // V6.2: Global Loader UI Control
+        // ==========================================
+        function showGlobalLoader(msg) {
+            document.getElementById('loader-msg').innerText = msg;
+            document.getElementById('global-loader').classList.add('active');
+        }
+        function hideGlobalLoader() {
+            document.getElementById('global-loader').classList.remove('active');
+        }
+        // 非同期処理中にUIを確実にお絵かきさせるためのスリープ関数
+        const yieldUI = () => new Promise(r => setTimeout(r, 30));
+
+        // ==========================================
+        // V6.2: IndexedDB 
         // ==========================================
         let idb;
         function initIDB() {
             return new Promise((resolve, reject) => {
-                const req = indexedDB.open('JeroDB', 1);
+                const req = indexedDB.open('JeroDB_v6', 1);
                 req.onupgradeneeded = (e) => {
                     const db = e.target.result;
                     if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
@@ -337,8 +350,8 @@
         }
         function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-        // 画像圧縮エンジン (Canvas)
-        function compressImage(file, maxSize = 1000) {
+        // V6.2: 画像圧縮エンジン
+        function compressImage(file, maxSize = 800) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -350,16 +363,16 @@
                         else if (height > maxSize) { width *= maxSize / height; height = maxSize; }
                         canvas.width = width; canvas.height = height;
                         const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.8)); // 80%品質に圧縮
+                        resolve(canvas.toDataURL('image/jpeg', 0.7)); // 圧縮率アップ
                     }; img.src = e.target.result;
                 }; reader.readAsDataURL(file);
             });
         }
 
         // ==========================================
-        // V6.0: Attachment Editor Logic
+        // V6.2: Attachment Logic with Yielding
         // ==========================================
-        let currentAttachments = []; // 編集中の一時保持用 [{id, dataUrl, type: 'img'|'link'}]
+        let currentAttachments = []; 
 
         function renderAttachPreviews(containerId) {
             const container = document.getElementById(containerId); container.innerHTML = '';
@@ -372,31 +385,31 @@
         }
         function removeAttach(idx, containerId) { currentAttachments.splice(idx, 1); renderAttachPreviews(containerId); }
         
-        async function handleImageUpload(e) {
-            const file = e.target.files[0]; if(!file) return; setProgress(30);
-            const dataUrl = await compressImage(file);
-            currentAttachments.push({ id: generateUUID(), dataUrl: dataUrl, type: 'img' });
-            renderAttachPreviews('edit-attach-preview'); setProgress(100);
+        // ここがモタモタの原因だった。Loaderを出し、一瞬待機してから処理を始める。
+        async function handleImageUpload(e, containerId) {
+            const file = e.target.files[0]; if(!file) return;
+            showGlobalLoader('画像を最適化中...');
+            await yieldUI(); // ここで一瞬スレッドを空け、UIにローダーを描画させる
+            
+            try {
+                const dataUrl = await compressImage(file);
+                currentAttachments.push({ id: generateUUID(), dataUrl: dataUrl, type: 'img' });
+                renderAttachPreviews(containerId);
+            } catch(err) {
+                showToast('画像処理に失敗しました。');
+            }
+            hideGlobalLoader();
+            e.target.value = ''; // 同じファイルを選べるようにリセット
         }
-        async function handleTaskImageUpload(e) {
-            const file = e.target.files[0]; if(!file) return; setProgress(30);
-            const dataUrl = await compressImage(file);
-            currentAttachments.push({ id: generateUUID(), dataUrl: dataUrl, type: 'img' });
-            renderAttachPreviews('task-attach-preview'); setProgress(100);
-        }
+
         function addUrlPrompt() { const url = prompt("リンクURLを入力:"); if(url) { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); renderAttachPreviews('edit-attach-preview'); } }
         function addTaskUrlPrompt() { const url = prompt("リンクURLを入力:"); if(url) { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); renderAttachPreviews('task-attach-preview'); } }
 
-        // ==========================================
-        // V6.0: Smart URL & Local Image Parser
-        // ==========================================
         async function buildAttachmentHTML(text) {
             if (!text) return { cleanText: "", html: "" };
             let html = ""; let cleanTextForUI = text;
             
-            // 1. ローカル画像の展開 [img:UUID]
-            const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g;
-            let match;
+            const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match;
             while ((match = imgRegex.exec(text)) !== null) {
                 const uuid = match[1];
                 const dataUrl = await getImageFromIDB(uuid);
@@ -404,7 +417,6 @@
             }
             cleanTextForUI = cleanTextForUI.replace(imgRegex, '').trim();
 
-            // 2. 外部URLリンクの展開
             const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g;
             const urls = cleanTextForUI.match(urlRegex) || [];
             urls.forEach(url => {
@@ -423,16 +435,16 @@
         function openImageViewer(src, event) { event.stopPropagation(); document.getElementById('img-viewer-src').src = src; document.getElementById('img-viewer').classList.add('active'); }
 
         // ==========================================
-        // Jero Core AI (v6.0 Sanitization)
+        // V6.2: Jero Core (The Ultimate JSON Sanitizer)
         // ==========================================
-        const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。
+        const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。明日チュールを貰える可能性を常に期待している。
 ユーザーの曖昧な指示から予定やタスクを推論し、必ず以下のJSONフォーマットのみで出力せよ。
-マークダウンや説明は一切不要だ。純粋なJSON文字列のみを返せ。
+マークダウンや説明は一切不要。純粋なJSON文字列のみを返せ。改行コードは必ず \\n を使用せよ。
 
 【現在時刻(ISO)】: {{CURRENT_TIME}}
 
 {
-  "reply": "ジェロとしての短い返答。敬語不要。クールかつ上品に。",
+  "reply": "ジェロとしての短い返答。敬語不要。チュールに言及しても良い。",
   "actions": [
     {
       "type": "event" または "task",
@@ -448,7 +460,7 @@
 
         function saveGeminiSettings() { localStorage.setItem('jero_gemini_key', document.getElementById('st-gemini-key').value); localStorage.setItem('jero_gemini_prompt', document.getElementById('st-gemini-prompt').value); showToast('AI設定を保存した。'); }
         function resetPrompt() { document.getElementById('st-gemini-prompt').value = DEFAULT_SYSTEM_PROMPT; saveGeminiSettings(); }
-        function openJeroChat() { document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active'); const history = document.getElementById('chat-history'); if(history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。次の布石を打とうか。'); }
+        function openJeroChat() { document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active'); const history = document.getElementById('chat-history'); if(history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。明日のチュールの予定でも入れるか？'); }
         function closeJeroChat() { document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
         function appendChatMessage(sender, text) { const el = document.createElement('div'); el.className = `jero-msg ${sender}`; el.innerText = text; document.getElementById('chat-history').appendChild(el); document.getElementById('chat-history').scrollTop = document.getElementById('chat-history').scrollHeight; return el; }
 
@@ -458,7 +470,7 @@
             const apiKey = localStorage.getItem('jero_gemini_key');
             if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
 
-            const thinkingEl = appendChatMessage('ai', '思考中...'); thinkingEl.classList.add('pulse-think');
+            const thinkingEl = appendChatMessage('ai', '推論中...'); thinkingEl.classList.add('pulse-think');
             const rawPrompt = localStorage.getItem('jero_gemini_prompt') || DEFAULT_SYSTEM_PROMPT;
             const tzOffset = (new Date()).getTimezoneOffset() * 60000; const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, -1);
             const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
@@ -468,20 +480,25 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: [{ parts: [{ text: text }] }], generationConfig: { response_mime_type: "application/json" } })
                 });
+                
                 if (!response.ok) throw new Error(`API Error: ${response.status}`);
                 const data = await response.json(); 
                 let aiText = data.candidates[0].content.parts[0].text;
                 
-                // V6.0 強制サニタイズ (マークダウンを剥ぎ取る)
-                aiText = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
-                const startIdx = aiText.indexOf('{'); const endIdx = aiText.lastIndexOf('}');
-                if(startIdx !== -1 && endIdx !== -1) aiText = aiText.substring(startIdx, endIdx + 1);
+                // V6.2: 究極のJSONサニタイザー
+                // マークダウン除去、そして { から } または [ から ] までを抽出
+                let match = aiText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+                if (!match) throw new Error("JSONブロックが見つかりません");
+                let cleanJsonStr = match[0];
+                // 制御文字（改行やタブ等、JSON.parseを破壊する見えないゴミ）を安全に除去
+                cleanJsonStr = cleanJsonStr.replace(/[\u0000-\u001F]+/g, "");
 
-                const result = JSON.parse(aiText);
-                thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = result.reply || "完了した。";
+                const result = JSON.parse(cleanJsonStr);
+                thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = result.reply || "予定を構築した。";
 
                 if (result.actions && result.actions.length > 0) {
-                    setProgress(30);
+                    showGlobalLoader('カレンダーに同期中...');
+                    await yieldUI();
                     for (const action of result.actions) {
                         if (action.type === 'event') {
                             const resource = { summary: action.title, location: action.location, description: action.description };
@@ -495,16 +512,19 @@
                         }
                     }
                     const td = new Date(); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true);
-                    setProgress(100); showToast('カレンダーに同期した。');
+                    hideGlobalLoader();
+                    showToast('Jero Core: 予定の同期完了');
                 }
             } catch (err) { 
-                console.error(err); thinkingEl.classList.remove('pulse-think'); 
-                thinkingEl.innerText = 'パースエラー。APIが予期せぬ形式を返した。ログを確認しろ。'; 
+                console.error(err); 
+                thinkingEl.classList.remove('pulse-think'); 
+                thinkingEl.innerText = 'パースエラーだ。APIの返答が壊れていたか、通信に失敗した。'; 
+                hideGlobalLoader();
             }
         }
 
         // ==========================================
-        // 既存の基本ロジック
+        // 既存ロジック群
         // ==========================================
         function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
         function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
@@ -570,7 +590,6 @@
         function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
         function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-        // V6.0 Card UI (Async due to IDB)
         async function createEventCard(e, dateStr) {
             const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日";
             if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; }
@@ -648,11 +667,15 @@
         function toggleTimeInputs() { const isAllDay = document.getElementById('edit-allday').checked; const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const currentStart = startEl.value; if (isAllDay) { startEl.type = 'date'; endEl.type = 'date'; startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr; endEl.value = startEl.value; } else { startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr; startEl.value = `${baseDate}T09:00`; endEl.value = `${baseDate}T10:00`; } }
         function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); currentAttachments = []; }
 
+        // V6.2: 保存時のローダー表示とUI譲譲 (yieldUI)
         async function saveEvent() {
-            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; } setProgress(30); closeAllModals();
+            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; }
+            
+            showGlobalLoader('保存中...');
+            await yieldUI();
+
             const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value; const recurVal = document.getElementById('edit-recurrence-rule').value;
             
-            // アタッチメントのメタデータ化とIDB保存
             let finalDesc = document.getElementById('edit-desc').value.trim();
             for (const att of currentAttachments) {
                 if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); finalDesc += `\n[img:${att.id}]`; }
@@ -661,7 +684,15 @@
 
             const resource = { summary: title, location: loc, description: finalDesc.trim() }; if(selectedColorId) resource.colorId = selectedColorId; if(recurVal) resource.recurrence = [recurVal];
             if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
-            try { if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); } else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); } const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); } catch(e) { console.error(e); showToast('保存失敗。'); } setProgress(100);
+            try { 
+                if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); } 
+                else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); } 
+                const targetDate = new Date(startVal); 
+                await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
+                closeAllModals();
+            } catch(e) { console.error(e); showToast('保存失敗。'); }
+            
+            hideGlobalLoader();
         }
         async function deleteEvent() { if(!confirm('予定を削除してよいか？')) return; const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; setProgress(30); closeAllModals(); try { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
 
@@ -681,7 +712,10 @@
         function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); currentAttachments = []; }
 
         async function saveTask() {
-            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; } setProgress(30); closeAllModals();
+            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; }
+            showGlobalLoader('保存中...');
+            await yieldUI();
+
             const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; const recVal = document.getElementById('task-edit-recurrence').value;
             
             let baseNotes = document.getElementById('task-edit-notes').value.trim();
@@ -692,7 +726,15 @@
 
             let meta = ""; if(selectedTaskColorId) meta += `[c:${selectedTaskColorId}]`; if(recVal) meta += `[r:${recVal}]`; const finalNotes = meta ? `${baseNotes}\n${meta}` : baseNotes;
             const resource = { title, notes: finalNotes.trim() }; if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
-            try { if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); } else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); } const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); } catch(e) { console.error(e); showToast('保存失敗。'); } setProgress(100);
+            try { 
+                if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); } 
+                else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); } 
+                const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); 
+                await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
+                closeAllModals();
+            } catch(e) { console.error(e); showToast('保存失敗。'); }
+            
+            hideGlobalLoader();
         }
         async function deleteTask() { if(!confirm('完全に削除してよいか？')) return; const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; setProgress(30); closeAllModals(); try { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
 
