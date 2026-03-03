@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v5.91</title>
+    <title>JeroCalendar v5.9</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -79,6 +79,7 @@
         .big-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; transition: all 0.2s; cursor: pointer; flex-shrink: 0; }
         .big-check:active { transform: scale(0.8); }
 
+        /* v5.9: アタッチメント（添付ファイル）用スタイル */
         .attach-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
         .attach-img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .attach-chip { display: inline-flex; align-items: center; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--txt); text-decoration: none; transition: background 0.2s; }
@@ -101,8 +102,11 @@
 
         .dict-container { background: var(--head-bg); border-radius: 10px; padding: 10px; margin-top: 10px; max-height: 250px; overflow-y: auto; }
         .dict-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); font-size: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 8px;}
-        .dict-btn-edit, .dict-btn-del { border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; color: white; }
-        .dict-btn-edit { background: var(--accent); margin-right: 5px; } .dict-btn-del { background: #ff3b30; }
+        .dict-item:last-child { margin-bottom: 0; }
+        .dict-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .dict-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; }
+        .dict-btn-edit { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; margin-right: 5px; font-size: 12px;}
+        .dict-btn-del { background: #ff3b30; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px;}
         
         .color-palette { display: flex; gap: 12px; padding: 15px 20px; overflow-x: auto; scrollbar-width: none; background: var(--bg);}
         .color-opt { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
@@ -125,7 +129,7 @@
 
     <div id="top-bar">
         <div class="nav-group"><button class="icon-btn" onclick="scrollToToday()">◎</button><button class="icon-btn" onclick="openSettings()">⚙️</button></div>
-        <div id="month-display">起動中...</div>
+        <div id="month-display">表示中...</div>
         <div class="nav-group"><button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button><button class="icon-btn" id="view-toggle-btn" onclick="toggleView()">📝</button></div>
         <div id="progress-bar"></div>
     </div>
@@ -193,8 +197,476 @@
         </div>
     </div>
 
-    <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;"><div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="dict-edit-idx"><div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div><div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div></div>
-    <div id="daily-modal" class="bottom-modal" style="z-index: 105;"><div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div><div class="modal-body"><div class="card-list" id="daily-list"></div></div><div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div></div>
-    <div id="editor-modal" class="bottom-modal" style="z-index: 106;"><div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="edit-id"><div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div><div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div><div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div><div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div><input type="hidden" id="edit-recurrence-rule"><div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div><div class="form-group"><textarea id="edit-desc" placeholder="≡ メモやリンクURLを追加 (画像もOK)"></textarea></div><div class="color-palette" id="color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div></div>
-    <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;"><div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div><div class="modal-body"><div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div><div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div></div><div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div></div>
-    <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;"><div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="task-edit-id"><div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div><div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div><div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細やリンクURLを追加 (画像もOK)"></textarea></div><div class="color-palette" id="task-color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete
+    <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
+        <div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="dict-edit-idx">
+            <div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div>
+            <div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div>
+    </div>
+
+    <div id="daily-modal" class="bottom-modal" style="z-index: 105;">
+        <div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div>
+        <div class="modal-body"><div class="card-list" id="daily-list"></div></div>
+        <div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div>
+    </div>
+
+    <div id="editor-modal" class="bottom-modal" style="z-index: 106;">
+        <div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-id">
+            <div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div>
+            <div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div>
+            <div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div>
+            <div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div>
+            <div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div>
+            <input type="hidden" id="edit-recurrence-rule">
+            <div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div>
+            <div class="form-group"><textarea id="edit-desc" placeholder="≡ メモやリンクURLを追加 (画像もOK)"></textarea></div>
+            <div class="color-palette" id="color-picker"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="deleteEvent()">削除</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div>
+    </div>
+
+    <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;">
+        <div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div>
+        <div class="modal-body">
+            <div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div>
+            <div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div>
+    </div>
+
+    <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;">
+        <div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="task-edit-id">
+            <div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div>
+            <div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div>
+            <div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div>
+            <div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細やリンクURLを追加 (画像もOK)"></textarea></div>
+            <div class="color-palette" id="task-color-picker"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="deleteTask()">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div>
+    </div>
+
+    <script>
+        const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
+        let tokenClient, gapiInited = false, gisInited = false;
+        let dataCache = {}; let renderedMonths = []; let observer, isFetching = false, isAuthError = false;
+        let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", currentView = 'calendar';
+        const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
+
+        let advancedDict = [];
+        const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
+
+        const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。
+ユーザーの曖昧な指示から予定やタスクを推論し、必ず以下のJSONフォーマットのみで出力せよ。
+無駄な返答やマークダウン(\`\`\`json等)は一切含めてはならない。
+
+【現在の時刻(ISO)】: {{CURRENT_TIME}}
+
+【出力JSONスキーマ】
+{
+  "reply": "ジェロとしての短い返答。敬語不要。クールかつ上品に。",
+  "actions": [
+    {
+      "type": "event" または "task",
+      "title": "予定/タスク名",
+      "start": "YYYY-MM-DDTHH:MM:00 (終日の場合は YYYY-MM-DD)",
+      "end": "YYYY-MM-DDTHH:MM:00 (終日の場合は翌日の YYYY-MM-DD)",
+      "due": "タスクの場合の期限 YYYY-MM-DD",
+      "location": "場所(あれば)",
+      "description": "メモ(あれば)"
+    }
+  ]
+}`;
+
+        function saveGeminiSettings() {
+            localStorage.setItem('jero_gemini_key', document.getElementById('st-gemini-key').value);
+            localStorage.setItem('jero_gemini_prompt', document.getElementById('st-gemini-prompt').value);
+            showToast('AI設定を保存した。');
+        }
+        function resetPrompt() { document.getElementById('st-gemini-prompt').value = DEFAULT_SYSTEM_PROMPT; saveGeminiSettings(); }
+
+        function openJeroChat() {
+            document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active');
+            const history = document.getElementById('chat-history');
+            if(history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。次の布石を打とうか。');
+        }
+        function closeJeroChat() { document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
+        function appendChatMessage(sender, text) {
+            const el = document.createElement('div'); el.className = `jero-msg ${sender}`; el.innerText = text;
+            const history = document.getElementById('chat-history'); history.appendChild(el); history.scrollTop = history.scrollHeight; return el;
+        }
+
+        async function sendToJero() {
+            const inputEl = document.getElementById('chat-input'); const text = inputEl.value.trim(); if(!text) return;
+            appendChatMessage('user', text); inputEl.value = '';
+            const apiKey = localStorage.getItem('jero_gemini_key');
+            if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。話はそれからだ。'); return; }
+
+            const thinkingEl = appendChatMessage('ai', '思考中...'); thinkingEl.classList.add('pulse-think');
+            const rawPrompt = localStorage.getItem('jero_gemini_prompt') || DEFAULT_SYSTEM_PROMPT;
+            const tzOffset = (new Date()).getTimezoneOffset() * 60000; const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, -1);
+            const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: [{ parts: [{ text: text }] }], generationConfig: { response_mime_type: "application/json" } })
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const data = await response.json(); const aiText = data.candidates[0].content.parts[0].text;
+                const result = JSON.parse(aiText);
+                
+                thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = result.reply || "完了した。";
+
+                if (result.actions && result.actions.length > 0) {
+                    setProgress(30);
+                    for (const action of result.actions) {
+                        if (action.type === 'event') {
+                            const resource = { summary: action.title, location: action.location, description: action.description };
+                            if (action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } 
+                            else { resource.start = { date: action.start }; resource.end = { date: action.end }; }
+                            await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
+                        } else if (action.type === 'task') {
+                            const resource = { title: action.title, notes: action.description };
+                            if (action.due) resource.due = new Date(action.due).toISOString();
+                            await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource });
+                        }
+                    }
+                    const td = new Date(); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true);
+                    setProgress(100); showToast('カレンダーに同期した。');
+                }
+            } catch (err) { console.error(err); thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = '通信エラー、もしくは推論のパースに失敗した。'; }
+        }
+
+        function loadDict() {
+            const saved = localStorage.getItem('jero_adv_dict');
+            if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } 
+            else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI();
+        }
+        function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
+        function renderDictUI() {
+            const container = document.getElementById('dict-list'); container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; }
+            advancedDict.forEach((item, idx) => {
+                const el = document.createElement('div'); el.className = 'dict-item';
+                el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${item.keys.join(', ')}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`;
+                container.appendChild(el);
+            });
+        }
+        function openDictEditor(idx = -1) {
+            document.getElementById('dict-editor-modal').classList.add('active');
+            if (idx >= 0) { const item = advancedDict[idx]; document.getElementById('dict-edit-idx').value = idx; document.getElementById('dict-edit-keys').value = item.keys.join(', '); document.getElementById('dict-edit-icon').value = item.icon; document.getElementById('dict-edit-bg').value = item.bg; document.getElementById('dict-edit-txt').value = item.txt; document.getElementById('dict-editor-title').innerText = '辞書の編集'; } 
+            else { document.getElementById('dict-edit-idx').value = -1; document.getElementById('dict-edit-keys').value = ''; document.getElementById('dict-edit-icon').value = ''; document.getElementById('dict-edit-bg').value = '#0a84ff'; document.getElementById('dict-edit-txt').value = '#ffffff'; document.getElementById('dict-editor-title').innerText = '新規追加'; }
+        }
+        function closeDictEditor() { document.getElementById('dict-editor-modal').classList.remove('active'); }
+        function saveDictItem() {
+            const idx = parseInt(document.getElementById('dict-edit-idx').value); const keysRaw = document.getElementById('dict-edit-keys').value; const icon = document.getElementById('dict-edit-icon').value.trim(); const bg = document.getElementById('dict-edit-bg').value; const txt = document.getElementById('dict-edit-txt').value;
+            if(!keysRaw || !icon) { showToast('キーワードとアイコンは必須。'); return; }
+            const keys = keysRaw.split(',').map(k => k.trim()).filter(k => k); const newItem = { keys, icon, bg, txt };
+            if(idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); saveDict(); closeDictEditor(); showToast('辞書更新。');
+        }
+        function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); showToast('削除した。'); }
+        function processSemanticText(text) {
+            if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null;
+            for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if(matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } }
+            return { text: resText, style: matchStyle };
+        }
+        function extractTaskData(notes) {
+            if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" };
+            let colorId = "", recurrence = "", cleanNotes = notes;
+            const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); }
+            const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); }
+            return { colorId, recurrence, cleanNotes: cleanNotes.trim() };
+        }
+
+        // v5.9: URLパーサー（添付ファイル抽出ロジック）
+        function parseAttachments(text) {
+            if (!text) return { cleanText: "", chipsHtml: "" };
+            // httpsリンク または iOSカスタムURLスキーム(例: shortcuts://) を検知
+            const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g;
+            let chipsHtml = "";
+            let match;
+            const urls = text.match(urlRegex) || [];
+            
+            // UI上のテキストからはURLの羅列を少し間引く（完全に消すと編集時に困るので、長いURLを短縮表示する程度に留めるが、今回は添付UI生成のみ行う）
+            urls.forEach(url => {
+                const cleanUrl = url.replace(/["']$/, ''); // 末尾のゴミ除去
+                if(cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|avif)(\?.*)?$/i)) {
+                    chipsHtml += `<a href="${cleanUrl}" target="_blank" onclick="event.stopPropagation()"><img src="${cleanUrl}" class="attach-img"></a>`;
+                } else if (cleanUrl.includes('drive.google.com') || cleanUrl.includes('docs.google.com')) {
+                    chipsHtml += `<a href="${cleanUrl}" target="_blank" class="attach-chip" onclick="event.stopPropagation()">📁 Drive</a>`;
+                } else if (cleanUrl.includes('icloud.com')) {
+                    chipsHtml += `<a href="${cleanUrl}" target="_blank" class="attach-chip" onclick="event.stopPropagation()">☁️ iCloud</a>`;
+                } else if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) {
+                    chipsHtml += `<a href="${cleanUrl}" target="_blank" class="attach-chip" onclick="event.stopPropagation()">▶️ YouTube</a>`;
+                } else if (!cleanUrl.startsWith('http')) {
+                    chipsHtml += `<a href="${cleanUrl}" class="attach-chip" onclick="event.stopPropagation()">📱 App</a>`; // iOS URL Scheme
+                } else {
+                    chipsHtml += `<a href="${cleanUrl}" target="_blank" class="attach-chip" onclick="event.stopPropagation()">🔗 Link</a>`;
+                }
+            });
+            // 説明文の長いURLはUI上で目障りなので非表示にするハック（元のデータは無事）
+            const cleanTextForUI = text.replace(urlRegex, '[Link]'); 
+            
+            return { cleanTextForUI, chipsHtml: chipsHtml ? `<div class="attach-container">${chipsHtml}</div>` : "" };
+        }
+
+        function triggerFullReRender() {
+            if (!localStorage.getItem('jero_token')) return;
+            document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = [];
+            const today = new Date(); const y = today.getFullYear(); const m = today.getMonth();
+            renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append');
+            if(currentView === 'agenda') renderAgendaView();
+        }
+        function toggleView() {
+            const calView = document.getElementById('calendar-view'); const agendaView = document.getElementById('agenda-view'); const btn = document.getElementById('view-toggle-btn');
+            if(currentView === 'calendar') { currentView = 'agenda'; calView.style.display = 'none'; agendaView.style.display = 'block'; btn.innerText = '📅'; renderAgendaView(); } 
+            else { currentView = 'calendar'; calView.style.display = 'block'; agendaView.style.display = 'none'; btn.innerText = '📝'; scrollToToday(); }
+        }
+
+        function renderAgendaView() {
+            const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = [];
+            for (const monthKey in dataCache) {
+                const data = dataCache[monthKey];
+                data.events.forEach(e => { const stDate = e.start.date ? new Date(e.start.date) : new Date(e.start.dateTime); if(stDate >= today || isEventSpanning(e, today.toISOString().split('T')[0]) !== 'single') { allItems.push({ type: 'event', dateObj: stDate, data: e }); } });
+                data.tasks.filter(t => t.due).forEach(t => { const dDate = new Date(t.due); if(dDate >= today) allItems.push({ type: 'task', dateObj: dDate, data: t }); });
+            }
+            allItems.sort((a, b) => a.dateObj - b.dateObj); const grouped = {};
+            allItems.forEach(item => { const dStr = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}-${String(item.dateObj.getDate()).padStart(2,'0')}`; if(!grouped[dStr]) grouped[dStr] = []; grouped[dStr].push(item); });
+            const days = ['日','月','火','水','木','金','土'];
+            if(Object.keys(grouped).length === 0) { container.innerHTML = '<div style="padding: 30px; text-align: center; color: #888;">予定はありません。</div>'; return; }
+            for (const [dStr, items] of Object.entries(grouped)) {
+                const dObj = new Date(dStr); const isToday = dObj.getTime() === today.getTime();
+                const dayHeader = document.createElement('div'); dayHeader.className = 'agenda-day-header'; dayHeader.innerText = `${dObj.getMonth()+1}月${dObj.getDate()}日 (${days[dObj.getDay()]}) ${isToday ? ' - 今日' : ''}`;
+                if(isToday) dayHeader.style.color = '#ff3b30';
+                const listCont = document.createElement('div'); listCont.className = 'agenda-list-container card-list';
+                items.forEach(item => { if(item.type === 'event') listCont.appendChild(createEventCard(item.data, dStr)); else listCont.appendChild(createTaskCard(item.data, dStr, dObj.getDay())); });
+                container.appendChild(dayHeader); container.appendChild(listCont);
+            }
+        }
+        function exportSettings() { const data = { dict: advancedDict, settings: JSON.parse(localStorage.getItem('jero_settings') || '{}') }; const str = JSON.stringify(data); navigator.clipboard.writeText(str).then(() => showToast('コピー完了。')).catch(() => { prompt('コピー:', str); }); }
+        function importSettings() { const str = prompt('バックアップ貼付:'); if(!str) return; try { const data = JSON.parse(str); if(data.dict) { advancedDict = data.dict; localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); } if(data.settings) { localStorage.setItem('jero_settings', JSON.stringify(data.settings)); } showToast('復元した。再読込する。'); setTimeout(() => location.reload(), 1500); } catch(e) { showToast('形式不正。'); } }
+
+        function loadSettings() { 
+            const saved = localStorage.getItem('jero_settings');
+            if (saved) { const settings = JSON.parse(saved); if (settings.theme) { document.getElementById('st-theme').value = settings.theme; document.documentElement.setAttribute('data-theme', settings.theme); } if (settings.fs) { document.getElementById('st-fs').value = settings.fs; document.documentElement.style.setProperty('--fs', settings.fs + 'px'); document.getElementById('fs-val').innerText = settings.fs; } } 
+            else { if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { document.getElementById('st-theme').value = 'dark'; document.documentElement.setAttribute('data-theme', 'dark'); } }
+            const key = localStorage.getItem('jero_gemini_key'); if(key) document.getElementById('st-gemini-key').value = key;
+            let prompt = localStorage.getItem('jero_gemini_prompt'); if(!prompt) { prompt = DEFAULT_SYSTEM_PROMPT; localStorage.setItem('jero_gemini_prompt', prompt); } document.getElementById('st-gemini-prompt').value = prompt;
+        }
+        function saveAndApplySettings() { const theme = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; document.documentElement.setAttribute('data-theme', theme); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; localStorage.setItem('jero_settings', JSON.stringify({ theme, fs })); }
+        document.addEventListener('DOMContentLoaded', () => { loadSettings(); loadDict(); initTaskColorPicker(); });
+        function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); }
+        function initWeekdays() { const wdContainer = document.getElementById('weekdays'); const days = ['日', '月', '火', '水', '木', '金', '土']; days.forEach((d, i) => { const div = document.createElement('div'); div.className = 'wd'; div.innerText = d; if(i===0) div.style.color = '#ff3b30'; if(i===6) div.style.color = '#0a84ff'; wdContainer.appendChild(div); }); initColorPicker(); }
+        function setProgress(percent) { const bar = document.getElementById('progress-bar'); bar.style.width = percent + '%'; if(percent >= 100) setTimeout(() => { bar.style.width = '0%'; }, 500); }
+
+        function setupObserver() {
+            const options = { rootMargin: '300px', threshold: 0.1 };
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(e => {
+                    if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) {
+                        if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); }
+                        if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); }
+                    }
+                });
+            }, options);
+            ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); });
+        }
+        async function initCalendar() { setProgress(10); try { const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', true); await fetchAndRenderMonth(y, m+1, 'append'); scrollToToday(); } finally { setProgress(100); } }
+        async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); document.getElementById('agenda-bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); document.getElementById('agenda-bottom-trigger').classList.add('hidden');} }
+        async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); document.getElementById('agenda-top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); document.getElementById('agenda-top-trigger').classList.add('hidden');} }
+        function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; showToast('認証切れだ。再接続してくれ。'); }
+
+        async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
+            if (isAuthError) return; const monthKey = `${year}-${month}`; const startOfMonth = new Date(year, month, 1).toISOString(); const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+            if (forceFetch || !dataCache[monthKey]) {
+                let events = [], tasks = [], authErrorDetected = false;
+                try { const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; }
+                try { const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; }
+                if (authErrorDetected) { notifyAuthError(); } dataCache[monthKey] = { events, tasks };
+            }
+            if (!dataCache[monthKey]) return; const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove();
+            renderMonthDOM(year, month, dataCache[monthKey], position);
+            if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else renderedMonths.unshift({year, month}); } updateHeaderDisplay();
+        }
+
+        function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
+
+        function renderMonthDOM(year, month, data, position) {
+            if(!data) return; const wrapper = document.createElement('div'); wrapper.className = 'month-wrapper'; wrapper.id = `month-${year}-${month}`; wrapper.innerHTML = `<div class="month-title">${year}年 ${month + 1}月</div><div class="calendar-grid"></div>`; const grid = wrapper.querySelector('.calendar-grid');
+            const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay();
+            for (let i = 0; i < firstDay; i++) { const empty = document.createElement('div'); empty.className = 'day empty'; empty.style.backgroundColor = 'var(--head-bg)'; grid.appendChild(empty); }
+            const sortedEvents = [...data.events].sort((a, b) => { const aAllDay = a.start.date ? 1 : 0; const bAllDay = b.start.date ? 1 : 0; if(aAllDay !== bAllDay) return bAllDay - aAllDay; return 0; });
+            const today = new Date();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
+                if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)';
+                if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
+                dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
+                sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => {
+                    const div = document.createElement('div'); div.className = 'event'; let timeStr = "";
+                    if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `; }
+                    const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType);
+                    const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = timeStr + recurIcon + pData.text;
+                    if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; }
+                    if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div);
+                });
+                data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
+                    const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; 
+                    if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div);
+                });
+                grid.appendChild(dayEl);
+            }
+            const container = document.getElementById('calendar-wrapper');
+            if(position === 'append') container.appendChild(wrapper); else if(position === 'prepend') container.insertBefore(wrapper, container.firstChild);
+            else { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
+        }
+
+        document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
+        function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
+        function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+
+        // --- Event/Task UI Builder with Attachment Parsing ---
+        function createEventCard(e, dateStr) {
+            const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日";
+            if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; }
+            const spanType = isEventSpanning(e, dateStr); if (spanType !== 'single') { const sDate = new Date(e.start.date); const eDate = new Date(e.end.date); eDate.setDate(eDate.getDate()-1); timeStr = `帯予定 (${sDate.getMonth()+1}/${sDate.getDate()} 〜 ${eDate.getMonth()+1}/${eDate.getDate()})`; }
+            const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); let color = 'var(--accent)'; if(pData.style) color = pData.style.bg; else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId];
+            
+            // 添付ファイルのパース
+            const attachData = parseAttachments(e.description);
+
+            card.innerHTML = `<div class="card-color-bar" style="background:${color};"></div><div class="card-content"><div class="card-title">${recurIcon}${pData.text}</div><div class="card-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>${attachData.chipsHtml}</div>`;
+            card.onclick = () => openEditor(e); return card;
+        }
+
+        function createTaskCard(t, dateStr, dow) {
+            const card = document.createElement('div'); card.className = 'item-card'; const isComp = t.status === 'completed'; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title);
+            let color = '#34c759'; if(pData.style) color = pData.style.bg; else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId];
+            const recurIcon = tData.recurrence ? '🔁 ' : ''; const titleStyle = isComp ? 'text-decoration:line-through; color:#888;' : ''; const checkStyle = isComp ? 'border-color:#888; color:#888;' : `border-color:${color}; color:${color};`;
+            
+            // 添付ファイルのパース (URLを含む場合、UI上はクリーンにする)
+            const attachData = parseAttachments(tData.cleanNotes);
+
+            card.innerHTML = `<div class="card-color-bar" style="background:${color}; opacity: 0.3;"></div><div class="big-check" style="${checkStyle}">${isComp ? '✓' : ''}</div><div class="card-content"><div class="card-title" style="${titleStyle}">${recurIcon}${pData.text}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.chipsHtml}</div>`;
+            card.querySelector('.big-check').onclick = async (ev) => {
+                ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed';
+                try { 
+                    await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus;
+                    if (newStatus === 'completed' && tData.recurrence) {
+                        showToast('タスク完了。次を生成中...'); const nextDate = new Date(t.due);
+                        if(tData.recurrence === 'DAILY') nextDate.setDate(nextDate.getDate() + 1); else if(tData.recurrence === 'WEEKLY') nextDate.setDate(nextDate.getDate() + 7); else if(tData.recurrence === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1);
+                        await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: { title: t.title, notes: t.notes, due: nextDate.toISOString() } }); showToast('次を生成した。');
+                    } else { showToast(newStatus === 'completed' ? 'タスク完了。' : '未完了に戻した。'); }
+                    const [y, m, d] = dateStr.split('-'); openDailyModal(dateStr, dow); fetchAndRenderMonth(parseInt(y), parseInt(m)-1, 'replace'); 
+                } catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100);
+            };
+            card.onclick = () => openTaskEditor(t); return card;
+        }
+
+        function openDailyModal(dateStr, dow) {
+            selectedDateStr = dateStr; const days = ['日','月','火','水','木','金','土']; const [y, m, d] = dateStr.split('-'); document.getElementById('daily-date-title').innerText = `${parseInt(m)}月${parseInt(d)}日 (${days[dow]})`;
+            const list = document.getElementById('daily-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
+            if(data) {
+                data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { hasItems = true; list.appendChild(createEventCard(e, dateStr)); });
+                data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { hasItems = true; list.appendChild(createTaskCard(t, dateStr, dow)); });
+            }
+            if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
+            document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
+        }
+
+        function openRecurrenceEditor() {
+            document.getElementById('recurrence-modal').classList.add('active'); const rrule = document.getElementById('edit-recurrence-rule').value; const freqEl = document.getElementById('rec-freq'); const hasUntilEl = document.getElementById('rec-has-until'); const untilDateEl = document.getElementById('rec-until-date'); freqEl.value = ""; hasUntilEl.checked = false; untilDateEl.value = "";
+            if (rrule.includes('FREQ=')) { if(rrule.includes('FREQ=DAILY')) freqEl.value = "DAILY"; else if(rrule.includes('FREQ=WEEKLY')) freqEl.value = "WEEKLY"; else if(rrule.includes('FREQ=MONTHLY')) freqEl.value = "MONTHLY"; else if(rrule.includes('FREQ=YEARLY')) freqEl.value = "YEARLY"; const untilMatch = rrule.match(/UNTIL=([0-9]{8})/); if (untilMatch) { hasUntilEl.checked = true; const dStr = untilMatch[1]; untilDateEl.value = `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`; } } updateRecDisplay();
+        }
+        function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); }
+        function updateRecDisplay() { const freq = document.getElementById('rec-freq').value; const untilRow = document.getElementById('rec-until-row'); if(freq) untilRow.style.display = 'flex'; else untilRow.style.display = 'none'; }
+        function applyRecurrence() {
+            const freq = document.getElementById('rec-freq').value; const hasUntil = document.getElementById('rec-has-until').checked; const untilDate = document.getElementById('rec-until-date').value; let rrule = ""; let dispText = "なし";
+            if (freq) { rrule = `RRULE:FREQ=${freq}`; dispText = document.querySelector(`#rec-freq option[value="${freq}"]`).innerText; if(hasUntil && untilDate) { const d = new Date(untilDate); const untilStr = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}T235959Z`; rrule += `;UNTIL=${untilStr}`; dispText += ` (~${untilDate})`; } }
+            document.getElementById('edit-recurrence-rule').value = rrule; document.getElementById('edit-recurrence-display').innerText = dispText; closeRecurrenceEditor();
+        }
+
+        function initColorPicker() { const picker = document.getElementById('color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
+        function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedColorId = id; }
+        
+        function openEditor(eventObj = null) {
+            document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none'; document.getElementById('btn-duplicate').style.display = isEdit ? 'block' : 'none';
+            const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc'); const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const ruleEl = document.getElementById('edit-recurrence-rule'); const dispEl = document.getElementById('edit-recurrence-display');
+            if (isEdit) {
+                document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = eventObj.description || "";
+                if(eventObj.recurrence && eventObj.recurrence.length > 0) { ruleEl.value = eventObj.recurrence[0]; dispEl.innerText = "設定済 (タップで確認)"; } else { ruleEl.value = ""; dispEl.innerText = "なし"; }
+                if (eventObj.start.date) { allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = eventObj.start.date; const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); endEl.value = ed.toISOString().split('T')[0]; } else { allDayEl.checked = false; startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; startEl.value = eventObj.start.dateTime.slice(0,16); endEl.value = eventObj.end.dateTime.slice(0,16); }
+                const colorOpts = document.querySelectorAll('#color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } else { colorOpts[0].classList.add('selected'); selectedColorId = ""; }
+            } else { document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; ruleEl.value = ""; dispEl.innerText = "なし"; allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = selectedDateStr; endEl.value = selectedDateStr; selectColor(document.querySelector('#color-picker .color-opt'), ""); }
+        }
+        function toggleTimeInputs() { const isAllDay = document.getElementById('edit-allday').checked; const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const currentStart = startEl.value; if (isAllDay) { startEl.type = 'date'; endEl.type = 'date'; startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr; endEl.value = startEl.value; } else { startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr; startEl.value = `${baseDate}T09:00`; endEl.value = `${baseDate}T10:00`; } }
+        function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); }
+        function duplicateEvent() { document.getElementById('edit-id').value = ""; document.getElementById('editor-title').innerText = "複製して新規保存"; showToast('複製した。日付を変更して保存してくれ。'); }
+
+        async function saveEvent() {
+            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; } setProgress(30); closeAllModals();
+            const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const desc = document.getElementById('edit-desc').value; const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value; const recurVal = document.getElementById('edit-recurrence-rule').value;
+            const resource = { summary: title, location: loc, description: desc }; if(selectedColorId) resource.colorId = selectedColorId; if(recurVal) resource.recurrence = [recurVal];
+            if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
+            try { if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); showToast('予定を更新した。'); } else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); showToast('予定を追加した。'); } const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); } catch(e) { console.error(e); showToast('保存失敗。'); } setProgress(100);
+        }
+        async function deleteEvent() { if(!confirm('予定を削除してよいか？')) return; const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; setProgress(30); closeAllModals(); try { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
+
+        function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
+        function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedTaskColorId = id; }
+        
+        function openTaskEditor(taskObj = null) {
+            document.getElementById('task-editor-modal').classList.add('active'); const isEdit = taskObj !== null; document.getElementById('task-editor-title').innerText = isEdit ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = isEdit ? 'block' : 'none';
+            const titleEl = document.getElementById('task-edit-title'); const notesEl = document.getElementById('task-edit-notes'); const dueEl = document.getElementById('task-edit-due'); const recEl = document.getElementById('task-edit-recurrence');
+            if (isEdit) {
+                document.getElementById('task-edit-id').value = taskObj.id; titleEl.value = taskObj.title || ""; const tData = extractTaskData(taskObj.notes); notesEl.value = tData.cleanNotes || ""; dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : ""; recEl.value = tData.recurrence || "";
+                const colorOpts = document.querySelectorAll('#task-color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(tData.colorId) { colorOpts[parseInt(tData.colorId)].classList.add('selected'); selectedTaskColorId = tData.colorId; } else { colorOpts[0].classList.add('selected'); selectedTaskColorId = ""; }
+            } else { document.getElementById('task-edit-id').value = ""; titleEl.value = ""; notesEl.value = ""; dueEl.value = selectedDateStr; recEl.value = ""; selectTaskColor(document.querySelector('#task-color-picker .color-opt'), ""); }
+        }
+        function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); }
+
+        async function saveTask() {
+            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; } setProgress(30); closeAllModals();
+            const id = document.getElementById('task-edit-id').value; const baseNotes = document.getElementById('task-edit-notes').value; const dueVal = document.getElementById('task-edit-due').value; const recVal = document.getElementById('task-edit-recurrence').value;
+            let meta = ""; if(selectedTaskColorId) meta += `[c:${selectedTaskColorId}]`; if(recVal) meta += `[r:${recVal}]`; const finalNotes = meta ? `${baseNotes}\n${meta}` : baseNotes;
+            const resource = { title, notes: finalNotes }; if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
+            try { if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); showToast('タスクを更新した。'); } else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); showToast('タスクを追加した。'); } const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); } catch(e) { console.error(e); showToast('保存失敗。'); } setProgress(100);
+        }
+        async function deleteTask() { if(!confirm('完全に削除してよいか？')) return; const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; setProgress(30); closeAllModals(); try { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
+
+        async function openSettings() { 
+            document.getElementById('overlay').classList.add('active'); document.getElementById('settings-modal').classList.add('active'); 
+            const infoEl = document.getElementById('account-info'); const cachedEmail = sessionStorage.getItem('jero_account_email');
+            if (cachedEmail) { infoEl.innerText = `連携中: ${cachedEmail}`; } 
+            else { try { const resp = await gapi.client.calendar.calendars.get({ calendarId: 'primary' }); sessionStorage.setItem('jero_account_email', resp.result.id); infoEl.innerText = `連携中: ${resp.result.id}`; } catch (e) { infoEl.innerText = 'アカウント情報取得失敗'; } }
+        }
+        function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
+        function switchAccount() { if(!confirm('連携を解除しログイン画面に戻るか？')) return; closeSettings(); localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); sessionStorage.removeItem('jero_account_email'); showToast('連携解除中...'); setTimeout(() => location.reload(), 1500); }
+        function executeEmergencyReset() { closeSettings(); showToast('🚨 キャッシュ完全初期化中...'); setTimeout(() => { localStorage.clear(); location.reload(); }, 1500); }
+        function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); closeDictEditor(); closeRecurrenceEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
+
+        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+        async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
+        function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
+        
+        function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time'); if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) { gapi.client.setToken({access_token: savedToken}); document.getElementById('auth-btn').style.display = 'none'; initCalendar(); } else { notifyAuthError(); } }
+        async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
+    </script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+</body>
+</html>
