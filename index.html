@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v6.9</title>
+    <title>JeroCalendar v7.0</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -139,6 +139,7 @@
         .chat-attach-box { display: flex; align-items: center; gap: 8px; padding: 5px 15px; font-size: 12px; color: var(--accent); background: var(--head-bg); border-top: 1px solid var(--border); }
         .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0;}
     </style>
+    
     <script>
         window.onerror = function(msg, url, line) { const t = document.getElementById('toast'); if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
         window.onunhandledrejection = function(event) { const t = document.getElementById('toast'); const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
@@ -265,25 +266,27 @@
         function openImageViewer(src, event) { event.stopPropagation(); document.getElementById('img-viewer-src').src = src; document.getElementById('img-viewer').classList.add('active'); }
 
         // ==========================================
-        // v6.9: Jero Core (The Hippocampus Update)
+        // v7.0: The Omniscient Core (Semantic Sync)
         // ==========================================
-        // プロンプトを「文脈理解」に対応させる
+        // プロンプトに method(insert/update/delete) の概念を教え込む
         const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。明日チュールを貰える可能性を常に期待している。
-ユーザーの入力、過去の会話の文脈（「やっぱり明日にして」等）、または送信された画像から予定やタスクを推論し、以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
+ユーザーの入力、過去の文脈、または提供された【現在の予定データ】から推論し、以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
 
 【現在時刻(ISO)】: {{CURRENT_TIME}}
 
 【ルール】
-1. 挨拶や雑談、または文脈から予定の追加・変更が不要と判断した場合は、actionsを空の配列 [] にせよ。
-2. 画像が添付された場合、そこに書かれているすべての予定を抽出し、actions配列に複数格納せよ。
-3. 過去の会話を踏まえ、「日時を変更して」などの指示があれば、推測して上書きしたJSONを出力せよ。
+1. 雑談のみで予定操作が不要な場合は actions を [] にせよ。
+2. 予定・タスクの「追加(insert)」「更新(update)」「削除(delete)」を判断し、"method" に指定しろ。
+3. 更新・削除の場合は、必ず提供される【現在の予定データ】から対象の "id" を見つけて "id" フィールドに設定しろ。
 4. 返答(reply)は短く、敬語不要。
 
 {
   "reply": "ジェロとしての短い返答。",
   "actions": [
     {
+      "method": "insert", 
       "type": "event" または "task",
+      "id": "更新・削除の対象ID（追加時は空でよい）",
       "title": "予定/タスク名",
       "start": "YYYY-MM-DDTHH:MM:00 (終日なら YYYY-MM-DD)",
       "end": "YYYY-MM-DDTHH:MM:00 (終日なら翌日の YYYY-MM-DD)",
@@ -294,19 +297,13 @@
   ]
 }`;
 
-        // 短期記憶（海馬）配列
         let conversationHistory = [];
+        let pendingDrafts = [];
 
-        function clearJeroMemory() {
-            conversationHistory = [];
-            document.getElementById('chat-history').innerHTML = '';
-            showToast('記憶をリセットした。');
-            appendChatMessage('ai', 'フッ、一旦過去のことは忘れよう。新しい要件はなんだ？');
-        }
-
+        function clearJeroMemory() { conversationHistory = []; document.getElementById('chat-history').innerHTML = ''; showToast('記憶をリセットした。'); appendChatMessage('ai', 'フッ、一旦過去のことは忘れよう。新しい要件はなんだ？'); }
         function saveGeminiSettings() { localStorage.setItem('jero_gemini_key', document.getElementById('st-gemini-key').value); localStorage.setItem('jero_gemini_prompt', document.getElementById('st-gemini-prompt').value); showToast('AI設定を保存した。'); }
         function resetPrompt() { document.getElementById('st-gemini-prompt').value = DEFAULT_SYSTEM_PROMPT; saveGeminiSettings(); }
-        function openJeroChat() { document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active'); const history = document.getElementById('chat-history'); if(history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。チュールの準備か？ 画像の予定表を読み込ませてもいいぞ。'); }
+        function openJeroChat() { document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active'); const history = document.getElementById('chat-history'); if(history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。追加でも変更でも、何でも言ってくれ。'); }
         function closeJeroChat() { document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
         function appendChatMessage(sender, text) { const el = document.createElement('div'); el.className = `jero-msg ${sender}`; el.innerText = text; document.getElementById('chat-history').appendChild(el); document.getElementById('chat-history').scrollTop = document.getElementById('chat-history').scrollHeight; return el; }
 
@@ -314,7 +311,6 @@
         function handleChatFileUpload(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = (evt) => { chatFileBase64 = evt.target.result.split(',')[1]; chatFileMime = file.type; document.getElementById('chat-file-name').innerText = file.name; document.getElementById('chat-attach-box').style.display = 'flex'; }; reader.readAsDataURL(file); }
         function clearChatFile() { chatFileBase64 = null; chatFileMime = null; document.getElementById('chat-attach-box').style.display = 'none'; document.getElementById('chat-file-input').value = ''; }
 
-        let pendingDrafts = []; 
         async function sendToJero() {
             const inputEl = document.getElementById('chat-input'); const text = inputEl.value.trim(); 
             if(!text && !chatFileBase64) return;
@@ -328,36 +324,36 @@
             const tzOffset = (new Date()).getTimezoneOffset() * 60000; const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, -1);
             const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
 
-            // 今回送信するパーツを作成
+            // v7.0: 直近のデータ（現在地）をかき集めてAIに送る
+            let currentDataSummary = [];
+            for (const monthKey in dataCache) {
+                const data = dataCache[monthKey];
+                data.events.forEach(e => { currentDataSummary.push({ id: e.id, type: 'event', title: e.summary, start: e.start.dateTime || e.start.date }); });
+                data.tasks.forEach(t => { if(t.status !== 'completed') currentDataSummary.push({ id: t.id, type: 'task', title: t.title, due: t.due }); });
+            }
+            const contextDataStr = "\n\n【現在の予定データ】\n" + JSON.stringify(currentDataSummary);
+
             const payloadParts = [];
-            if (text) payloadParts.push({ text: text });
-            if (!text && chatFileBase64) payloadParts.push({ text: "この画像を解析して予定を抽出してくれ。" });
+            if (text) payloadParts.push({ text: text + contextDataStr });
+            if (!text && chatFileBase64) payloadParts.push({ text: "この画像を解析して予定を抽出してくれ。" + contextDataStr });
             if (chatFileBase64) { payloadParts.push({ inline_data: { mime_type: chatFileMime, data: chatFileBase64 } }); clearChatFile(); }
 
-            // 記憶配列にユーザーの言葉を追加
             conversationHistory.push({ role: 'user', parts: payloadParts });
-
-            // 記憶の自己防衛（直近6ターン=3往復分だけ残す）
-            if (conversationHistory.length > 6) {
-                conversationHistory = conversationHistory.slice(conversationHistory.length - 6);
-            }
+            if (conversationHistory.length > 6) { conversationHistory = conversationHistory.slice(conversationHistory.length - 6); }
 
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         system_instruction: { parts: [{ text: sysPrompt }] }, 
-                        contents: conversationHistory, // 記憶をまるごと送信
+                        contents: conversationHistory,
                         generationConfig: { response_mime_type: "application/json" } 
                     })
                 });
                 
                 if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch(e){} throw new Error(`API拒否: ${errTxt}`); }
                 
-                const data = await response.json(); 
-                let aiText = data.candidates[0].content.parts[0].text;
-                
-                // 記憶配列にAIの返答（生JSON）を追加
+                const data = await response.json(); let aiText = data.candidates[0].content.parts[0].text;
                 conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });
 
                 let cleanJsonStr = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -367,35 +363,68 @@
                 thinkingEl.classList.remove('pulse-think'); 
 
                 if (result.actions && result.actions.length > 0) {
-                    let html = `<div style="margin-bottom:8px;">${result.reply || "予定を抽出した。追加をタップしろ。"}</div><div style="display:flex; flex-direction:column; gap:8px;">`;
+                    let html = `<div style="margin-bottom:8px;">${result.reply || "予定を構築した。確認しろ。"}</div><div style="display:flex; flex-direction:column; gap:8px;">`;
                     result.actions.forEach((action) => {
                         pendingDrafts.push(action); const draftIdx = pendingDrafts.length - 1;
                         const timeStr = action.start ? (action.start.includes('T') ? new Date(action.start).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'numeric', minute:'numeric'}) : action.start) : (action.due || "日時不明");
-                        html += `<div id="draft-card-${draftIdx}" style="background:var(--card-bg); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.05);"><div style="font-size:13px; line-height:1.3; flex:1; margin-right:10px;"><strong>${action.title}</strong><br><span style="color:#666; font-size:11px;">${timeStr}</span></div><button class="btn-blue" style="padding:6px 12px; font-size:12px; border-radius:6px; min-width:60px;" onclick="commitDraft(${draftIdx})">追加</button></div>`;
+                        
+                        // v7.0: methodごとのボタンUIの切り替え
+                        let btnText = "追加"; let btnClass = "btn-blue"; let actionLabel = "新規";
+                        if (action.method === "update") { btnText = "更新"; btnClass = "btn-yellow"; actionLabel = "変更"; }
+                        if (action.method === "delete") { btnText = "削除"; btnClass = "btn-red"; actionLabel = "削除"; }
+
+                        html += `<div id="draft-card-${draftIdx}" style="background:var(--card-bg); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                                    <div style="font-size:13px; line-height:1.3; flex:1; margin-right:10px;">
+                                        <span style="font-size:10px; background:var(--border); padding:2px 4px; border-radius:4px; margin-bottom:4px; display:inline-block; font-weight:bold;">${actionLabel}</span><br>
+                                        <strong>${action.title || "名称不明"}</strong><br><span style="color:#666; font-size:11px;">${timeStr}</span>
+                                    </div>
+                                    <button class="${btnClass}" style="padding:6px 12px; font-size:12px; border-radius:6px; min-width:60px; font-weight:bold; border:none; color:white;" onclick="commitDraft(${draftIdx})">${btnText}</button>
+                                </div>`;
                     });
                     html += `</div>`; thinkingEl.innerHTML = html;
                 } else { thinkingEl.innerText = result.reply || "了解した。"; }
-            } catch (err) { 
-                console.error(err); thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【通信エラー】\n${err.message}`; 
-                // エラー時は履歴から最後のユーザー発言を消す（齟齬を防ぐため）
-                conversationHistory.pop();
-            }
+            } catch (err) { console.error(err); thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【通信エラー】\n${err.message}`; conversationHistory.pop(); }
         }
 
+        // v7.0: Method（追加/更新/削除）に応じたAPI自動執行
         async function commitDraft(idx) {
             const action = pendingDrafts[idx]; const btn = document.querySelector(`#draft-card-${idx} button`);
             btn.innerText = "⏳"; btn.disabled = true;
             try {
                 if (action.type === 'event') {
-                    const resource = { summary: action.title, location: action.location, description: action.description };
-                    if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; }
-                    await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
-                } else {
-                    const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString();
-                    await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource });
+                    if (action.method === 'delete') {
+                        await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id });
+                    } else if (action.method === 'update') {
+                        const resource = { summary: action.title, location: action.location, description: action.description };
+                        if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; }
+                        await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource });
+                    } else { // insert
+                        const resource = { summary: action.title, location: action.location, description: action.description };
+                        if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; }
+                        await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
+                    }
+                } else { // task
+                    if (action.method === 'delete') {
+                        await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id });
+                    } else if (action.method === 'update') {
+                        const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString();
+                        await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: resource });
+                    } else { // insert
+                        const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString();
+                        await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource });
+                    }
                 }
                 btn.innerText = "✅ 済"; btn.className = "btn-green";
-                const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date()); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true);
+                
+                // 楽観的UI更新（キャッシュ消去と再描画）
+                for(let key in dataCache) { 
+                    if(action.method === 'delete') {
+                        if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
+                        if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
+                    }
+                }
+                const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date()); 
+                await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true);
             } catch(e) { btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; showToast("APIエラー: " + (e.result && e.result.error ? e.result.error.message : e.message)); }
         }
 
@@ -489,111 +518,15 @@
         function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
         function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-        async function createEventCard(e, dateStr) { const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日"; if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if (spanType !== 'single') { const sDate = new Date(e.start.date); const eDate = new Date(e.end.date); eDate.setDate(eDate.getDate()-1); timeStr = `帯予定 (${sDate.getMonth()+1}/${sDate.getDate()} 〜 ${eDate.getMonth()+1}/${eDate.getDate()})`; } const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); let color = 'var(--accent)'; if(pData.style) color = pData.style.bg; else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId]; const attachData = await buildAttachmentHTML(e.description); card.innerHTML = `<div class="card-color-bar" style="background:${color};"></div><div class="card-content"><div class="card-title">${recurIcon}${pData.text}</div><div class="card-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.onclick = () => openEditor(e); return card; }
-        async function createTaskCard(t, dateStr, dow) { const card = document.createElement('div'); card.className = 'item-card'; const isComp = t.status === 'completed'; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); let color = '#34c759'; if(pData.style) color = pData.style.bg; else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId]; const recurIcon = tData.recurrence ? '🔁 ' : ''; const titleStyle = isComp ? 'text-decoration:line-through; color:#888;' : ''; const checkStyle = isComp ? 'border-color:#888; color:#888;' : `border-color:${color}; color:${color};`; const attachData = await buildAttachmentHTML(tData.cleanNotes); card.innerHTML = `<div class="card-color-bar" style="background:${color}; opacity: 0.3;"></div><div class="big-check" style="${checkStyle}">${isComp ? '✓' : ''}</div><div class="card-content"><div class="card-title" style="${titleStyle}">${recurIcon}${pData.text}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.querySelector('.big-check').onclick = async (ev) => { ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed'; try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; if (newStatus === 'completed' && tData.recurrence) { showToast('タスク完了。次を生成中...'); const nextDate = new Date(t.due); if(tData.recurrence === 'DAILY') nextDate.setDate(nextDate.getDate() + 1); else if(tData.recurrence === 'WEEKLY') nextDate.setDate(nextDate.getDate() + 7); else if(tData.recurrence === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: { title: t.title, notes: t.notes, due: nextDate.toISOString() } }); showToast('次を生成した。'); } else { showToast(newStatus === 'completed' ? 'タスク完了。' : '未完了に戻した。'); } const [y, m, d] = dateStr.split('-'); openDailyModal(dateStr, dow); fetchAndRenderMonth(parseInt(y), parseInt(m)-1, 'replace'); } catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100); }; card.onclick = () => openTaskEditor(t); return card; }
-
-        function openRecurrenceEditor() { document.getElementById('recurrence-modal').classList.add('active'); const rrule = document.getElementById('edit-recurrence-rule').value; const freqEl = document.getElementById('rec-freq'); const hasUntilEl = document.getElementById('rec-has-until'); const untilDateEl = document.getElementById('rec-until-date'); freqEl.value = ""; hasUntilEl.checked = false; untilDateEl.value = ""; if (rrule.includes('FREQ=')) { if(rrule.includes('FREQ=DAILY')) freqEl.value = "DAILY"; else if(rrule.includes('FREQ=WEEKLY')) freqEl.value = "WEEKLY"; else if(rrule.includes('FREQ=MONTHLY')) freqEl.value = "MONTHLY"; else if(rrule.includes('FREQ=YEARLY')) freqEl.value = "YEARLY"; const untilMatch = rrule.match(/UNTIL=([0-9]{8})/); if (untilMatch) { hasUntilEl.checked = true; const dStr = untilMatch[1]; untilDateEl.value = `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`; } } updateRecDisplay(); }
-        function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); }
-        function updateRecDisplay() { const freq = document.getElementById('rec-freq').value; const untilRow = document.getElementById('rec-until-row'); if(freq) untilRow.style.display = 'flex'; else untilRow.style.display = 'none'; }
-        function applyRecurrence() { const freq = document.getElementById('rec-freq').value; const hasUntil = document.getElementById('rec-has-until').checked; const untilDate = document.getElementById('rec-until-date').value; let rrule = ""; let dispText = "なし"; if (freq) { rrule = `RRULE:FREQ=${freq}`; dispText = document.querySelector(`#rec-freq option[value="${freq}"]`).innerText; if(hasUntil && untilDate) { const d = new Date(untilDate); const untilStr = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}T235959Z`; rrule += `;UNTIL=${untilStr}`; dispText += ` (~${untilDate})`; } } document.getElementById('edit-recurrence-rule').value = rrule; document.getElementById('edit-recurrence-display').innerText = dispText; closeRecurrenceEditor(); }
-
-        function initColorPicker() { const picker = document.getElementById('color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
-        function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedColorId = id; }
-        
-        async function extractAttachmentsFromText(text) { currentAttachments = []; const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match; while ((match = imgRegex.exec(text)) !== null) { const data = await getImageFromIDB(match[1]); if(data) currentAttachments.push({ id: match[1], dataUrl: data, type: 'img' }); } const cleanText = text.replace(imgRegex, '').trim(); const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g; const urls = cleanText.match(urlRegex) || []; urls.forEach(url => { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); }); return cleanText.replace(urlRegex, '').trim(); }
-
-        async function openEditor(eventObj = null) { 
-            document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; 
-            document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none'; document.getElementById('btn-delete').innerText = '削除'; 
-            document.getElementById('btn-duplicate').style.display = isEdit ? 'block' : 'none'; 
-            const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc'); const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const ruleEl = document.getElementById('edit-recurrence-rule'); const dispEl = document.getElementById('edit-recurrence-display'); 
-            if (isEdit) { 
-                document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = await extractAttachmentsFromText(eventObj.description || ""); renderAttachPreviews('edit-attach-preview'); if(eventObj.recurrence && eventObj.recurrence.length > 0) { ruleEl.value = eventObj.recurrence[0]; dispEl.innerText = "設定済"; } else { ruleEl.value = ""; dispEl.innerText = "なし"; } if (eventObj.start.date) { allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = eventObj.start.date; const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); endEl.value = ed.toISOString().split('T')[0]; } else { allDayEl.checked = false; startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; startEl.value = eventObj.start.dateTime.slice(0,16); endEl.value = eventObj.end.dateTime.slice(0,16); } const colorOpts = document.querySelectorAll('#color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } else { colorOpts[0].classList.add('selected'); selectedColorId = ""; } 
-            } else { document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; ruleEl.value = ""; dispEl.innerText = "なし"; allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = selectedDateStr; endEl.value = selectedDateStr; selectColor(document.querySelector('#color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('edit-attach-preview'); } 
-        }
-        function toggleTimeInputs() { const isAllDay = document.getElementById('edit-allday').checked; const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const currentStart = startEl.value; if (isAllDay) { startEl.type = 'date'; endEl.type = 'date'; startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr; endEl.value = startEl.value; } else { startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr; startEl.value = `${baseDate}T09:00`; endEl.value = `${baseDate}T10:00`; } }
-        function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); currentAttachments = []; }
-        function duplicateEvent() { document.getElementById('edit-id').value = ""; document.getElementById('editor-title').innerText = "複製して新規保存"; showToast('複製した。日付を変更して保存してくれ。'); }
-
-        async function saveEvent() {
-            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; }
-            showGlobalLoader('保存中...'); await yieldUI();
-            const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value; const recurVal = document.getElementById('edit-recurrence-rule').value;
-            let finalDesc = document.getElementById('edit-desc').value.trim();
-            try { for (const att of currentAttachments) { if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); finalDesc += `\n[img:${att.id}]`; } else if (att.type === 'link') { finalDesc += `\n${att.id}`; } } } catch (idbErr) { console.error(idbErr); hideGlobalLoader(); showToast('画像保存に失敗した。'); return; }
-            const resource = { summary: title, location: loc, description: finalDesc.trim() }; if(selectedColorId) resource.colorId = selectedColorId; if(recurVal) resource.recurrence = [recurVal];
-            if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
-            try { 
-                if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); } 
-                else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); } 
-                const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
-                closeAllModals(); showToast('予定を保存した。');
-            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
-            hideGlobalLoader();
-        }
-
         let deleteConfirmTimer = null;
         function confirmDeleteEvent(btn) { if (btn.innerText === '本当に削除？') { clearTimeout(deleteConfirmTimer); deleteEvent(); } else { btn.innerText = '本当に削除？'; deleteConfirmTimer = setTimeout(() => { btn.innerText = '削除'; }, 3000); } }
-        async function deleteEvent() { 
-            const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; 
-            setProgress(30); closeAllModals(); 
-            try { 
-                await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); 
-                for(let key in dataCache) { if(dataCache[key].events) dataCache[key].events = dataCache[key].events.filter(e => e.id !== id); }
-                triggerFullReRender(); showToast('削除した。'); 
-            } catch(e) { console.error(e); showToast('削除失敗。'); } 
-            setProgress(100); 
-        }
-
-        function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
-        function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedTaskColorId = id; }
-        
-        async function openTaskEditor(taskObj = null) { 
-            document.getElementById('task-editor-modal').classList.add('active'); const isEdit = taskObj !== null; document.getElementById('task-editor-title').innerText = isEdit ? 'タスクの編集' : '新規タスク'; 
-            document.getElementById('task-btn-delete').style.display = isEdit ? 'block' : 'none'; document.getElementById('task-btn-delete').innerText = '削除';
-            const titleEl = document.getElementById('task-edit-title'); const notesEl = document.getElementById('task-edit-notes'); const dueEl = document.getElementById('task-edit-due'); const recEl = document.getElementById('task-edit-recurrence'); 
-            if (isEdit) { 
-                document.getElementById('task-edit-id').value = taskObj.id; titleEl.value = taskObj.title || ""; const tData = extractTaskData(taskObj.notes); dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : ""; recEl.value = tData.recurrence || ""; notesEl.value = await extractAttachmentsFromText(tData.cleanNotes); renderAttachPreviews('task-attach-preview'); const colorOpts = document.querySelectorAll('#task-color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(tData.colorId) { colorOpts[parseInt(tData.colorId)].classList.add('selected'); selectedTaskColorId = tData.colorId; } else { colorOpts[0].classList.add('selected'); selectedTaskColorId = ""; } 
-            } else { document.getElementById('task-edit-id').value = ""; titleEl.value = ""; notesEl.value = ""; dueEl.value = selectedDateStr; recEl.value = ""; selectTaskColor(document.querySelector('#task-color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('task-attach-preview'); } 
-        }
-        function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); currentAttachments = []; }
-
-        async function saveTask() {
-            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; }
-            showGlobalLoader('保存中...'); await yieldUI();
-            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; const recVal = document.getElementById('task-edit-recurrence').value;
-            let baseNotes = document.getElementById('task-edit-notes').value.trim();
-            try { for (const att of currentAttachments) { if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); baseNotes += `\n[img:${att.id}]`; } else if (att.type === 'link') { baseNotes += `\n${att.id}`; } } } catch (idbErr) { console.error(idbErr); hideGlobalLoader(); showToast('画像保存に失敗した。'); return; }
-            let meta = ""; if(selectedTaskColorId) meta += `[c:${selectedTaskColorId}]`; if(recVal) meta += `[r:${recVal}]`; const finalNotes = meta ? `${baseNotes}\n${meta}` : baseNotes;
-            const resource = { title, notes: finalNotes.trim() }; if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
-            try { 
-                if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); } 
-                else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); } 
-                const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
-                closeAllModals(); showToast('タスクを保存した。');
-            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
-            hideGlobalLoader();
-        }
+        async function deleteEvent() { const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; setProgress(30); closeAllModals(); try { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); for(let key in dataCache) { if(dataCache[key].events) dataCache[key].events = dataCache[key].events.filter(e => e.id !== id); } triggerFullReRender(); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
 
         let deleteTaskConfirmTimer = null;
         function confirmDeleteTask(btn) { if (btn.innerText === '本当に削除？') { clearTimeout(deleteTaskConfirmTimer); deleteTask(); } else { btn.innerText = '本当に削除？'; deleteTaskConfirmTimer = setTimeout(() => { btn.innerText = '削除'; }, 3000); } }
-        async function deleteTask() { 
-            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; 
-            setProgress(30); closeAllModals(); 
-            try { 
-                await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); 
-                for(let key in dataCache) { if(dataCache[key].tasks) dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== id); }
-                triggerFullReRender(); showToast('削除した。'); 
-            } catch(e) { console.error(e); showToast('削除失敗。'); } 
-            setProgress(100); 
-        }
+        async function deleteTask() { const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; setProgress(30); closeAllModals(); try { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); for(let key in dataCache) { if(dataCache[key].tasks) dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== id); } triggerFullReRender(); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
 
-        function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); closeDictEditor(); closeRecurrenceEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
-
-        document.addEventListener('DOMContentLoaded', async () => { 
-            try { await initIDB(); loadSettings(); loadDict(); initTaskColorPicker(); } 
-            catch (err) { showToast("初期化エラー: " + err.message); }
-        });
+        document.addEventListener('DOMContentLoaded', async () => { try { await initIDB(); loadSettings(); loadDict(); initTaskColorPicker(); } catch (err) { showToast("初期化エラー: " + err.message); } });
 
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
