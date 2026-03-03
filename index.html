@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v7.0</title>
+    <title>JeroCalendar v7.1</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -139,10 +139,16 @@
         .chat-attach-box { display: flex; align-items: center; gap: 8px; padding: 5px 15px; font-size: 12px; color: var(--accent); background: var(--head-bg); border-top: 1px solid var(--border); }
         .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0;}
     </style>
-    
     <script>
-        window.onerror = function(msg, url, line) { const t = document.getElementById('toast'); if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
-        window.onunhandledrejection = function(event) { const t = document.getElementById('toast'); const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
+        window.onerror = function(msg, url, line) {
+            const t = document.getElementById('toast');
+            if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); }
+        };
+        window.onunhandledrejection = function(event) {
+            const t = document.getElementById('toast');
+            const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー";
+            if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); }
+        };
     </script>
 </head>
 <body>
@@ -200,10 +206,15 @@
     </div>
 
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;"><div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="dict-edit-idx"><div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div><div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div></div>
+    
     <div id="daily-modal" class="bottom-modal" style="z-index: 105;"><div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div><div class="modal-body"><div class="card-list" id="daily-list"></div></div><div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div></div>
+    
     <div id="editor-modal" class="bottom-modal" style="z-index: 106;"><div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="edit-id"><div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div><div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div><div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div><div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div><input type="hidden" id="edit-recurrence-rule"><div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div><div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div><div class="color-palette" id="color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="confirmDeleteEvent(this)">削除</button><button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div></div>
+    
     <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;"><div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div><div class="modal-body"><div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div><div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div></div><div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div></div>
+    
     <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;"><div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="task-edit-id"><div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div><div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div><div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div><div class="color-palette" id="task-color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="confirmDeleteTask(this)">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div></div>
+    
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""></div>
 
     <script>
@@ -217,32 +228,117 @@
         let advancedDict = [];
         const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
+        // UI Utils
         function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
         function hideGlobalLoader() { document.getElementById('global-loader').classList.remove('active'); }
         const yieldUI = () => new Promise(r => setTimeout(r, 30));
         function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
+        // IDB Utils
         let idb;
         function initIDB() {
             return new Promise((resolve) => {
                 const timeout = setTimeout(() => { resolve(); }, 2000);
                 try {
                     const req = indexedDB.open('JeroDB_v6', 1);
-                    req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); };
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
+                    };
                     req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); };
                     req.onerror = (e) => { clearTimeout(timeout); resolve(); };
                 } catch(e) { clearTimeout(timeout); resolve(); }
             });
         }
-        function saveImageToIDB(id, dataUrl) { return new Promise((resolve, reject) => { if(!idb) return resolve(); try { const tx = idb.transaction('images', 'readwrite'); tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e); tx.objectStore('images').put({ id: id, data: dataUrl }); } catch(err) { reject(err); } }); }
-        function getImageFromIDB(id) { return new Promise((resolve) => { if(!idb) return resolve(null); try { const tx = idb.transaction('images', 'readonly'); const req = tx.objectStore('images').get(id); req.onsuccess = () => resolve(req.result ? req.result.data : null); req.onerror = () => resolve(null); } catch(err) { resolve(null); } }); }
+        function saveImageToIDB(id, dataUrl) {
+            return new Promise((resolve, reject) => {
+                if(!idb) return resolve();
+                try {
+                    const tx = idb.transaction('images', 'readwrite');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = (e) => reject(e);
+                    tx.objectStore('images').put({ id: id, data: dataUrl });
+                } catch(err) { reject(err); }
+            });
+        }
+        function getImageFromIDB(id) {
+            return new Promise((resolve) => {
+                if(!idb) return resolve(null);
+                try {
+                    const tx = idb.transaction('images', 'readonly');
+                    const req = tx.objectStore('images').get(id);
+                    req.onsuccess = () => resolve(req.result ? req.result.data : null);
+                    req.onerror = () => resolve(null);
+                } catch(err) { resolve(null); }
+            });
+        }
         function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
-        function compressImage(file, maxSize = 500) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; } else if (height > maxSize) { width *= maxSize / height; height = maxSize; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); }
+        
+        function compressImage(file, maxSize = 500) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width, height = img.height;
+                        if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; }
+                        else if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6)); 
+                    }; img.src = e.target.result;
+                }; reader.readAsDataURL(file);
+            });
+        }
 
+        // ==========================================
+        // ★ 完全復活：Color Pickers ★
+        // ==========================================
+        function initColorPicker() {
+            const picker = document.getElementById('color-picker');
+            picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`;
+            Object.keys(GOOGLE_COLORS).forEach(id => {
+                picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`;
+            });
+        }
+        function selectColor(el, id) {
+            document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected'); selectedColorId = id;
+        }
+        
+        function initTaskColorPicker() {
+            const picker = document.getElementById('task-color-picker');
+            picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`;
+            Object.keys(GOOGLE_COLORS).forEach(id => {
+                picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`;
+            });
+        }
+        function selectTaskColor(el, id) {
+            document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected'); selectedTaskColorId = id;
+        }
+
+        // Attachments
         let currentAttachments = []; 
-        function renderAttachPreviews(containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; currentAttachments.forEach((att, idx) => { const div = document.createElement('div'); div.className = 'preview-item'; if(att.type === 'img') { div.innerHTML = `<img src="${att.dataUrl}"><div class="preview-del" onclick="removeAttach(${idx}, '${containerId}')">✕</div>`; } else { div.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--accent); color:white; font-size:10px; font-weight:bold; word-break:break-all; padding:4px; box-sizing:border-box;">LINK</div><div class="preview-del" onclick="removeAttach(${idx}, '${containerId}')">✕</div>`; } container.appendChild(div); }); }
+        function renderAttachPreviews(containerId) {
+            const container = document.getElementById(containerId); container.innerHTML = '';
+            currentAttachments.forEach((att, idx) => {
+                const div = document.createElement('div'); div.className = 'preview-item';
+                if(att.type === 'img') { div.innerHTML = `<img src="${att.dataUrl}"><div class="preview-del" onclick="removeAttach(${idx}, '${containerId}')">✕</div>`; }
+                else { div.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--accent); color:white; font-size:10px; font-weight:bold; word-break:break-all; padding:4px; box-sizing:border-box;">LINK</div><div class="preview-del" onclick="removeAttach(${idx}, '${containerId}')">✕</div>`; }
+                container.appendChild(div);
+            });
+        }
         function removeAttach(idx, containerId) { currentAttachments.splice(idx, 1); renderAttachPreviews(containerId); }
-        async function handleImageUpload(e, containerId) { const file = e.target.files[0]; if(!file) return; showGlobalLoader('画像を最適化中...'); await yieldUI(); try { const dataUrl = await compressImage(file); currentAttachments.push({ id: generateUUID(), dataUrl: dataUrl, type: 'img' }); renderAttachPreviews(containerId); } catch(err) { showToast('画像処理に失敗しました。'); } hideGlobalLoader(); e.target.value = ''; }
+        
+        async function handleImageUpload(e, containerId) {
+            const file = e.target.files[0]; if(!file) return;
+            showGlobalLoader('画像を最適化中...'); await yieldUI();
+            try { const dataUrl = await compressImage(file); currentAttachments.push({ id: generateUUID(), dataUrl: dataUrl, type: 'img' }); renderAttachPreviews(containerId); } 
+            catch(err) { showToast('画像処理に失敗しました。'); }
+            hideGlobalLoader(); e.target.value = '';
+        }
         function addUrlPrompt() { const url = prompt("共有リンクURLを入力:"); if(url) { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); renderAttachPreviews('edit-attach-preview'); } }
         function addTaskUrlPrompt() { const url = prompt("共有リンクURLを入力:"); if(url) { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); renderAttachPreviews('task-attach-preview'); } }
 
@@ -250,7 +346,10 @@
             if (!text) return { cleanText: "", html: "" };
             let html = ""; let cleanTextForUI = text;
             const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match;
-            while ((match = imgRegex.exec(text)) !== null) { const uuid = match[1]; const dataUrl = await getImageFromIDB(uuid); if (dataUrl) { html += `<img src="${dataUrl}" class="attach-img-render" onclick="openImageViewer('${dataUrl}', event)">`; } }
+            while ((match = imgRegex.exec(text)) !== null) {
+                const uuid = match[1]; const dataUrl = await getImageFromIDB(uuid);
+                if (dataUrl) { html += `<img src="${dataUrl}" class="attach-img-render" onclick="openImageViewer('${dataUrl}', event)">`; }
+            }
             cleanTextForUI = cleanTextForUI.replace(imgRegex, '').trim();
             const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g; const urls = cleanTextForUI.match(urlRegex) || [];
             urls.forEach(url => {
@@ -261,14 +360,12 @@
                 else if (!cleanUrl.startsWith('http')) html += `<a href="${cleanUrl}" class="attach-chip" onclick="event.stopPropagation()">📱 App</a>`;
                 else html += `<a href="${cleanUrl}" target="_blank" class="attach-chip" onclick="event.stopPropagation()">🔗 Link</a>`;
             });
-            cleanTextForUI = cleanTextForUI.replace(urlRegex, '[Link]').trim(); return { cleanTextForUI, html: html ? `<div class="attach-container">${html}</div>` : "" };
+            cleanTextForUI = cleanTextForUI.replace(urlRegex, '[Link]').trim();
+            return { cleanTextForUI, html: html ? `<div class="attach-container">${html}</div>` : "" };
         }
         function openImageViewer(src, event) { event.stopPropagation(); document.getElementById('img-viewer-src').src = src; document.getElementById('img-viewer').classList.add('active'); }
 
-        // ==========================================
-        // v7.0: The Omniscient Core (Semantic Sync)
-        // ==========================================
-        // プロンプトに method(insert/update/delete) の概念を教え込む
+        // Jero Core AI
         const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。明日チュールを貰える可能性を常に期待している。
 ユーザーの入力、過去の文脈、または提供された【現在の予定データ】から推論し、以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
 
@@ -324,7 +421,6 @@
             const tzOffset = (new Date()).getTimezoneOffset() * 60000; const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, -1);
             const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
 
-            // v7.0: 直近のデータ（現在地）をかき集めてAIに送る
             let currentDataSummary = [];
             for (const monthKey in dataCache) {
                 const data = dataCache[monthKey];
@@ -368,7 +464,6 @@
                         pendingDrafts.push(action); const draftIdx = pendingDrafts.length - 1;
                         const timeStr = action.start ? (action.start.includes('T') ? new Date(action.start).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'numeric', minute:'numeric'}) : action.start) : (action.due || "日時不明");
                         
-                        // v7.0: methodごとのボタンUIの切り替え
                         let btnText = "追加"; let btnClass = "btn-blue"; let actionLabel = "新規";
                         if (action.method === "update") { btnText = "更新"; btnClass = "btn-yellow"; actionLabel = "変更"; }
                         if (action.method === "delete") { btnText = "削除"; btnClass = "btn-red"; actionLabel = "削除"; }
@@ -386,7 +481,6 @@
             } catch (err) { console.error(err); thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【通信エラー】\n${err.message}`; conversationHistory.pop(); }
         }
 
-        // v7.0: Method（追加/更新/削除）に応じたAPI自動執行
         async function commitDraft(idx) {
             const action = pendingDrafts[idx]; const btn = document.querySelector(`#draft-card-${idx} button`);
             btn.innerText = "⏳"; btn.disabled = true;
@@ -398,25 +492,24 @@
                         const resource = { summary: action.title, location: action.location, description: action.description };
                         if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; }
                         await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource });
-                    } else { // insert
+                    } else {
                         const resource = { summary: action.title, location: action.location, description: action.description };
                         if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; }
                         await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource });
                     }
-                } else { // task
+                } else {
                     if (action.method === 'delete') {
                         await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id });
                     } else if (action.method === 'update') {
                         const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString();
                         await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: resource });
-                    } else { // insert
+                    } else {
                         const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString();
                         await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource });
                     }
                 }
                 btn.innerText = "✅ 済"; btn.className = "btn-green";
                 
-                // 楽観的UI更新（キャッシュ消去と再描画）
                 for(let key in dataCache) { 
                     if(action.method === 'delete') {
                         if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
@@ -428,6 +521,7 @@
             } catch(e) { btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; showToast("APIエラー: " + (e.result && e.result.error ? e.result.error.message : e.message)); }
         }
 
+        // Settings, Dict, App Logic
         function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
         function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
         function renderDictUI() { const container = document.getElementById('dict-list'); container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${item.keys.join(', ')}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
@@ -471,10 +565,8 @@
         function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
         function switchAccount() { if(!confirm('連携を解除しログイン画面に戻るか？')) return; closeSettings(); localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); sessionStorage.removeItem('jero_account_email'); showToast('連携解除中...'); setTimeout(() => location.reload(), 1500); }
         function executeEmergencyReset() { closeSettings(); showToast('🚨 キャッシュ完全初期化中...'); setTimeout(() => { localStorage.clear(); location.reload(); }, 1500); }
-
         function exportSettings() { const data = { dict: advancedDict, settings: JSON.parse(localStorage.getItem('jero_settings') || '{}') }; const str = JSON.stringify(data); navigator.clipboard.writeText(str).then(() => showToast('コピー完了。')).catch(() => { prompt('コピー:', str); }); }
         function importSettings() { const str = prompt('バックアップ貼付:'); if(!str) return; try { const data = JSON.parse(str); if(data.dict) { advancedDict = data.dict; localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); } if(data.settings) { localStorage.setItem('jero_settings', JSON.stringify(data.settings)); } showToast('復元した。再読込する。'); setTimeout(() => location.reload(), 1500); } catch(e) { showToast('形式不正。'); } }
-
         function loadSettings() { const saved = localStorage.getItem('jero_settings'); if (saved) { const settings = JSON.parse(saved); if (settings.theme) { document.getElementById('st-theme').value = settings.theme; document.documentElement.setAttribute('data-theme', settings.theme); } if (settings.fs) { document.getElementById('st-fs').value = settings.fs; document.documentElement.style.setProperty('--fs', settings.fs + 'px'); document.getElementById('fs-val').innerText = settings.fs; } } else { if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { document.getElementById('st-theme').value = 'dark'; document.documentElement.setAttribute('data-theme', 'dark'); } } const key = localStorage.getItem('jero_gemini_key'); if(key) document.getElementById('st-gemini-key').value = key; let prompt = localStorage.getItem('jero_gemini_prompt'); if(!prompt) { prompt = DEFAULT_SYSTEM_PROMPT; localStorage.setItem('jero_gemini_prompt', prompt); } document.getElementById('st-gemini-prompt').value = prompt; }
         function saveAndApplySettings() { const theme = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; document.documentElement.setAttribute('data-theme', theme); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; localStorage.setItem('jero_settings', JSON.stringify({ theme, fs })); }
         
@@ -518,15 +610,105 @@
         function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
         function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
+        async function createEventCard(e, dateStr) { const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日"; if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if (spanType !== 'single') { const sDate = new Date(e.start.date); const eDate = new Date(e.end.date); eDate.setDate(eDate.getDate()-1); timeStr = `帯予定 (${sDate.getMonth()+1}/${sDate.getDate()} 〜 ${eDate.getMonth()+1}/${eDate.getDate()})`; } const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); let color = 'var(--accent)'; if(pData.style) color = pData.style.bg; else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId]; const attachData = await buildAttachmentHTML(e.description); card.innerHTML = `<div class="card-color-bar" style="background:${color};"></div><div class="card-content"><div class="card-title">${recurIcon}${pData.text}</div><div class="card-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.onclick = () => openEditor(e); return card; }
+        async function createTaskCard(t, dateStr, dow) { const card = document.createElement('div'); card.className = 'item-card'; const isComp = t.status === 'completed'; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); let color = '#34c759'; if(pData.style) color = pData.style.bg; else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId]; const recurIcon = tData.recurrence ? '🔁 ' : ''; const titleStyle = isComp ? 'text-decoration:line-through; color:#888;' : ''; const checkStyle = isComp ? 'border-color:#888; color:#888;' : `border-color:${color}; color:${color};`; const attachData = await buildAttachmentHTML(tData.cleanNotes); card.innerHTML = `<div class="card-color-bar" style="background:${color}; opacity: 0.3;"></div><div class="big-check" style="${checkStyle}">${isComp ? '✓' : ''}</div><div class="card-content"><div class="card-title" style="${titleStyle}">${recurIcon}${pData.text}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.querySelector('.big-check').onclick = async (ev) => { ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed'; try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; if (newStatus === 'completed' && tData.recurrence) { showToast('タスク完了。次を生成中...'); const nextDate = new Date(t.due); if(tData.recurrence === 'DAILY') nextDate.setDate(nextDate.getDate() + 1); else if(tData.recurrence === 'WEEKLY') nextDate.setDate(nextDate.getDate() + 7); else if(tData.recurrence === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: { title: t.title, notes: t.notes, due: nextDate.toISOString() } }); showToast('次を生成した。'); } else { showToast(newStatus === 'completed' ? 'タスク完了。' : '未完了に戻した。'); } const [y, m, d] = dateStr.split('-'); openDailyModal(dateStr, dow); fetchAndRenderMonth(parseInt(y), parseInt(m)-1, 'replace'); } catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100); }; card.onclick = () => openTaskEditor(t); return card; }
+
+        function openRecurrenceEditor() { document.getElementById('recurrence-modal').classList.add('active'); const rrule = document.getElementById('edit-recurrence-rule').value; const freqEl = document.getElementById('rec-freq'); const hasUntilEl = document.getElementById('rec-has-until'); const untilDateEl = document.getElementById('rec-until-date'); freqEl.value = ""; hasUntilEl.checked = false; untilDateEl.value = ""; if (rrule.includes('FREQ=')) { if(rrule.includes('FREQ=DAILY')) freqEl.value = "DAILY"; else if(rrule.includes('FREQ=WEEKLY')) freqEl.value = "WEEKLY"; else if(rrule.includes('FREQ=MONTHLY')) freqEl.value = "MONTHLY"; else if(rrule.includes('FREQ=YEARLY')) freqEl.value = "YEARLY"; const untilMatch = rrule.match(/UNTIL=([0-9]{8})/); if (untilMatch) { hasUntilEl.checked = true; const dStr = untilMatch[1]; untilDateEl.value = `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`; } } updateRecDisplay(); }
+        function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); }
+        function updateRecDisplay() { const freq = document.getElementById('rec-freq').value; const untilRow = document.getElementById('rec-until-row'); if(freq) untilRow.style.display = 'flex'; else untilRow.style.display = 'none'; }
+        function applyRecurrence() { const freq = document.getElementById('rec-freq').value; const hasUntil = document.getElementById('rec-has-until').checked; const untilDate = document.getElementById('rec-until-date').value; let rrule = ""; let dispText = "なし"; if (freq) { rrule = `RRULE:FREQ=${freq}`; dispText = document.querySelector(`#rec-freq option[value="${freq}"]`).innerText; if(hasUntil && untilDate) { const d = new Date(untilDate); const untilStr = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}T235959Z`; rrule += `;UNTIL=${untilStr}`; dispText += ` (~${untilDate})`; } } document.getElementById('edit-recurrence-rule').value = rrule; document.getElementById('edit-recurrence-display').innerText = dispText; closeRecurrenceEditor(); }
+
+        async function extractAttachmentsFromText(text) { currentAttachments = []; const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match; while ((match = imgRegex.exec(text)) !== null) { const data = await getImageFromIDB(match[1]); if(data) currentAttachments.push({ id: match[1], dataUrl: data, type: 'img' }); } const cleanText = text.replace(imgRegex, '').trim(); const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g; const urls = cleanText.match(urlRegex) || []; urls.forEach(url => { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); }); return cleanText.replace(urlRegex, '').trim(); }
+
+        async function openEditor(eventObj = null) { 
+            document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; 
+            document.getElementById('btn-delete').style.display = isEdit ? 'block' : 'none'; document.getElementById('btn-delete').innerText = '削除'; 
+            document.getElementById('btn-duplicate').style.display = isEdit ? 'block' : 'none'; 
+            const titleEl = document.getElementById('edit-title'); const locEl = document.getElementById('edit-loc'); const descEl = document.getElementById('edit-desc'); const allDayEl = document.getElementById('edit-allday'); const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const ruleEl = document.getElementById('edit-recurrence-rule'); const dispEl = document.getElementById('edit-recurrence-display'); 
+            if (isEdit) { 
+                document.getElementById('edit-id').value = eventObj.id; titleEl.value = eventObj.summary || ""; locEl.value = eventObj.location || ""; descEl.value = await extractAttachmentsFromText(eventObj.description || ""); renderAttachPreviews('edit-attach-preview'); if(eventObj.recurrence && eventObj.recurrence.length > 0) { ruleEl.value = eventObj.recurrence[0]; dispEl.innerText = "設定済"; } else { ruleEl.value = ""; dispEl.innerText = "なし"; } if (eventObj.start.date) { allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = eventObj.start.date; const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); endEl.value = ed.toISOString().split('T')[0]; } else { allDayEl.checked = false; startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; startEl.value = eventObj.start.dateTime.slice(0,16); endEl.value = eventObj.end.dateTime.slice(0,16); } const colorOpts = document.querySelectorAll('#color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(eventObj.colorId) { colorOpts[parseInt(eventObj.colorId)].classList.add('selected'); selectedColorId = eventObj.colorId; } else { colorOpts[0].classList.add('selected'); selectedColorId = ""; } 
+            } else { document.getElementById('edit-id').value = ""; titleEl.value = ""; locEl.value = ""; descEl.value = ""; ruleEl.value = ""; dispEl.innerText = "なし"; allDayEl.checked = true; startEl.type = 'date'; endEl.type = 'date'; startEl.value = selectedDateStr; endEl.value = selectedDateStr; selectColor(document.querySelector('#color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('edit-attach-preview'); } 
+        }
+        function toggleTimeInputs() { const isAllDay = document.getElementById('edit-allday').checked; const startEl = document.getElementById('edit-start'); const endEl = document.getElementById('edit-end'); const currentStart = startEl.value; if (isAllDay) { startEl.type = 'date'; endEl.type = 'date'; startEl.value = currentStart ? currentStart.split('T')[0] : selectedDateStr; endEl.value = startEl.value; } else { startEl.type = 'datetime-local'; endEl.type = 'datetime-local'; const baseDate = currentStart ? currentStart.split('T')[0] : selectedDateStr; startEl.value = `${baseDate}T09:00`; endEl.value = `${baseDate}T10:00`; } }
+        function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); currentAttachments = []; }
+        function duplicateEvent() { document.getElementById('edit-id').value = ""; document.getElementById('editor-title').innerText = "複製して新規保存"; showToast('複製した。日付を変更して保存してくれ。'); }
+
+        async function saveEvent() {
+            const title = document.getElementById('edit-title').value; if(!title) { showToast('タイトルを入力してくれ。'); return; }
+            showGlobalLoader('保存中...'); await yieldUI();
+            const id = document.getElementById('edit-id').value; const loc = document.getElementById('edit-loc').value; const isAllDay = document.getElementById('edit-allday').checked; const startVal = document.getElementById('edit-start').value; const endVal = document.getElementById('edit-end').value; const recurVal = document.getElementById('edit-recurrence-rule').value;
+            let finalDesc = document.getElementById('edit-desc').value.trim();
+            try { for (const att of currentAttachments) { if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); finalDesc += `\n[img:${att.id}]`; } else if (att.type === 'link') { finalDesc += `\n${att.id}`; } } } catch (idbErr) { console.error(idbErr); hideGlobalLoader(); showToast('画像保存に失敗した。'); return; }
+            const resource = { summary: title, location: loc, description: finalDesc.trim() }; if(selectedColorId) resource.colorId = selectedColorId; if(recurVal) resource.recurrence = [recurVal];
+            if (isAllDay) { resource.start = { date: startVal }; const ed = new Date(endVal); ed.setDate(ed.getDate() + 1); resource.end = { date: ed.toISOString().split('T')[0] }; } else { resource.start = { dateTime: new Date(startVal).toISOString() }; resource.end = { dateTime: new Date(endVal).toISOString() }; }
+            try { 
+                if (id) { await gapi.client.calendar.events.update({ calendarId: 'primary', eventId: id, resource: resource }); } 
+                else { await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); } 
+                const targetDate = new Date(startVal); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
+                closeAllModals(); showToast('予定を保存した。');
+            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
+            hideGlobalLoader();
+        }
+
         let deleteConfirmTimer = null;
         function confirmDeleteEvent(btn) { if (btn.innerText === '本当に削除？') { clearTimeout(deleteConfirmTimer); deleteEvent(); } else { btn.innerText = '本当に削除？'; deleteConfirmTimer = setTimeout(() => { btn.innerText = '削除'; }, 3000); } }
-        async function deleteEvent() { const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; setProgress(30); closeAllModals(); try { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); for(let key in dataCache) { if(dataCache[key].events) dataCache[key].events = dataCache[key].events.filter(e => e.id !== id); } triggerFullReRender(); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
+        async function deleteEvent() { 
+            const id = document.getElementById('edit-id').value; const startVal = document.getElementById('edit-start').value; 
+            setProgress(30); closeAllModals(); 
+            try { 
+                await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: id }); 
+                for(let key in dataCache) { if(dataCache[key].events) dataCache[key].events = dataCache[key].events.filter(e => e.id !== id); }
+                triggerFullReRender(); showToast('削除した。'); 
+            } catch(e) { console.error(e); showToast('削除失敗。'); } 
+            setProgress(100); 
+        }
+        
+        async function openTaskEditor(taskObj = null) { 
+            document.getElementById('task-editor-modal').classList.add('active'); const isEdit = taskObj !== null; document.getElementById('task-editor-title').innerText = isEdit ? 'タスクの編集' : '新規タスク'; 
+            document.getElementById('task-btn-delete').style.display = isEdit ? 'block' : 'none'; document.getElementById('task-btn-delete').innerText = '削除';
+            const titleEl = document.getElementById('task-edit-title'); const notesEl = document.getElementById('task-edit-notes'); const dueEl = document.getElementById('task-edit-due'); const recEl = document.getElementById('task-edit-recurrence'); 
+            if (isEdit) { 
+                document.getElementById('task-edit-id').value = taskObj.id; titleEl.value = taskObj.title || ""; const tData = extractTaskData(taskObj.notes); dueEl.value = taskObj.due ? taskObj.due.split('T')[0] : ""; recEl.value = tData.recurrence || ""; notesEl.value = await extractAttachmentsFromText(tData.cleanNotes); renderAttachPreviews('task-attach-preview'); const colorOpts = document.querySelectorAll('#task-color-picker .color-opt'); colorOpts.forEach(c => c.classList.remove('selected')); if(tData.colorId) { colorOpts[parseInt(tData.colorId)].classList.add('selected'); selectedTaskColorId = tData.colorId; } else { colorOpts[0].classList.add('selected'); selectedTaskColorId = ""; } 
+            } else { document.getElementById('task-edit-id').value = ""; titleEl.value = ""; notesEl.value = ""; dueEl.value = selectedDateStr; recEl.value = ""; selectTaskColor(document.querySelector('#task-color-picker .color-opt'), ""); currentAttachments = []; renderAttachPreviews('task-attach-preview'); } 
+        }
+        function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); currentAttachments = []; }
+
+        async function saveTask() {
+            const title = document.getElementById('task-edit-title').value; if(!title) { showToast('タスク名を入力してくれ。'); return; }
+            showGlobalLoader('保存中...'); await yieldUI();
+            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; const recVal = document.getElementById('task-edit-recurrence').value;
+            let baseNotes = document.getElementById('task-edit-notes').value.trim();
+            try { for (const att of currentAttachments) { if (att.type === 'img') { await saveImageToIDB(att.id, att.dataUrl); baseNotes += `\n[img:${att.id}]`; } else if (att.type === 'link') { baseNotes += `\n${att.id}`; } } } catch (idbErr) { console.error(idbErr); hideGlobalLoader(); showToast('画像保存に失敗した。'); return; }
+            let meta = ""; if(selectedTaskColorId) meta += `[c:${selectedTaskColorId}]`; if(recVal) meta += `[r:${recVal}]`; const finalNotes = meta ? `${baseNotes}\n${meta}` : baseNotes;
+            const resource = { title, notes: finalNotes.trim() }; if (dueVal) resource.due = new Date(dueVal).toISOString(); else resource.due = null;
+            try { 
+                if (id) { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: id, resource: resource }); } 
+                else { await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); } 
+                const targetDate = dueVal ? new Date(dueVal) : new Date(selectedDateStr); await fetchAndRenderMonth(targetDate.getFullYear(), targetDate.getMonth(), 'replace', true); 
+                closeAllModals(); showToast('タスクを保存した。');
+            } catch(e) { showToast(`APIエラー: ` + (e.result && e.result.error ? e.result.error.message : e.message)); }
+            hideGlobalLoader();
+        }
 
         let deleteTaskConfirmTimer = null;
         function confirmDeleteTask(btn) { if (btn.innerText === '本当に削除？') { clearTimeout(deleteTaskConfirmTimer); deleteTask(); } else { btn.innerText = '本当に削除？'; deleteTaskConfirmTimer = setTimeout(() => { btn.innerText = '削除'; }, 3000); } }
-        async function deleteTask() { const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; setProgress(30); closeAllModals(); try { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); for(let key in dataCache) { if(dataCache[key].tasks) dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== id); } triggerFullReRender(); showToast('削除した。'); } catch(e) { console.error(e); showToast('削除失敗。'); } setProgress(100); }
+        async function deleteTask() { 
+            const id = document.getElementById('task-edit-id').value; const dueVal = document.getElementById('task-edit-due').value; 
+            setProgress(30); closeAllModals(); 
+            try { 
+                await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: id }); 
+                for(let key in dataCache) { if(dataCache[key].tasks) dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== id); }
+                triggerFullReRender(); showToast('削除した。'); 
+            } catch(e) { console.error(e); showToast('削除失敗。'); } 
+            setProgress(100); 
+        }
 
-        document.addEventListener('DOMContentLoaded', async () => { try { await initIDB(); loadSettings(); loadDict(); initTaskColorPicker(); } catch (err) { showToast("初期化エラー: " + err.message); } });
+        function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); closeDictEditor(); closeRecurrenceEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
+
+        document.addEventListener('DOMContentLoaded', async () => { 
+            try { await initIDB(); loadSettings(); loadDict(); initTaskColorPicker(); } 
+            catch (err) { showToast("初期化エラー: " + err.message); }
+        });
 
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
