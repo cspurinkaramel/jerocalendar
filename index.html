@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <title>JeroCalendar v7.3</title>
+    <title>JeroCalendar v7.5</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -138,33 +138,19 @@
         #img-viewer img { max-width: 95%; max-height: 90%; border-radius: 8px; }
 
         .chat-attach-box { display: flex; align-items: center; gap: 8px; padding: 5px 15px; font-size: 12px; color: var(--accent); background: var(--head-bg); border-top: 1px solid var(--border); }
-        .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0;}
+        .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0; display: flex; align-items: center; justify-content: center; transition: color 0.3s; }
+        
+        /* v7.5 音声認識時のパルスアニメーション */
+        .mic-active { color: #ff3b30 !important; animation: pulse 1s infinite alternate; }
 
-        /* v7.3: Offline Badge */
         #offline-badge { display: none; position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; background: #ff9500; color: #fff; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 0; z-index: 45; }
         #offline-badge.active { display: block; }
     </style>
     
-<script>
-        // v7.3: 正規のService Worker登録
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('SW Registered', reg.scope))
-                .catch(err => console.error('SW Registration failed', err));
-        }
-
-        // v7.4: ブラウザ特有の無害な内部エラーをミュートする賢いデバッグアイ
-        window.onerror = function(msg, url, line) { 
-            if(msg.includes('__gCrWeb') || msg.includes('webkit')) return; // iOS/Braveの内部エラーは無視
-            const t = document.getElementById('toast'); 
-            if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } 
-        };
-        window.onunhandledrejection = function(event) { 
-            const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; 
-            if(String(err).includes('__gCrWeb') || String(err).includes('Load failed')) return; // 無害な通信遮断エラーは無視
-            const t = document.getElementById('toast'); 
-            if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } 
-        };
+    <script>
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
+        window.onerror = function(msg, url, line) { if(msg.includes('__gCrWeb') || msg.includes('webkit')) return; const t = document.getElementById('toast'); if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
+        window.onunhandledrejection = function(event) { const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; if(String(err).includes('__gCrWeb') || String(err).includes('Load failed')) return; const t = document.getElementById('toast'); if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
     </script>
 </head>
 <body>
@@ -215,9 +201,13 @@
         </div>
         <div class="modal-body" id="chat-history" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; background: var(--bg);"></div>
         <div class="chat-attach-box" id="chat-attach-box" style="display:none;"><span>📎</span><span id="chat-file-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span><button onclick="clearChatFile()" style="background:none; border:none; color:red; font-weight:bold;">✕</button></div>
+        
         <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px; align-items:center;">
-            <button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()">📎</button>
+            <button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()" style="margin-right: 2px;">📎</button>
             <input type="file" id="chat-file-input" accept="image/*,application/pdf" style="display:none;" onchange="handleChatFileUpload(event)">
+            
+            <button id="mic-btn" class="chat-file-btn" onclick="toggleSpeechRecognition()" style="margin-right: 4px;">🎤</button>
+            
             <input type="text" id="chat-input" placeholder="予定や挨拶をどうぞ..." style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px;">
             <button class="btn btn-blue" onclick="sendToJero()" style="border-radius:20px; padding:12px 20px;">送信</button>
         </div>
@@ -246,6 +236,61 @@
         const yieldUI = () => new Promise(r => setTimeout(r, 30));
         function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
+        // --- v7.5 Web Speech API (Voice Interface) ---
+        let recognition;
+        let isRecording = false;
+
+        function initSpeech() {
+            window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (window.SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.lang = 'ja-JP';
+                recognition.interimResults = false; 
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = function() {
+                    isRecording = true;
+                    document.getElementById('mic-btn').classList.add('mic-active');
+                    document.getElementById('chat-input').placeholder = "音声を認識中...";
+                };
+
+                recognition.onresult = function(event) {
+                    const speechResult = event.results[0][0].transcript;
+                    document.getElementById('chat-input').value = speechResult;
+                };
+
+                recognition.onerror = function(event) {
+                    console.error("Speech error:", event.error);
+                    if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error);
+                };
+
+                recognition.onend = function() {
+                    isRecording = false;
+                    document.getElementById('mic-btn').classList.remove('mic-active');
+                    document.getElementById('chat-input').placeholder = "予定や挨拶をどうぞ...";
+                };
+            } else {
+                console.warn("このブラウザは音声入力APIをサポートしていません。");
+            }
+        }
+
+        function toggleSpeechRecognition() {
+            if (!recognition) {
+                showToast("このブラウザ(環境)では音声入力が使えないようだ。");
+                return;
+            }
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                try {
+                    recognition.start();
+                } catch(e) {
+                    console.error("Recognition start error:", e);
+                }
+            }
+        }
+
+        // --- IDB Image Storage ---
         let idb;
         function initIDB() {
             return new Promise((resolve) => {
@@ -345,11 +390,7 @@
             if(!text && !chatFileBase64) return;
             appendChatMessage('user', text || "(ファイルを送信)"); inputEl.value = '';
             
-            // 圏外の場合はAIを使えないのでフェイルセーフ
-            if (!navigator.onLine) {
-                appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。');
-                return;
-            }
+            if (!navigator.onLine) { appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。'); return; }
 
             const apiKey = (localStorage.getItem('jero_gemini_key') || "").trim();
             if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
@@ -477,12 +518,11 @@
         function loadSettings() { const saved = localStorage.getItem('jero_settings'); if (saved) { const settings = JSON.parse(saved); if (settings.theme) { document.getElementById('st-theme').value = settings.theme; document.documentElement.setAttribute('data-theme', settings.theme); } if (settings.fs) { document.getElementById('st-fs').value = settings.fs; document.documentElement.style.setProperty('--fs', settings.fs + 'px'); document.getElementById('fs-val').innerText = settings.fs; } } else { if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { document.getElementById('st-theme').value = 'dark'; document.documentElement.setAttribute('data-theme', 'dark'); } } const key = localStorage.getItem('jero_gemini_key'); if(key) document.getElementById('st-gemini-key').value = key; let prompt = localStorage.getItem('jero_gemini_prompt'); if(!prompt) { prompt = DEFAULT_SYSTEM_PROMPT; localStorage.setItem('jero_gemini_prompt', prompt); } document.getElementById('st-gemini-prompt').value = prompt; }
         function saveAndApplySettings() { const theme = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; document.documentElement.setAttribute('data-theme', theme); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; localStorage.setItem('jero_settings', JSON.stringify({ theme, fs })); }
         
-        function initWeekdays() { const wdContainer = document.getElementById('weekdays'); const days = ['日', '月', '火', '水', '木', '金', '土']; days.forEach((d, i) => { const div = document.createElement('div'); div.className = 'wd'; div.innerText = d; if(i===0) div.style.color = '#ff3b30'; if(i===6) div.style.color = '#0a84ff'; wdContainer.appendChild(div); }); initColorPicker(); }
+        function initWeekdays() { const wdContainer = document.getElementById('weekdays'); const days = ['日', '月', '火', '水', '木', '金', '土']; days.forEach((d, i) => { const div = document.createElement('div'); div.className = 'wd'; div.innerText = d; if(i===0) div.style.color = '#ff3b30'; if(i===6) div.style.color = '#0a84ff'; wdContainer.appendChild(div); }); }
         function setProgress(percent) { const bar = document.getElementById('progress-bar'); bar.style.width = percent + '%'; if(percent >= 100) setTimeout(() => { bar.style.width = '0%'; }, 500); }
 
         function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
 
-        // --- Stale-while-revalidate Boot ---
         async function initCalendar() { 
             setProgress(10); 
             try { 
@@ -560,6 +600,13 @@
 
         async function createEventCard(e, dateStr) { const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日"; if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if (spanType !== 'single') { const sDate = new Date(e.start.date); const eDate = new Date(e.end.date); eDate.setDate(eDate.getDate()-1); timeStr = `帯予定 (${sDate.getMonth()+1}/${sDate.getDate()} 〜 ${eDate.getMonth()+1}/${eDate.getDate()})`; } const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); let color = 'var(--accent)'; if(pData.style) color = pData.style.bg; else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId]; const attachData = await buildAttachmentHTML(e.description); card.innerHTML = `<div class="card-color-bar" style="background:${color};"></div><div class="card-content"><div class="card-title">${recurIcon}${pData.text}</div><div class="card-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.onclick = () => openEditor(e); return card; }
         async function createTaskCard(t, dateStr, dow) { const card = document.createElement('div'); card.className = 'item-card'; const isComp = t.status === 'completed'; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); let color = '#34c759'; if(pData.style) color = pData.style.bg; else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId]; const recurIcon = tData.recurrence ? '🔁 ' : ''; const titleStyle = isComp ? 'text-decoration:line-through; color:#888;' : ''; const checkStyle = isComp ? 'border-color:#888; color:#888;' : `border-color:${color}; color:${color};`; const attachData = await buildAttachmentHTML(tData.cleanNotes); card.innerHTML = `<div class="card-color-bar" style="background:${color}; opacity: 0.3;"></div><div class="big-check" style="${checkStyle}">${isComp ? '✓' : ''}</div><div class="card-content"><div class="card-title" style="${titleStyle}">${recurIcon}${pData.text}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.querySelector('.big-check').onclick = async (ev) => { ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed'; try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; if (newStatus === 'completed' && tData.recurrence) { showToast('タスク完了。次を生成中...'); const nextDate = new Date(t.due); if(tData.recurrence === 'DAILY') nextDate.setDate(nextDate.getDate() + 1); else if(tData.recurrence === 'WEEKLY') nextDate.setDate(nextDate.getDate() + 7); else if(tData.recurrence === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: { title: t.title, notes: t.notes, due: nextDate.toISOString() } }); showToast('次を生成した。'); } else { showToast(newStatus === 'completed' ? 'タスク完了。' : '未完了に戻した。'); } const [y, m, d] = dateStr.split('-'); openDailyModal(dateStr, dow); fetchAndRenderMonth(parseInt(y), parseInt(m)-1, 'replace'); } catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100); }; card.onclick = () => openTaskEditor(t); return card; }
+
+        function openRecurrenceEditor() { document.getElementById('recurrence-modal').classList.add('active'); const rrule = document.getElementById('edit-recurrence-rule').value; const freqEl = document.getElementById('rec-freq'); const hasUntilEl = document.getElementById('rec-has-until'); const untilDateEl = document.getElementById('rec-until-date'); freqEl.value = ""; hasUntilEl.checked = false; untilDateEl.value = ""; if (rrule.includes('FREQ=')) { if(rrule.includes('FREQ=DAILY')) freqEl.value = "DAILY"; else if(rrule.includes('FREQ=WEEKLY')) freqEl.value = "WEEKLY"; else if(rrule.includes('FREQ=MONTHLY')) freqEl.value = "MONTHLY"; else if(rrule.includes('FREQ=YEARLY')) freqEl.value = "YEARLY"; const untilMatch = rrule.match(/UNTIL=([0-9]{8})/); if (untilMatch) { hasUntilEl.checked = true; const dStr = untilMatch[1]; untilDateEl.value = `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`; } } updateRecDisplay(); }
+        function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); }
+        function updateRecDisplay() { const freq = document.getElementById('rec-freq').value; const untilRow = document.getElementById('rec-until-row'); if(freq) untilRow.style.display = 'flex'; else untilRow.style.display = 'none'; }
+        function applyRecurrence() { const freq = document.getElementById('rec-freq').value; const hasUntil = document.getElementById('rec-has-until').checked; const untilDate = document.getElementById('rec-until-date').value; let rrule = ""; let dispText = "なし"; if (freq) { rrule = `RRULE:FREQ=${freq}`; dispText = document.querySelector(`#rec-freq option[value="${freq}"]`).innerText; if(hasUntil && untilDate) { const d = new Date(untilDate); const untilStr = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}T235959Z`; rrule += `;UNTIL=${untilStr}`; dispText += ` (~${untilDate})`; } } document.getElementById('edit-recurrence-rule').value = rrule; document.getElementById('edit-recurrence-display').innerText = dispText; closeRecurrenceEditor(); }
+
+        async function extractAttachmentsFromText(text) { currentAttachments = []; const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match; while ((match = imgRegex.exec(text)) !== null) { const data = await getImageFromIDB(match[1]); if(data) currentAttachments.push({ id: match[1], dataUrl: data, type: 'img' }); } const cleanText = text.replace(imgRegex, '').trim(); const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g; const urls = cleanText.match(urlRegex) || []; urls.forEach(url => { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); }); return cleanText.replace(urlRegex, '').trim(); }
 
         async function openEditor(eventObj = null) { 
             document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; 
@@ -647,7 +694,7 @@
         function closeAllModals() { closeEditor(); closeTaskEditor(); closeSettings(); closeDictEditor(); closeRecurrenceEditor(); document.getElementById('daily-modal').classList.remove('active'); document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
 
         document.addEventListener('DOMContentLoaded', async () => { 
-            try { await initIDB(); loadSettings(); loadDict(); initColorPicker(); initTaskColorPicker(); } 
+            try { await initIDB(); loadSettings(); loadDict(); initColorPicker(); initTaskColorPicker(); initSpeech(); } 
             catch (err) { showToast("初期化エラー: " + err.message); }
         });
 
