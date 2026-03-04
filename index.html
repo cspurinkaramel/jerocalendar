@@ -145,7 +145,7 @@
         #offline-badge.active { display: block; }
     </style>
     
-    <script>
+<script>
         // v7.3: 正規のService Worker登録
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js')
@@ -153,8 +153,18 @@
                 .catch(err => console.error('SW Registration failed', err));
         }
 
-        window.onerror = function(msg, url, line) { const t = document.getElementById('toast'); if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
-        window.onunhandledrejection = function(event) { const t = document.getElementById('toast'); const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
+        // v7.4: ブラウザ特有の無害な内部エラーをミュートする賢いデバッグアイ
+        window.onerror = function(msg, url, line) { 
+            if(msg.includes('__gCrWeb') || msg.includes('webkit')) return; // iOS/Braveの内部エラーは無視
+            const t = document.getElementById('toast'); 
+            if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } 
+        };
+        window.onunhandledrejection = function(event) { 
+            const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; 
+            if(String(err).includes('__gCrWeb') || String(err).includes('Load failed')) return; // 無害な通信遮断エラーは無視
+            const t = document.getElementById('toast'); 
+            if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } 
+        };
     </script>
 </head>
 <body>
