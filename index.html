@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>JeroCalendar v7.2</title>
+    <link rel="manifest" href="./manifest.json">
+    <title>JeroCalendar v7.3</title>
     <style>
         :root { 
             --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
@@ -138,31 +139,21 @@
 
         .chat-attach-box { display: flex; align-items: center; gap: 8px; padding: 5px 15px; font-size: 12px; color: var(--accent); background: var(--head-bg); border-top: 1px solid var(--border); }
         .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0;}
-        
-        /* v7.2: Offline Badge */
+
+        /* v7.3: Offline Badge */
         #offline-badge { display: none; position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; background: #ff9500; color: #fff; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 0; z-index: 45; }
         #offline-badge.active { display: block; }
     </style>
     
     <script>
-        // PWAの神髄：動的Service Worker生成ハック (圏外でもHTMLを開けるようにする)
-        try {
-            const swCode = `
-                const CACHE_NAME = 'jero-cal-v7.2';
-                self.addEventListener('install', (e) => { self.skipWaiting(); });
-                self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
-                self.addEventListener('fetch', (e) => {
-                    // APIリクエストはプロキシしない（IDBで管理するため）
-                    if (e.request.url.includes('googleapis.com')) return;
-                    e.respondWith( fetch(e.request).catch(() => caches.match(e.request)) );
-                });
-            `;
-            const blob = new Blob([swCode], { type: 'application/javascript' });
-            const swUrl = URL.createObjectURL(blob);
-            if ('serviceWorker' in navigator) navigator.serviceWorker.register(swUrl).catch(()=>{});
-        } catch(e) {}
+        // v7.3: 正規のService Worker登録
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW Registered', reg.scope))
+                .catch(err => console.error('SW Registration failed', err));
+        }
 
-        window.onerror = function(msg) { const t = document.getElementById('toast'); if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
+        window.onerror = function(msg, url, line) { const t = document.getElementById('toast'); if(t) { t.innerText = "🚨エラー:\n" + msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
         window.onunhandledrejection = function(event) { const t = document.getElementById('toast'); const err = event.reason ? (event.reason.message || event.reason) : "非同期エラー"; if(t) { t.innerText = "🚨非同期エラー:\n" + err; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); } };
     </script>
 </head>
@@ -177,8 +168,8 @@
         <div id="progress-bar"></div>
     </div>
     
-    <div id="offline-badge">⚡️ オフラインモード (キャッシュ表示中)</div>
-    
+    <div id="offline-badge">⚡️ オフライン (キャッシュ表示中・AI使用不可)</div>
+
     <div id="calendar-view"><div id="weekdays"></div><div id="scroll-container"><div id="top-trigger" class="loader-container hidden"><div class="spinner"></div></div><div id="calendar-wrapper"></div><div id="bottom-trigger" class="loader-container hidden"><div class="spinner"></div></div></div></div>
     <div id="agenda-view"><div id="agenda-top-trigger" class="loader-container hidden"><div class="spinner"></div></div><div id="agenda-content"></div><div id="agenda-bottom-trigger" class="loader-container hidden"><div class="spinner"></div></div></div>
     <div id="overlay" onclick="closeAllModals()"></div>
@@ -224,13 +215,9 @@
 
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;"><div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="dict-edit-idx"><div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div><div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div></div>
     <div id="daily-modal" class="bottom-modal" style="z-index: 105;"><div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div><div class="modal-body"><div class="card-list" id="daily-list"></div></div><div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div></div>
-    
     <div id="editor-modal" class="bottom-modal" style="z-index: 106;"><div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="edit-id"><div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div><div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div><div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div><div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div><input type="hidden" id="edit-recurrence-rule"><div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div><div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div><div class="color-palette" id="color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="confirmDeleteEvent(this)">削除</button><button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div></div>
-    
     <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;"><div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div><div class="modal-body"><div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div><div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div></div><div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div></div>
-    
     <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;"><div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="task-edit-id"><div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div><div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div><div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div><div class="color-palette" id="task-color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="confirmDeleteTask(this)">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div></div>
-    
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""></div>
 
     <script>
@@ -249,55 +236,29 @@
         const yieldUI = () => new Promise(r => setTimeout(r, 30));
         function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
-        // ==========================================
-        // v7.2: Offline DB (Cache Storage Upgrade)
-        // ==========================================
         let idb;
         function initIDB() {
             return new Promise((resolve) => {
                 const timeout = setTimeout(() => { resolve(); }, 2000);
                 try {
-                    const req = indexedDB.open('JeroDB_v7', 2); // DBバージョンアップ
+                    const req = indexedDB.open('JeroDB_v7', 2);
                     req.onupgradeneeded = (e) => {
                         const db = e.target.result;
                         if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
-                        if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); // カレンダーデータ用
+                        if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' });
                     };
                     req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); };
                     req.onerror = (e) => { clearTimeout(timeout); resolve(); };
                 } catch(e) { clearTimeout(timeout); resolve(); }
             });
         }
-        
-        // --- データの永続化 ---
-        function saveDataCacheToIDB(monthKey, data) {
-            if(!idb) return;
-            try {
-                const tx = idb.transaction('cache', 'readwrite');
-                tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() });
-            } catch(e) {}
-        }
-        function loadDataCacheFromIDB() {
-            return new Promise((resolve) => {
-                if(!idb) return resolve();
-                try {
-                    const tx = idb.transaction('cache', 'readonly');
-                    const req = tx.objectStore('cache').getAll();
-                    req.onsuccess = () => {
-                        if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); }
-                        resolve();
-                    };
-                    req.onerror = () => resolve();
-                } catch(e) { resolve(); }
-            });
-        }
-
+        function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch(e) {} }
+        function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
         function saveImageToIDB(id, dataUrl) { return new Promise((resolve, reject) => { if(!idb) return resolve(); try { const tx = idb.transaction('images', 'readwrite'); tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e); tx.objectStore('images').put({ id: id, data: dataUrl }); } catch(err) { reject(err); } }); }
         function getImageFromIDB(id) { return new Promise((resolve) => { if(!idb) return resolve(null); try { const tx = idb.transaction('images', 'readonly'); const req = tx.objectStore('images').get(id); req.onsuccess = () => resolve(req.result ? req.result.data : null); req.onerror = () => resolve(null); } catch(err) { resolve(null); } }); }
         function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
         function compressImage(file, maxSize = 500) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; } else if (height > maxSize) { width *= maxSize / height; height = maxSize; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); }
 
-        // --- Color Pickers ---
         function initColorPicker() { const picker = document.getElementById('color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
         function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedColorId = id; }
         function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
@@ -373,6 +334,13 @@
             const inputEl = document.getElementById('chat-input'); const text = inputEl.value.trim(); 
             if(!text && !chatFileBase64) return;
             appendChatMessage('user', text || "(ファイルを送信)"); inputEl.value = '';
+            
+            // 圏外の場合はAIを使えないのでフェイルセーフ
+            if (!navigator.onLine) {
+                appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。');
+                return;
+            }
+
             const apiKey = (localStorage.getItem('jero_gemini_key') || "").trim();
             if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
 
@@ -444,7 +412,6 @@
                     else { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); }
                 }
                 btn.innerText = "✅ 済"; btn.className = "btn-green";
-                
                 for(let key in dataCache) { 
                     if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); }
                 }
@@ -505,21 +472,16 @@
 
         function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
 
-        // ==========================================
-        // v7.2: Stale-while-revalidate Boot Sequence
-        // ==========================================
+        // --- Stale-while-revalidate Boot ---
         async function initCalendar() { 
             setProgress(10); 
             try { 
-                await loadDataCacheFromIDB(); // まずIDBのキャッシュを全展開
+                await loadDataCacheFromIDB(); 
                 const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); 
-                
-                // キャッシュがある場合、0秒で即座に描画（オフラインでも動く）
                 await fetchAndRenderMonth(y, m, 'append', false); 
                 await fetchAndRenderMonth(y, m+1, 'append', false); 
                 scrollToToday();
 
-                // ネットワークが繋がっていれば、裏でAPIを叩いて差分を上書きする
                 if (navigator.onLine && !isAuthError) {
                     document.getElementById('offline-badge').classList.remove('active');
                     fetchAndRenderMonth(y, m, 'replace', true);
@@ -535,29 +497,20 @@
         function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
 
         async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
-            if (isAuthError) return; 
-            const monthKey = `${year}-${month}`; 
-            const startOfMonth = new Date(year, month, 1).toISOString(); 
-            const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
-            
+            if (isAuthError) return; const monthKey = `${year}-${month}`; const startOfMonth = new Date(year, month, 1).toISOString(); const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
             let needsRender = false;
 
-            // キャッシュがない、または強制更新の場合
             if (forceFetch || !dataCache[monthKey]) { 
-                if (!navigator.onLine) {
-                    if (!dataCache[monthKey]) showToast('オフラインのためデータが取得できません。');
-                    return; 
-                }
+                if (!navigator.onLine) { if (!dataCache[monthKey]) showToast('オフラインのためデータが取得できません。'); return; }
                 let events = [], tasks = [], authErrorDetected = false; 
                 try { const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
                 try { const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
                 if (authErrorDetected) { notifyAuthError(); return; } 
                 
                 dataCache[monthKey] = { events, tasks }; 
-                saveDataCacheToIDB(monthKey, { events, tasks }); // IDBに永続化
+                saveDataCacheToIDB(monthKey, { events, tasks }); 
                 needsRender = true;
             } else {
-                // キャッシュはあるがDOMがない場合
                 if (!document.getElementById(`month-${year}-${month}`)) needsRender = true;
             }
 
@@ -565,10 +518,7 @@
                 const existing = document.getElementById(`month-${year}-${month}`); 
                 if(existing) existing.remove(); 
                 renderMonthDOM(year, month, dataCache[monthKey], position);
-                if(!existing) { 
-                    if (position === 'append') renderedMonths.push({year, month}); 
-                    else if (position === 'prepend') renderedMonths.unshift({year, month}); 
-                } 
+                if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } 
                 updateHeaderDisplay();
             }
         }
@@ -585,15 +535,13 @@
                 if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
                 dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
                 sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `; } const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType); const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = timeStr + recurIcon + pData.text; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div); });
-                data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div); });
+                if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div); });
                 grid.appendChild(dayEl);
             }
             const container = document.getElementById('calendar-wrapper');
             if(position === 'append') container.appendChild(wrapper); 
             else if(position === 'prepend') container.insertBefore(wrapper, container.firstChild);
-            else if(position === 'replace') {
-                const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]);
-            }
+            else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
         }
 
         document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
@@ -602,13 +550,6 @@
 
         async function createEventCard(e, dateStr) { const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日"; if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if (spanType !== 'single') { const sDate = new Date(e.start.date); const eDate = new Date(e.end.date); eDate.setDate(eDate.getDate()-1); timeStr = `帯予定 (${sDate.getMonth()+1}/${sDate.getDate()} 〜 ${eDate.getMonth()+1}/${eDate.getDate()})`; } const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); let color = 'var(--accent)'; if(pData.style) color = pData.style.bg; else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId]; const attachData = await buildAttachmentHTML(e.description); card.innerHTML = `<div class="card-color-bar" style="background:${color};"></div><div class="card-content"><div class="card-title">${recurIcon}${pData.text}</div><div class="card-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.onclick = () => openEditor(e); return card; }
         async function createTaskCard(t, dateStr, dow) { const card = document.createElement('div'); card.className = 'item-card'; const isComp = t.status === 'completed'; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); let color = '#34c759'; if(pData.style) color = pData.style.bg; else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId]; const recurIcon = tData.recurrence ? '🔁 ' : ''; const titleStyle = isComp ? 'text-decoration:line-through; color:#888;' : ''; const checkStyle = isComp ? 'border-color:#888; color:#888;' : `border-color:${color}; color:${color};`; const attachData = await buildAttachmentHTML(tData.cleanNotes); card.innerHTML = `<div class="card-color-bar" style="background:${color}; opacity: 0.3;"></div><div class="big-check" style="${checkStyle}">${isComp ? '✓' : ''}</div><div class="card-content"><div class="card-title" style="${titleStyle}">${recurIcon}${pData.text}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.querySelector('.big-check').onclick = async (ev) => { ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed'; try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; if (newStatus === 'completed' && tData.recurrence) { showToast('タスク完了。次を生成中...'); const nextDate = new Date(t.due); if(tData.recurrence === 'DAILY') nextDate.setDate(nextDate.getDate() + 1); else if(tData.recurrence === 'WEEKLY') nextDate.setDate(nextDate.getDate() + 7); else if(tData.recurrence === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: { title: t.title, notes: t.notes, due: nextDate.toISOString() } }); showToast('次を生成した。'); } else { showToast(newStatus === 'completed' ? 'タスク完了。' : '未完了に戻した。'); } const [y, m, d] = dateStr.split('-'); openDailyModal(dateStr, dow); fetchAndRenderMonth(parseInt(y), parseInt(m)-1, 'replace'); } catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100); }; card.onclick = () => openTaskEditor(t); return card; }
-
-        function openRecurrenceEditor() { document.getElementById('recurrence-modal').classList.add('active'); const rrule = document.getElementById('edit-recurrence-rule').value; const freqEl = document.getElementById('rec-freq'); const hasUntilEl = document.getElementById('rec-has-until'); const untilDateEl = document.getElementById('rec-until-date'); freqEl.value = ""; hasUntilEl.checked = false; untilDateEl.value = ""; if (rrule.includes('FREQ=')) { if(rrule.includes('FREQ=DAILY')) freqEl.value = "DAILY"; else if(rrule.includes('FREQ=WEEKLY')) freqEl.value = "WEEKLY"; else if(rrule.includes('FREQ=MONTHLY')) freqEl.value = "MONTHLY"; else if(rrule.includes('FREQ=YEARLY')) freqEl.value = "YEARLY"; const untilMatch = rrule.match(/UNTIL=([0-9]{8})/); if (untilMatch) { hasUntilEl.checked = true; const dStr = untilMatch[1]; untilDateEl.value = `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`; } } updateRecDisplay(); }
-        function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); }
-        function updateRecDisplay() { const freq = document.getElementById('rec-freq').value; const untilRow = document.getElementById('rec-until-row'); if(freq) untilRow.style.display = 'flex'; else untilRow.style.display = 'none'; }
-        function applyRecurrence() { const freq = document.getElementById('rec-freq').value; const hasUntil = document.getElementById('rec-has-until').checked; const untilDate = document.getElementById('rec-until-date').value; let rrule = ""; let dispText = "なし"; if (freq) { rrule = `RRULE:FREQ=${freq}`; dispText = document.querySelector(`#rec-freq option[value="${freq}"]`).innerText; if(hasUntil && untilDate) { const d = new Date(untilDate); const untilStr = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}T235959Z`; rrule += `;UNTIL=${untilStr}`; dispText += ` (~${untilDate})`; } } document.getElementById('edit-recurrence-rule').value = rrule; document.getElementById('edit-recurrence-display').innerText = dispText; closeRecurrenceEditor(); }
-
-        async function extractAttachmentsFromText(text) { currentAttachments = []; const imgRegex = /\[img:([a-zA-Z0-9\-]+)\]/g; let match; while ((match = imgRegex.exec(text)) !== null) { const data = await getImageFromIDB(match[1]); if(data) currentAttachments.push({ id: match[1], dataUrl: data, type: 'img' }); } const cleanText = text.replace(imgRegex, '').trim(); const urlRegex = /(https?:\/\/[^\s]+|[a-zA-Z0-9\-]+:\/\/[^\s]+)/g; const urls = cleanText.match(urlRegex) || []; urls.forEach(url => { currentAttachments.push({ id: url, dataUrl: url, type: 'link' }); }); return cleanText.replace(urlRegex, '').trim(); }
 
         async function openEditor(eventObj = null) { 
             document.getElementById('editor-modal').classList.add('active'); const isEdit = eventObj !== null; document.getElementById('editor-title').innerText = isEdit ? '予定の編集' : '新規予定'; 
