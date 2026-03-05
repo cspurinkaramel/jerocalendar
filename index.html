@@ -6,11 +6,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <title>JeroCalendar v7.9</title>
+    <title>JeroCalendar v8.0</title>
     <style>
-        :root { --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; --today: #fff9c4; --sat: #f4f9ff; --sun: #fff4f4; --fs: 10px; --accent: #0a84ff; --card-bg: #ffffff; --card-shadow: rgba(0,0,0,0.08); }
-        [data-theme="dark"] { --bg: #000; --txt: #fff; --border: #333; --head-bg: #1c1c1e; --today: #333300; --sat: #00152b; --sun: #2b0000; --card-bg: #1c1c1e; --card-shadow: rgba(0,0,0,0.5); }
+        :root { 
+            --bg: #ffffff; --txt: #111; --border: #e8e8e8; --head-bg: #f8f8f8; 
+            --today: #fff9c4; --sat: #f4f9ff; --sun: #fff4f4; --fs: 10px; --accent: #0a84ff;
+            --card-bg: #ffffff; --card-shadow: rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] { 
+            --bg: #000; --txt: #fff; --border: #333; --head-bg: #1c1c1e; 
+            --today: #333300; --sat: #00152b; --sun: #2b0000; 
+            --card-bg: #1c1c1e; --card-shadow: rgba(0,0,0,0.5);
+        }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s, color 0.3s; }
+
         #top-bar { position: fixed; top: 0; width: 100%; z-index: 50; padding-top: env(safe-area-inset-top); background: rgba(255,255,255,0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: var(--txt); display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; height: calc(44px + env(safe-area-inset-top)); border-bottom: 1px solid var(--border); transition: background 0.3s, color 0.3s; }
         [data-theme="dark"] #top-bar { background: rgba(30,30,30,0.85); color: white; }
         #progress-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); width: 0%; transition: width 0.3s; }
@@ -19,37 +28,45 @@
         .icon-btn { background: none; border: none; color: inherit; font-size: 20px; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;}
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.3); color: #ff3b30; } 100% { transform: scale(1); } }
         .auth-pulse { display: block !important; animation: pulse 1.5s infinite; color: #ff3b30 !important; }
+
         #toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); color: white; padding: 12px 24px; border-radius: 24px; font-size: 13px; font-weight: bold; z-index: 99999; transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none; backdrop-filter: blur(5px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 85%; text-align: center; line-height: 1.4; word-break: break-word;}
         #toast.show { top: calc(env(safe-area-inset-top) + 20px); }
+
         #global-loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 10000; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0; transition: opacity 0.3s; }
         [data-theme="dark"] #global-loader { background: rgba(0,0,0,0.85); }
         #global-loader.active { display: flex; opacity: 1; }
         .loader-text { margin-top: 20px; font-weight: bold; font-size: 16px; color: var(--accent); letter-spacing: 1px;}
         .big-spinner { width: 50px; height: 50px; border: 4px solid rgba(10,132,255,0.2); border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+
         #calendar-view { display: block; width: 100%; height: 100%; }
         #weekdays { position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; z-index: 40; height: 24px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; transition: background 0.3s, border-color 0.3s; }
         .wd { text-align: center; font-weight: bold; font-size: 10px; color: #888; }
         #scroll-container { position: fixed; top: calc(68px + env(safe-area-inset-top)); width: 100%; height: calc(100vh - 68px - env(safe-area-inset-top)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .month-title { padding: 6px; font-size: 12px; font-weight: bold; background: var(--head-bg); border-bottom: 1px solid var(--border); text-align: center; color: #666; transition: background 0.3s, border-color 0.3s;}
         .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(90px, auto); }
+        
         .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; padding-top: 20px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; transition: border-color 0.3s, background 0.3s;}
         .day:active { background: rgba(128,128,128,0.15); }
         .day-num { position: absolute; top: 4px; left: 4px; font-weight: 600; font-size: 11px; z-index: 1; color: var(--txt); transition: color 0.3s;}
         .today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; top: 2px; left: 2px; }
+
         .event, .task { font-size: var(--fs); border-radius: 4px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 2px; color: #fff; font-weight: 600; box-sizing: border-box; width: calc(100% - 4px); box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; }
         .event { background-color: var(--accent); } .task { background-color: #34c759; } 
         .task.completed { text-decoration: line-through; opacity: 0.5; filter: grayscale(50%); }
         .span-start { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: -1px; width: calc(100% - 2px); z-index: 3;}
         .span-mid { border-radius: 0; margin: 0 -1px; width: calc(100% + 2px); z-index: 3;}
         .span-end { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; width: calc(100% - 2px); z-index: 3;}
+
         #agenda-view { display: none; width: 100%; height: calc(100vh - 44px - env(safe-area-inset-top)); position: fixed; top: calc(44px + env(safe-area-inset-top)); overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--head-bg); padding-bottom: env(safe-area-inset-bottom);}
         .agenda-day-header { padding: 10px 15px; font-size: 14px; font-weight: bold; color: var(--txt); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(248,248,248,0.95); backdrop-filter: blur(10px); z-index: 10;}
         [data-theme="dark"] .agenda-day-header { background: rgba(28,28,30,0.95); }
         .agenda-list-container { padding: 10px 15px; display: flex; flex-direction: column; gap: 10px; }
+
         .loader-container { height: 40px; display: flex; justify-content: center; align-items: center; overflow: hidden; transition: height 0.3s; }
         .loader-container.hidden { height: 0; }
         .spinner { width: 24px; height: 24px; border: 3px solid rgba(10,132,255,0.3); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+
         .bottom-modal { position: fixed; bottom: -100%; left: 0; width: 100%; max-height: 85vh; background: var(--bg); border-top-left-radius: 20px; border-top-right-radius: 20px; box-shadow: 0 -10px 25px rgba(0,0,0,0.3); z-index: 100; transition: bottom 0.35s cubic-bezier(0.1, 0.9, 0.2, 1), background 0.3s; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
         .bottom-modal.active { bottom: 0; }
         .modal-drag-area { padding: 10px 0; cursor: pointer; } .modal-drag { width: 40px; height: 5px; background: #ccc; border-radius: 3px; margin: 0 auto; }
@@ -57,6 +74,7 @@
         .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--txt); transition: color 0.3s;}
         .close-btn { background: var(--head-bg); border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; color: var(--txt); cursor: pointer; transition: background 0.3s, color 0.3s; display:flex; justify-content:center; align-items:center;}
         .modal-body { padding: 0; overflow-y: auto; flex: 1; background: var(--head-bg); }
+        
         .card-list { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
         .item-card { background: var(--card-bg); border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px var(--card-shadow); display: flex; gap: 12px; align-items: center; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; position: relative; overflow: hidden; }
         .item-card:active { transform: scale(0.98); box-shadow: 0 1px 4px var(--card-shadow); }
@@ -66,6 +84,7 @@
         .card-meta { font-size: 13px; color: #888; display: flex; gap: 10px; flex-wrap: wrap; font-weight: 500;}
         .big-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; transition: all 0.2s; cursor: pointer; flex-shrink: 0; }
         .big-check:active { transform: scale(0.8); }
+
         .attach-area { padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg); display: flex; flex-direction: column; gap: 10px; }
         .attach-buttons { display: flex; gap: 10px; }
         .btn-attach { flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--head-bg); color: var(--txt); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s; }
@@ -74,21 +93,26 @@
         .preview-item { position: relative; width: 60px; height: 60px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .preview-item img { width: 100%; height: 100%; object-fit: cover; }
         .preview-del { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; font-weight: bold; }
+        
         .attach-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
         .attach-img-render { height: 60px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; }
         .attach-chip { display: inline-flex; align-items: center; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--txt); text-decoration: none; transition: background 0.2s; }
+
         .action-bar { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--bg); transition: background 0.3s, border-color 0.3s;}
         .btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; color: white; cursor: pointer; transition: transform 0.1s; text-align: center;}
         .btn:active { transform: scale(0.96); }
         .btn-blue { background: var(--accent); } .btn-green { background: #34c759; } .btn-red { background: #ff3b30; } .btn-gray { background: #8e8e93; } .btn-yellow { background: #ff9500; }
+
         .form-group { padding: 12px 20px; border-bottom: 1px solid var(--border); transition: border-color 0.3s; background: var(--bg);}
         .form-group input[type="text"], .form-group textarea, .form-group select { width: 100%; border: none; background: transparent; color: var(--txt); font-size: 16px; outline: none; transition: color 0.3s;}
         .form-group textarea { resize: none; height: 80px; margin-top: 8px; }
         .form-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 500; color: var(--txt); transition: border-color 0.3s, color 0.3s; background: var(--bg);}
         .form-row input[type="datetime-local"], .form-row input[type="date"], .form-row select { background: transparent; border: none; color: var(--accent); font-size: 16px; font-weight: bold; outline:none; text-align: right; }
+        
         .setting-row { display: flex; flex-direction: column; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--border); color: var(--txt); font-weight: 600; background: var(--bg);}
         .setting-row select { padding: 8px; font-size: 16px; border-radius: 8px; background: var(--head-bg); color: var(--txt); border: 1px solid var(--border); outline: none;}
         .setting-row input[type="range"] { accent-color: var(--accent); }
+
         .dict-container { background: var(--head-bg); border-radius: 10px; padding: 10px; margin-top: 10px; max-height: 250px; overflow-y: auto; }
         .dict-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); font-size: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 8px;}
         .dict-item:last-child { margin-bottom: 0; }
@@ -96,21 +120,27 @@
         .dict-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; }
         .dict-btn-edit { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; margin-right: 5px; font-size: 12px;}
         .dict-btn-del { background: #ff3b30; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px;}
+        
         .color-palette { display: flex; gap: 12px; padding: 15px 20px; overflow-x: auto; scrollbar-width: none; background: var(--bg);}
         .color-opt { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);}
         .color-opt.selected { border-color: var(--txt); transform: scale(1.15); }
+
         #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 90; transition: opacity 0.3s; opacity: 0; backdrop-filter: blur(2px);}
         #overlay.active { display: block; opacity: 1; }
+        
         .jero-msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; font-size: 15px; line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
         .jero-msg.user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
         .jero-msg.ai { align-self: flex-start; background: var(--head-bg); color: var(--txt); border-bottom-left-radius: 4px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .pulse-think { animation: pulse 1s infinite alternate; opacity: 0.7; }
+
         #img-viewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
         #img-viewer.active { display: flex; opacity: 1; }
         #img-viewer img { max-width: 95%; max-height: 90%; border-radius: 8px; }
+
         .chat-attach-box { display: flex; align-items: center; gap: 8px; padding: 5px 15px; font-size: 12px; color: var(--accent); background: var(--head-bg); border-top: 1px solid var(--border); }
         .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0; display: flex; align-items: center; justify-content: center; transition: color 0.3s; }
         .mic-active { color: #ff3b30 !important; animation: pulse 1s infinite alternate; }
+
         #offline-badge { display: none; position: fixed; top: calc(44px + env(safe-area-inset-top)); width: 100%; background: #ff9500; color: #fff; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 0; z-index: 45; }
         #offline-badge.active { display: block; }
     </style>
@@ -149,7 +179,6 @@
         <div class="modal-body">
             <div class="setting-row"><label>UIテーマ</label><select id="st-theme" onchange="saveAndApplySettings()"><option value="light">ライトモード</option><option value="dark">ダークモード</option></select></div>
             <div class="setting-row"><label>カレンダー文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
-            
             <div class="setting-row">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <label style="color: var(--accent);">Jero Alert (プッシュ通知)</label>
@@ -158,7 +187,6 @@
                 <div style="font-size: 11px; color: #888; margin-top: 4px;">予定の10分前に通知を送るぞ。ホーム画面に追加した状態でのみ動作する。</div>
                 <button class="btn-blue" style="padding: 8px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer; margin-top:8px;" onclick="requestNotificationPermission()">通知を許可する</button>
             </div>
-
             <div class="setting-row">
                 <label style="color: var(--accent);">Jero Core 思考エンジン</label>
                 <div style="font-size: 12px; color: #888; margin-bottom: 4px;">Google AI StudioのAPIキー</div>
@@ -169,9 +197,7 @@
             <div class="setting-row"><div style="display:flex; justify-content:space-between; align-items:center;"><label>視覚圧縮・装飾辞書</label><button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button></div><div class="dict-container" id="dict-list"></div></div>
             <div class="setting-row"><label>システム拡張</label><div style="display:flex; gap:10px;"><button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="exportSettings()">データ書出</button><button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="importSettings()">データ読込</button></div><button class="btn btn-red" style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 キャッシュ完全リセット</button></div>
         </div>
-        <div class="action-bar" style="padding: 15px 20px;">
-            <button class="btn btn-blue" onclick="closeSettings()">完了 (閉じる)</button>
-        </div>
+        <div class="action-bar" style="padding: 15px 20px;"><button class="btn btn-blue" onclick="closeSettings()">完了 (閉じる)</button></div>
     </div>
 
     <div id="jero-chat-modal" class="bottom-modal" style="z-index: 110; height: 85vh;">
@@ -186,9 +212,7 @@
         <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px; align-items:center;">
             <button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()" style="margin-right: 2px;">📎</button>
             <input type="file" id="chat-file-input" accept="image/*,application/pdf" style="display:none;" onchange="handleChatFileUpload(event)">
-            
             <button id="mic-btn" class="chat-file-btn" onclick="toggleSpeechRecognition()" style="margin-right: 4px;">🎤</button>
-            
             <input type="text" id="chat-input" placeholder="予定や検索ワードをどうぞ..." style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px;">
             <button class="btn btn-blue" onclick="sendToJero()" style="border-radius:20px; padding:12px 20px;">送信</button>
         </div>
@@ -247,9 +271,27 @@
             }
         }
 
-        let recognition; let isRecording = false;
-        function initSpeech() { window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (window.SpeechRecognition) { recognition = new SpeechRecognition(); recognition.lang = 'ja-JP'; recognition.interimResults = false; recognition.maxAlternatives = 1; recognition.onstart = function() { isRecording = true; document.getElementById('mic-btn').classList.add('mic-active'); document.getElementById('chat-input').placeholder = "音声を認識中..."; }; recognition.onresult = function(event) { document.getElementById('chat-input').value = event.results[0][0].transcript; }; recognition.onerror = function(event) { if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); }; recognition.onend = function() { isRecording = false; document.getElementById('mic-btn').classList.remove('mic-active'); document.getElementById('chat-input').placeholder = "予定や検索ワードをどうぞ..."; }; } }
-        function toggleSpeechRecognition() { if (!recognition) { showToast("このブラウザでは音声入力不可だ。"); return; } if (isRecording) { recognition.stop(); } else { try { recognition.start(); } catch(e) {} } }
+        // --- v8.0: Web Speech API (The Silent Mic Fix) ---
+        let recognition = null; let isRecording = false;
+        function toggleSpeechRecognition() {
+            window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
+            if (isRecording && recognition) { recognition.stop(); return; }
+            try {
+                recognition = new SpeechRecognition();
+                recognition.lang = 'ja-JP'; recognition.interimResults = false; recognition.maxAlternatives = 1;
+                recognition.onstart = function() { isRecording = true; document.getElementById('mic-btn').classList.add('mic-active'); document.getElementById('chat-input').placeholder = "音声を認識中..."; };
+                recognition.onresult = function(event) { document.getElementById('chat-input').value = event.results[0][0].transcript; };
+                recognition.onerror = function(event) { if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); };
+                recognition.onend = function() { 
+                    isRecording = false; 
+                    document.getElementById('mic-btn').classList.remove('mic-active'); 
+                    document.getElementById('chat-input').placeholder = "予定や検索ワードをどうぞ..."; 
+                    recognition = null; // iOSのメモリ解放漏れ（ホールド）を防ぐための強制破棄
+                };
+                recognition.start();
+            } catch(e) { console.error(e); isRecording = false; recognition = null; }
+        }
 
         let idb;
         function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v7', 2); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch(e) { clearTimeout(timeout); resolve(); } }); }
@@ -260,7 +302,6 @@
         function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
         function compressImage(file, maxSize = 500) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; } else if (height > maxSize) { width *= maxSize / height; height = maxSize; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); }
 
-        // ★ 欠落修復部分 ★
         function initColorPicker() { const picker = document.getElementById('color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
         function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedColorId = id; }
         function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
@@ -470,6 +511,12 @@
         function processSemanticText(text) { if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null; for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if(matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } } return { text: resText, style: matchStyle }; }
         function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 
+        // ★ 欠落修復部分 (updateHeaderDisplay, scrollToToday) ★
+        function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
+        document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
+        function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
+        function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+
         function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return; document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append'); if(currentView === 'agenda') renderAgendaView(); }
         function toggleView() { const calView = document.getElementById('calendar-view'); const agendaView = document.getElementById('agenda-view'); const btn = document.getElementById('view-toggle-btn'); if(currentView === 'calendar') { currentView = 'agenda'; calView.style.display = 'none'; agendaView.style.display = 'block'; btn.innerText = '📅'; renderAgendaView(); } else { currentView = 'calendar'; calView.style.display = 'block'; agendaView.style.display = 'none'; btn.innerText = '📝'; scrollToToday(); } }
 
@@ -496,40 +543,6 @@
             if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
             document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
         }
-
-        async function openSettings() { document.getElementById('overlay').classList.add('active'); document.getElementById('settings-modal').classList.add('active'); const infoEl = document.getElementById('account-info'); const cachedEmail = sessionStorage.getItem('jero_account_email'); if (cachedEmail) { infoEl.innerText = `連携中: ${cachedEmail}`; } else { try { const resp = await gapi.client.calendar.calendars.get({ calendarId: 'primary' }); sessionStorage.setItem('jero_account_email', resp.result.id); infoEl.innerText = `連携中: ${resp.result.id}`; } catch (e) { infoEl.innerText = 'アカウント情報取得失敗'; } } }
-        function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
-        function switchAccount() { if(!confirm('連携を解除しログイン画面に戻るか？')) return; closeSettings(); localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); sessionStorage.removeItem('jero_account_email'); showToast('連携解除中...'); setTimeout(() => location.reload(), 1500); }
-        function executeEmergencyReset() { closeSettings(); showToast('🚨 キャッシュ完全初期化中...'); setTimeout(() => { localStorage.clear(); location.reload(); }, 1500); }
-        function exportSettings() { const data = { dict: advancedDict, settings: JSON.parse(localStorage.getItem('jero_settings') || '{}') }; const str = JSON.stringify(data); navigator.clipboard.writeText(str).then(() => showToast('コピー完了。')).catch(() => { prompt('コピー:', str); }); }
-        function importSettings() { const str = prompt('バックアップ貼付:'); if(!str) return; try { const data = JSON.parse(str); if(data.dict) { advancedDict = data.dict; localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); } if(data.settings) { localStorage.setItem('jero_settings', JSON.stringify(data.settings)); } showToast('復元した。再読込する。'); setTimeout(() => location.reload(), 1500); } catch(e) { showToast('形式不正。'); } }
-
-        function loadSettings() { 
-            const saved = localStorage.getItem('jero_settings'); 
-            if (saved) { const settings = JSON.parse(saved); if (settings.theme) { document.getElementById('st-theme').value = settings.theme; document.documentElement.setAttribute('data-theme', settings.theme); } if (settings.fs) { document.getElementById('st-fs').value = settings.fs; document.documentElement.style.setProperty('--fs', settings.fs + 'px'); document.getElementById('fs-val').innerText = settings.fs; } } 
-            else { if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { document.getElementById('st-theme').value = 'dark'; document.documentElement.setAttribute('data-theme', 'dark'); } } 
-            
-            const key = localStorage.getItem('jero_gemini_key'); if(key) document.getElementById('st-gemini-key').value = key; 
-            let prompt = localStorage.getItem('jero_gemini_prompt'); if(!prompt) { prompt = DEFAULT_SYSTEM_PROMPT; localStorage.setItem('jero_gemini_prompt', prompt); } document.getElementById('st-gemini-prompt').value = prompt; 
-
-            if ("Notification" in window) {
-                if (Notification.permission === 'granted') {
-                    const el = document.getElementById('notif-status');
-                    if(el){ el.innerText = '許可済'; el.style.color = '#34c759'; }
-                }
-            }
-        }
-        function saveAndApplySettings() { const theme = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; document.documentElement.setAttribute('data-theme', theme); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; localStorage.setItem('jero_settings', JSON.stringify({ theme, fs })); }
-        
-        function initWeekdays() { const wdContainer = document.getElementById('weekdays'); const days = ['日', '月', '火', '水', '木', '金', '土']; days.forEach((d, i) => { const div = document.createElement('div'); div.className = 'wd'; div.innerText = d; if(i===0) div.style.color = '#ff3b30'; if(i===6) div.style.color = '#0a84ff'; wdContainer.appendChild(div); }); }
-        function setProgress(percent) { const bar = document.getElementById('progress-bar'); bar.style.width = percent + '%'; if(percent >= 100) setTimeout(() => { bar.style.width = '0%'; }, 500); }
-
-        // ★ 欠落修復部分 (updateHeaderDisplay, scrollToToday) ★
-        function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
-        document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
-        function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
-        function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-
 
         async function initCalendar() { 
             setProgress(10); 
@@ -601,9 +614,6 @@
             else if(position === 'prepend') container.insertBefore(wrapper, container.firstChild);
             else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
         }
-
-        async function createEventCard(e, dateStr) { const card = document.createElement('div'); card.className = 'item-card'; let timeStr = "終日"; if(e.start.dateTime) { const st = new Date(e.start.dateTime); const ed = new Date(e.end.dateTime); timeStr = `${st.getHours()}:${String(st.getMinutes()).padStart(2,'0')} - ${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if (spanType !== 'single') { const sDate = new Date(e.start.date); const eDate = new Date(e.end.date); eDate.setDate(eDate.getDate()-1); timeStr = `帯予定 (${sDate.getMonth()+1}/${sDate.getDate()} 〜 ${eDate.getMonth()+1}/${eDate.getDate()})`; } const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); let color = 'var(--accent)'; if(pData.style) color = pData.style.bg; else if(e.colorId && GOOGLE_COLORS[e.colorId]) color = GOOGLE_COLORS[e.colorId]; const attachData = await buildAttachmentHTML(e.description); card.innerHTML = `<div class="card-color-bar" style="background:${color};"></div><div class="card-content"><div class="card-title">${recurIcon}${pData.text}</div><div class="card-meta"><span>🕒 ${timeStr}</span> ${e.location ? `<span>📍 ${e.location}</span>` : ''}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.onclick = () => openEditor(e); return card; }
-        async function createTaskCard(t, dateStr, dow) { const card = document.createElement('div'); card.className = 'item-card'; const isComp = t.status === 'completed'; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); let color = '#34c759'; if(pData.style) color = pData.style.bg; else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) color = GOOGLE_COLORS[tData.colorId]; const recurIcon = tData.recurrence ? '🔁 ' : ''; const titleStyle = isComp ? 'text-decoration:line-through; color:#888;' : ''; const checkStyle = isComp ? 'border-color:#888; color:#888;' : `border-color:${color}; color:${color};`; const attachData = await buildAttachmentHTML(tData.cleanNotes); card.innerHTML = `<div class="card-color-bar" style="background:${color}; opacity: 0.3;"></div><div class="big-check" style="${checkStyle}">${isComp ? '✓' : ''}</div><div class="card-content"><div class="card-title" style="${titleStyle}">${recurIcon}${pData.text}</div>${attachData.cleanTextForUI ? `<div class="card-meta">📝 ${attachData.cleanTextForUI}</div>` : ''}${attachData.html}</div>`; card.querySelector('.big-check').onclick = async (ev) => { ev.stopPropagation(); setProgress(30); const newStatus = isComp ? 'needsAction' : 'completed'; try { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: t.id, resource: { status: newStatus }}); t.status = newStatus; if (newStatus === 'completed' && tData.recurrence) { showToast('タスク完了。次を生成中...'); const nextDate = new Date(t.due); if(tData.recurrence === 'DAILY') nextDate.setDate(nextDate.getDate() + 1); else if(tData.recurrence === 'WEEKLY') nextDate.setDate(nextDate.getDate() + 7); else if(tData.recurrence === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: { title: t.title, notes: t.notes, due: nextDate.toISOString() } }); showToast('次を生成した。'); } else { showToast(newStatus === 'completed' ? 'タスク完了。' : '未完了に戻した。'); } const [y, m, d] = dateStr.split('-'); openDailyModal(dateStr, dow); fetchAndRenderMonth(parseInt(y), parseInt(m)-1, 'replace'); } catch(err) { showToast('更新に失敗した。'); console.error(err); } setProgress(100); }; card.onclick = () => openTaskEditor(t); return card; }
 
         document.addEventListener('DOMContentLoaded', async () => { 
             try { 
