@@ -1,4 +1,4 @@
-// Jero Core Engine v8.0 - AI, Voice, and Alerts (With Project Breakdown)
+// Jero Core Engine v8.1 - AI, Voice, Alerts, and The Sync Queue
 
 // ---------------------------------
 // 1. Voice Synthesis & Recognition
@@ -29,8 +29,8 @@ function speakText(text) {
     window.speechSynthesis.cancel(); 
     const u = new SpeechSynthesisUtterance(cleanText); 
     u.lang = 'ja-JP'; 
-    u.rate = 1.15; // 軽快なテンポ
-    u.pitch = 1.7; // 猫らしい高音域
+    u.rate = 1.15; 
+    u.pitch = 1.7; 
     if (jeroVoice) u.voice = jeroVoice; 
     window.speechSynthesis.speak(u); 
 }
@@ -142,7 +142,13 @@ async function sendToJero() {
     if(!text && !chatFileBase64) return;
     appendChatMessage('user', text || "(ファイルを送信)"); inputEl.value = '';
     
-    if (!navigator.onLine) { appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。'); return; }
+    if (!navigator.onLine) { 
+        // 圏外でも思考できるか？ Gemini API自体が叩けないため思考は不可。
+        // オフライン時の手動キュー追加はGUI（将来の実装）に任せ、今はAIからの返答で止める。
+        appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。圏外での予定追加はGUI(手動)からやってくれ。'); 
+        speakText("電波がない。私の頭脳にアクセスできない。");
+        return; 
+    }
     const apiKey = (localStorage.getItem('jero_gemini_key') || "").trim();
     if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
 
@@ -241,28 +247,73 @@ async function executeSearch(action, containerEl) {
     } catch(err) { console.error(err); containerEl.innerHTML += `<br><span style="color:red; font-size:12px;">検索エラー: ${err.message}</span>`; }
 }
 
+// --- The Sync Queue & API Execution ---
+async function executeApiAction(action) {
+    if (action.type === 'event') {
+        if (action.method === 'delete') { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id }); } 
+        else if (action.method === 'update') { const resource = { summary: action.title, location: action.location, description: action.description }; if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; } await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource }); } 
+        else { const resource = { summary: action.title, location: action.location, description: action.description }; if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; } await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); }
+    } else {
+        if (action.method === 'delete') { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id }); } 
+        else if (action.method === 'update') { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: resource }); } 
+        else { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); }
+    }
+}
+
 async function commitDraft(idx) {
     const action = pendingDrafts[idx]; const btn = document.querySelector(`#draft-card-${idx} button`);
     btn.innerText = "⏳"; btn.disabled = true;
     try {
-        if (action.type === 'event') {
-            if (action.method === 'delete') { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id }); } 
-            else if (action.method === 'update') { const resource = { summary: action.title, location: action.location, description: action.description }; if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; } await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource }); } 
-            else { const resource = { summary: action.title, location: action.location, description: action.description }; if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; } await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); }
+        if (navigator.onLine) {
+            // オンライン：即座にAPIへ送信
+            await executeApiAction(action);
+            btn.innerText = "✅ 済"; btn.className = "btn-green";
         } else {
-            if (action.method === 'delete') { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id }); } 
-            else if (action.method === 'update') { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: resource }); } 
-            else { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); }
+            // オフライン：The Sync Queueに保存
+            if(typeof saveToSyncQueue === 'function') {
+                await saveToSyncQueue(action);
+                btn.innerText = "📦 保留(キュー)"; btn.className = "btn-yellow";
+                showToast("圏外のためポストに保管した。電波回復時に自動送信するぞ。");
+            } else {
+                throw new Error("Sync Queueが見つからない");
+            }
         }
-        btn.innerText = "✅ 済"; btn.className = "btn-green";
+
+        // キャッシュのローカル更新（UI再描画用）
         if(typeof dataCache !== 'undefined') {
             for(let key in dataCache) { 
                 if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); }
+                // insertやupdateの疑似反映もここで行うと完璧だが、リロード時に任せる手もある。今回は削除のみ即時反映。
             }
         }
-        if(typeof fetchAndRenderMonth !== 'undefined') {
+        if(typeof fetchAndRenderMonth !== 'undefined' && navigator.onLine) {
             const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date()); 
             await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true);
         }
     } catch(e) { btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; showToast("APIエラー: " + (e.result && e.result.error ? e.result.error.message : e.message)); }
+}
+
+// 電波回復時に呼ばれるバックグラウンド同期処理
+async function processSyncQueue() {
+    if(typeof getSyncQueue !== 'function' || !navigator.onLine) return;
+    const queue = await getSyncQueue();
+    if (queue.length === 0) return;
+
+    showToast(`📮 ポスト内の未送信データ（${queue.length}件）を送信中...`);
+    let successCount = 0;
+
+    for (const item of queue) {
+        try {
+            await executeApiAction(item.payload);
+            clearSyncQueueItem(item.id);
+            successCount++;
+        } catch (e) {
+            console.error("Queue送信エラー:", e);
+        }
+    }
+
+    if (successCount > 0) {
+        showToast(`✅ ${successCount}件の保留データを送信完了した。`);
+        if(typeof triggerFullReRender !== 'undefined') triggerFullReRender();
+    }
 }
