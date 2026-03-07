@@ -1,4 +1,4 @@
-// Jero Core Engine v8.1 - AI, Voice, Alerts, and The Sync Queue
+// Jero Core Engine v8.2 - API Execution Color Fix
 
 // ---------------------------------
 // 1. Voice Synthesis & Recognition
@@ -143,8 +143,6 @@ async function sendToJero() {
     appendChatMessage('user', text || "(ファイルを送信)"); inputEl.value = '';
     
     if (!navigator.onLine) { 
-        // 圏外でも思考できるか？ Gemini API自体が叩けないため思考は不可。
-        // オフライン時の手動キュー追加はGUI（将来の実装）に任せ、今はAIからの返答で止める。
         appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。圏外での予定追加はGUI(手動)からやってくれ。'); 
         speakText("電波がない。私の頭脳にアクセスできない。");
         return; 
@@ -247,8 +245,7 @@ async function executeSearch(action, containerEl) {
     } catch(err) { console.error(err); containerEl.innerHTML += `<br><span style="color:red; font-size:12px;">検索エラー: ${err.message}</span>`; }
 }
 
-// --- The Sync Queue & API Execution ---
-// --- The Sync Queue & API Execution ---
+// --- The Sync Queue & API Execution (★ Color Fix) ---
 async function executeApiAction(action) {
     if (action.type === 'event') {
         if (action.method === 'delete') { 
@@ -256,12 +253,15 @@ async function executeApiAction(action) {
         } 
         else if (action.method === 'update') { 
             const resource = { summary: action.title, location: action.location, description: action.description }; 
+            
+            // ★ 色の適用処理（無指定ならnullを送ってデフォルトに戻す）
+            if (action.colorId) { resource.colorId = action.colorId; } 
+            else { resource.colorId = null; }
+
             if (action.start && action.start.includes('T')) { 
-                // 時間指定に変更する場合、終日(date)を明示的にnullにして消去する
                 resource.start = { dateTime: new Date(action.start).toISOString(), date: null }; 
                 resource.end = { dateTime: new Date(action.end).toISOString(), date: null }; 
             } else { 
-                // 終日に変更する場合、時間指定(dateTime)を明示的にnullにして消去する
                 resource.start = { date: action.start, dateTime: null }; 
                 resource.end = { date: action.end, dateTime: null }; 
             } 
@@ -269,6 +269,10 @@ async function executeApiAction(action) {
         } 
         else { 
             const resource = { summary: action.title, location: action.location, description: action.description }; 
+            
+            // ★ 色の適用処理
+            if (action.colorId) { resource.colorId = action.colorId; }
+
             if (action.start && action.start.includes('T')) { 
                 resource.start = { dateTime: new Date(action.start).toISOString() }; 
                 resource.end = { dateTime: new Date(action.end).toISOString() }; 
@@ -290,11 +294,9 @@ async function commitDraft(idx) {
     btn.innerText = "⏳"; btn.disabled = true;
     try {
         if (navigator.onLine) {
-            // オンライン：即座にAPIへ送信
             await executeApiAction(action);
             btn.innerText = "✅ 済"; btn.className = "btn-green";
         } else {
-            // オフライン：The Sync Queueに保存
             if(typeof saveToSyncQueue === 'function') {
                 await saveToSyncQueue(action);
                 btn.innerText = "📦 保留(キュー)"; btn.className = "btn-yellow";
@@ -304,11 +306,9 @@ async function commitDraft(idx) {
             }
         }
 
-        // キャッシュのローカル更新（UI再描画用）
         if(typeof dataCache !== 'undefined') {
             for(let key in dataCache) { 
                 if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); }
-                // insertやupdateの疑似反映もここで行うと完璧だが、リロード時に任せる手もある。今回は削除のみ即時反映。
             }
         }
         if(typeof fetchAndRenderMonth !== 'undefined' && navigator.onLine) {
@@ -318,7 +318,6 @@ async function commitDraft(idx) {
     } catch(e) { btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; showToast("APIエラー: " + (e.result && e.result.error ? e.result.error.message : e.message)); }
 }
 
-// 電波回復時に呼ばれるバックグラウンド同期処理
 async function processSyncQueue() {
     if(typeof getSyncQueue !== 'function' || !navigator.onLine) return;
     const queue = await getSyncQueue();
