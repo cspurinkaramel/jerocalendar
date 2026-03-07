@@ -1,4 +1,4 @@
-// JeroCalendar v8.1 Main Logic - The Sync Queue & Manual Override
+// JeroCalendar v8.2 Main Logic - The Synapse Link (Color & UI Fix)
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -53,22 +53,9 @@ function initIDB() {
     }); 
 }
 
-function saveToSyncQueue(actionPayload) {
-    return new Promise((resolve) => {
-        if(!idb) return resolve();
-        try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').put({ id: generateUUID(), payload: actionPayload, timestamp: Date.now() }); tx.oncomplete = () => resolve(); } catch(e) { resolve(); }
-    });
-}
-function getSyncQueue() {
-    return new Promise((resolve) => {
-        if(!idb) return resolve([]);
-        try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch(e) { resolve([]); }
-    });
-}
-function clearSyncQueueItem(id) {
-    if(!idb) return;
-    try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); } catch(e) {}
-}
+function saveToSyncQueue(actionPayload) { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').put({ id: generateUUID(), payload: actionPayload, timestamp: Date.now() }); tx.oncomplete = () => resolve(); } catch(e) { resolve(); } }); }
+function getSyncQueue() { return new Promise((resolve) => { if(!idb) return resolve([]); try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch(e) { resolve([]); } }); }
+function clearSyncQueueItem(id) { if(!idb) return; try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); } catch(e) {} }
 
 function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch(e) {} }
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
@@ -85,11 +72,12 @@ function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); }
 function processSemanticText(text) { if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null; for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if(matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } } return { text: resText, style: matchStyle }; }
 function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 
+// --- Color Pickers (修正: 外部からIDで選択状態を変えられるようにした) ---
 function initColorPicker() { const picker = document.getElementById('color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
-function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedColorId = id; }
-function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
-function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); selectedTaskColorId = id; }
+function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'var(--accent)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedColorId = id; }
 
+function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
+function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'rgb(52, 199, 89)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedTaskColorId = id; }
 
 // --- Calendar Rendering & Logic ---
 function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
@@ -99,21 +87,19 @@ function scrollToToday() { const today = new Date(); const dateStr = `${today.ge
 
 function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return; document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append'); if(currentView === 'agenda') renderAgendaView(); }
 function toggleView() { const calView = document.getElementById('calendar-view'); const agendaView = document.getElementById('agenda-view'); const btn = document.getElementById('view-toggle-btn'); if(currentView === 'calendar') { currentView = 'agenda'; calView.style.display = 'none'; agendaView.style.display = 'block'; btn.innerText = '📅'; renderAgendaView(); } else { currentView = 'calendar'; calView.style.display = 'block'; agendaView.style.display = 'none'; btn.innerText = '📝'; scrollToToday(); } }
-
 function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
 
-// カードUI生成ジェネレータ（エラー防止の安全設計）
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
-    const color = isEvent ? (item.colorId ? GOOGLE_COLORS[item.colorId] : 'var(--accent)') : (item.colorId ? GOOGLE_COLORS[item.colorId] : '#34c759');
+    const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
+    const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
     const title = isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)');
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
     
     let timeStr = "";
     if(isEvent && item.start && item.start.dateTime) {
-        const d = new Date(item.start.dateTime);
-        timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const d = new Date(item.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
     } else if (!isEvent && item.due) {
         timeStr = new Date(item.due).toLocaleDateString('ja-JP');
     } else {
@@ -202,9 +188,7 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
 
-
-// --- The Manual Override (手動エディタ＆同期ブリッジ) ---
-
+// --- The Manual Override (手動エディタ＆同期ブリッジ・完全版) ---
 function openEditor(e = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
@@ -213,6 +197,9 @@ function openEditor(e = null) {
     document.getElementById('edit-loc').value = e ? e.location || '' : '';
     document.getElementById('edit-desc').value = e ? e.description || '' : '';
     
+    // ★ 修正：色の復元
+    selectColor(null, e && e.colorId ? e.colorId : '');
+
     const isAllDay = e && e.start && e.start.date;
     const alldayToggle = document.getElementById('edit-allday');
     alldayToggle.checked = isAllDay;
@@ -229,9 +216,10 @@ function openEditor(e = null) {
         if(isAllDay) ed.setDate(ed.getDate() - 1); 
     }
     
-    toggleTimeInputs();
+    startInput.type = isAllDay ? 'date' : 'datetime-local';
+    endInput.type = isAllDay ? 'date' : 'datetime-local';
     
-    if (alldayToggle.checked) {
+    if (isAllDay) {
         startInput.value = st.toISOString().split('T')[0];
         endInput.value = ed.toISOString().split('T')[0];
     } else {
@@ -257,7 +245,6 @@ function toggleTimeInputs() {
     const startInput = document.getElementById('edit-start');
     const endInput = document.getElementById('edit-end');
     
-    // バグ修復: 型を切り替える前に現在の値を保持し、フォーマットを変換して再セットする
     let startVal = startInput.value;
     let endVal = endInput.value;
     
@@ -277,22 +264,22 @@ async function saveEvent() {
     let startVal = document.getElementById('edit-start').value;
     let endVal = document.getElementById('edit-end').value;
     if(!startVal) { showToast('開始日時が不正だ'); return; }
-    if(!endVal) endVal = startVal; // 終了日が飛んでいた場合のフェイルセーフ
+    if(!endVal) endVal = startVal;
     
     const action = {
         type: 'event', method: id ? 'update' : 'insert',
         id: id, title: title,
         location: document.getElementById('edit-loc').value,
         description: document.getElementById('edit-desc').value,
+        colorId: selectedColorId // ★ 修正：色情報をアクションに含める
     };
 
     try {
         if (isAllDay) {
             action.start = startVal;
-            // 安全な日付計算（Safariのサイレントクラッシュ対策）
             let parts = endVal.split('-');
             const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            ed.setDate(ed.getDate() + 1); // 終日は翌日を指定するGoogle API仕様
+            ed.setDate(ed.getDate() + 1);
             action.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
         } else {
             action.start = new Date(startVal).toISOString();
@@ -320,65 +307,27 @@ function duplicateEvent() {
     document.getElementById('editor-title').innerText = '新規予定 (複製)';
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('btn-duplicate').style.display = 'none';
+    // 色と入力値はそのまま維持されるので、このまま保存を押せば複製される。
     showToast('複製モードだ。日時を変えて保存を押せ。');
 }
 
-async function dispatchManualAction(action) {
-    showGlobalLoader('処理中...');
-    
-    // UI文言の最適化（ユーザーの指摘を反映）
-    let msgAction = '保存';
-    if(action.method === 'insert') msgAction = '追加';
-    if(action.method === 'update') msgAction = '更新';
-    if(action.method === 'delete') msgAction = '削除';
-    const msgType = action.type === 'event' ? '予定' : 'タスク';
-    const successMsg = `✅ ${msgType}を${msgAction}した`;
-    const queueMsg = `📦 圏外のためポストに保管した。電波回復時に${msgAction}する`;
-
-    try {
-        if (navigator.onLine) {
-            if(typeof executeApiAction === 'function') {
-                await executeApiAction(action);
-                showToast(successMsg); // 追加・更新・削除に応じた言葉が出る
-            } else {
-                throw new Error('API通信関数が見つからない。');
-            }
-        } else {
-            await saveToSyncQueue(action);
-            showToast(queueMsg);
-        }
-        
-        if(typeof dataCache !== 'undefined') {
-            for(let key in dataCache) { 
-                if(action.method === 'delete') {
-                    if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
-                    if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
-                }
-            }
-        }
-        
-        // 安全な再描画日付の取得
-        const tdStr = action.start || action.due;
-        let td = new Date();
-        if (tdStr) {
-            if (tdStr.includes('T')) { td = new Date(tdStr); } 
-            else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); }
-        }
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-    } catch (e) {
-        showToast('❌ エラー: ' + e.message);
-    } finally {
-        hideGlobalLoader();
-    }
-}
-
-// --- The Manual Override for Tasks (タスクエディタ解放) ---
+// --- Task Editor Override ---
 function openTaskEditor(t = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('task-editor-modal').classList.add('active');
     document.getElementById('task-edit-id').value = t ? t.id : '';
     document.getElementById('task-edit-title').value = t ? t.title || '' : '';
-    document.getElementById('task-edit-notes').value = t ? t.notes || '' : '';
+    
+    // ★ 修正：タスクの色の復元とメモの分離
+    let cleanNotes = "";
+    if (t && t.notes) {
+        const extracted = extractTaskData(t.notes);
+        cleanNotes = extracted.cleanNotes;
+        selectTaskColor(null, extracted.colorId);
+    } else {
+        selectTaskColor(null, '');
+    }
+    document.getElementById('task-edit-notes').value = cleanNotes;
     
     const dueInput = document.getElementById('task-edit-due');
     if (t && t.due) {
@@ -403,10 +352,16 @@ async function saveTask() {
     const title = document.getElementById('task-edit-title').value.trim();
     if (!title) { showToast('タスク名を入力してくれ'); return; }
     
+    // ★ 修正：タスクの色情報をメモ欄に埋め込む
+    let rawNotes = document.getElementById('task-edit-notes').value.trim();
+    if (selectedTaskColorId) {
+        rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`;
+    }
+
     const action = {
         type: 'task', method: id ? 'update' : 'insert',
         id: id, title: title,
-        description: document.getElementById('task-edit-notes').value,
+        description: rawNotes, // 色情報を含んだメモを送信
     };
 
     const dueVal = document.getElementById('task-edit-due').value;
@@ -426,8 +381,52 @@ async function confirmDeleteTask() {
     await dispatchManualAction(action);
 }
 
-// 繰り返し設定のダミー（将来拡張用）
-function openRecurrenceEditor() {} function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); } function updateRecDisplay() {} function applyRecurrence() {}
+async function dispatchManualAction(action) {
+    showGlobalLoader('処理中...');
+    
+    let msgAction = '保存';
+    if(action.method === 'insert') msgAction = '追加';
+    if(action.method === 'update') msgAction = '更新';
+    if(action.method === 'delete') msgAction = '削除';
+    const msgType = action.type === 'event' ? '予定' : 'タスク';
+    const successMsg = `✅ ${msgType}を${msgAction}した`;
+    const queueMsg = `📦 圏外のためポストに保管した。電波回復時に${msgAction}する`;
+
+    try {
+        if (navigator.onLine) {
+            if(typeof executeApiAction === 'function') {
+                await executeApiAction(action);
+                showToast(successMsg); 
+            } else {
+                throw new Error('API通信関数が見つからない。');
+            }
+        } else {
+            await saveToSyncQueue(action);
+            showToast(queueMsg);
+        }
+        
+        if(typeof dataCache !== 'undefined') {
+            for(let key in dataCache) { 
+                if(action.method === 'delete') {
+                    if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
+                    if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
+                }
+            }
+        }
+        
+        const tdStr = action.start || action.due;
+        let td = new Date();
+        if (tdStr) {
+            if (tdStr.includes('T')) { td = new Date(tdStr); } 
+            else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); }
+        }
+        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
+    } catch (e) {
+        showToast('❌ エラー: ' + e.message);
+    } finally {
+        hideGlobalLoader();
+    }
+}
 
 // --- Online/Offline Event Listeners ---
 window.addEventListener('online', async () => {
