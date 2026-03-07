@@ -1,4 +1,4 @@
-// JeroCalendar v8.2 Main Logic - The Synapse Link (Color & UI Fix)
+// JeroCalendar v8.3 Main Logic - The Alchemical Converter
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -72,12 +72,12 @@ function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); }
 function processSemanticText(text) { if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null; for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if(matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } } return { text: resText, style: matchStyle }; }
 function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 
-// --- Color Pickers (修正: 外部からIDで選択状態を変えられるようにした) ---
 function initColorPicker() { const picker = document.getElementById('color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
 function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'var(--accent)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedColorId = id; }
 
 function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
 function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'rgb(52, 199, 89)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedTaskColorId = id; }
+
 
 // --- Calendar Rendering & Logic ---
 function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
@@ -106,7 +106,6 @@ function getCardHtml(type, item) {
         timeStr = isEvent ? '終日' : '期限なし';
     }
 
-    // ★修正：タスクの場合、チェックマークを独立させてワンタップで完了状態を切り替えられるようにする
     const iconHtml = isEvent ? '📅' : `<span style="font-size:16px; margin-right:4px;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${item.status === 'completed' ? '✅' : '⬜️'}</span>`;
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
 
@@ -118,8 +117,6 @@ function getCardHtml(type, item) {
         </div>
     </div>`;
 }
-
-// (renderAgendaView, openDailyModal, renderMonthDOM, initCalendar, loadNextMonth, loadPrevMonth, notifyAuthError, fetchAndRenderMonth の各関数はそのまま残す。長いため省略せずにここから下の既存のコードと置き換える)
 
 async function renderAgendaView() { 
     const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = []; 
@@ -154,7 +151,7 @@ function renderMonthDOM(year, month, data, position) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
         if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
-        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `; } const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType); const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div); });
+        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType); const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div); });
         if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div); });
         grid.appendChild(dayEl);
     }
@@ -183,7 +180,9 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
 
-// --- The Manual Override (手動エディタ＆同期ブリッジ・完全版) ---
+
+// --- The Manual Override (手動エディタ＆同期ブリッジ) ---
+
 function openEditor(e = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
@@ -225,6 +224,10 @@ function openEditor(e = null) {
     document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定';
     document.getElementById('btn-delete').style.display = e ? 'block' : 'none';
     document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none';
+    
+    // ★新設：タスクへ変換ボタンの表示制御
+    const convertBtn = document.getElementById('btn-convert-task');
+    if(convertBtn) convertBtn.style.display = e ? 'block' : 'none';
 }
 
 function closeEditor() {
@@ -301,10 +304,12 @@ function duplicateEvent() {
     document.getElementById('editor-title').innerText = '新規予定 (複製)';
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('btn-duplicate').style.display = 'none';
+    const convertBtn = document.getElementById('btn-convert-task');
+    if(convertBtn) convertBtn.style.display = 'none';
     showToast('複製モードだ。日時を変えて保存を押せ。');
 }
 
-// --- Task Editor & Logic (完全修復版) ---
+// --- Task Editor ---
 function openTaskEditor(t = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('task-editor-modal').classList.add('active');
@@ -330,6 +335,10 @@ function openTaskEditor(t = null) {
     
     document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク';
     document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';
+    
+    // ★新設：予定へ変換ボタンの表示制御
+    const convertBtn = document.getElementById('btn-convert-event');
+    if(convertBtn) convertBtn.style.display = t ? 'block' : 'none';
 }
 
 function closeTaskEditor() {
@@ -339,9 +348,7 @@ function closeTaskEditor() {
     }
 }
 
-// ★新設：ワンタップでタスクの完了/未完了を切り替える神のメソッド
 async function toggleTaskCompletion(taskId, newStatus) {
-    // 既存のタスクデータをキャッシュから探す
     let targetTask = null;
     for (const key in dataCache) {
         if (dataCache[key].tasks) {
@@ -351,15 +358,10 @@ async function toggleTaskCompletion(taskId, newStatus) {
     }
     if (!targetTask) return;
 
-    // Google APIの仕様に合わせてステータス文字列を整形
     const patchBody = { status: newStatus };
-    if (newStatus === 'completed') {
-        patchBody.completed = new Date().toISOString();
-    } else {
-        patchBody.completed = null; // 未完了に戻す場合はクリア
-    }
+    if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } 
+    else { patchBody.completed = null; }
 
-    // APIへ直接送信（あるいはSync Queueへ）
     showGlobalLoader('タスク状態を更新中...');
     try {
         if (navigator.onLine && typeof gapi !== 'undefined') {
@@ -369,12 +371,10 @@ async function toggleTaskCompletion(taskId, newStatus) {
             showToast('圏外ではタスクの完了操作はできない。電波を探せ。');
         }
         
-        // キャッシュを更新して即座にUIを再描画
         targetTask.status = newStatus;
         const td = targetTask.due ? new Date(targetTask.due) : new Date();
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
         
-        // もしDailyモーダルやAgendaビューが開いていれば再描画
         if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) {
             const dow = new Date(selectedDateStr).getDay();
             openDailyModal(selectedDateStr, dow);
@@ -406,10 +406,8 @@ async function saveTask() {
 
     const dueVal = document.getElementById('task-edit-due').value;
     if (dueVal) {
-        // ★修正：タイムゾーンのズレを防ぐ安全な日付パース
         let parts = dueVal.split('-');
         const dueObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        // Google Tasks の due は時刻を 00:00:00.000Z にする仕様
         action.due = dueObj.toISOString();
     }
 
@@ -423,6 +421,90 @@ async function confirmDeleteTask() {
     const action = { type: 'task', method: 'delete', id: id };
     closeTaskEditor(); closeAllModals();
     await dispatchManualAction(action);
+}
+
+// ★新設：The Alchemical Converter (錬金術的変換機構)
+async function executeConversion(fromType) {
+    if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
+
+    let deleteAction = null;
+    let insertAction = null;
+    let redrawDate = new Date();
+
+    if (fromType === 'event') {
+        const id = document.getElementById('edit-id').value;
+        const title = document.getElementById('edit-title').value.trim() || '無名タスク';
+        const startVal = document.getElementById('edit-start').value;
+        const notes = document.getElementById('edit-desc').value;
+        const colorId = selectedColorId;
+
+        if (id) deleteAction = { type: 'event', method: 'delete', id: id };
+
+        let rawNotes = notes;
+        if (colorId) rawNotes += (rawNotes ? '\n' : '') + `[c:${colorId}]`;
+        
+        let dueIso = '';
+        if (startVal) {
+            let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal;
+            let parts = dStr.split('-');
+            redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            dueIso = redrawDate.toISOString();
+        }
+
+        insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso };
+    } else {
+        const id = document.getElementById('task-edit-id').value;
+        const title = document.getElementById('task-edit-title').value.trim() || '無名予定';
+        const dueVal = document.getElementById('task-edit-due').value;
+        const notesVal = document.getElementById('task-edit-notes').value;
+        const colorId = selectedTaskColorId;
+
+        if (id) deleteAction = { type: 'task', method: 'delete', id: id };
+
+        insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, colorId: colorId };
+        if (dueVal) {
+            let parts = dueVal.split('-');
+            redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            insertAction.start = dueVal;
+            const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1);
+            insertAction.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
+        } else {
+            insertAction.start = new Date().toISOString().split('T')[0];
+            const tmrw = new Date(); tmrw.setDate(tmrw.getDate()+1);
+            insertAction.end = tmrw.toISOString().split('T')[0];
+        }
+    }
+
+    showGlobalLoader('変換中...');
+    try {
+        if (navigator.onLine) {
+            if (deleteAction) await executeApiAction(deleteAction);
+            await executeApiAction(insertAction);
+            showToast('✅ 変換を完了した');
+        } else {
+            if (deleteAction) await saveToSyncQueue(deleteAction);
+            await saveToSyncQueue(insertAction);
+            showToast('📦 圏外のためポストに保管した。電波回復時に変換する');
+        }
+
+        if (typeof dataCache !== 'undefined' && deleteAction) {
+            for (let key in dataCache) {
+                if (deleteAction.type === 'event' && dataCache[key].events) {
+                    dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id);
+                }
+                if (deleteAction.type === 'task' && dataCache[key].tasks) {
+                    dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id);
+                }
+            }
+        }
+
+        closeEditor(); closeTaskEditor(); closeAllModals();
+        await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', navigator.onLine);
+    } catch (e) {
+        showToast('❌ 変換エラー: ' + e.message);
+    } finally {
+        hideGlobalLoader();
+    }
 }
 
 async function dispatchManualAction(action) {
@@ -493,6 +575,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         initTaskColorPicker(); 
         if(typeof initSpeech === 'function') initSpeech();
         if(typeof initNotification === 'function') initNotification();
+        
+        // ★新設：DOMロード時に変換ボタンをハッキング的に仕込む
+        const eventActionBar = document.querySelector('#editor-modal .action-bar');
+        if (eventActionBar && !document.getElementById('btn-convert-task')) {
+            const btn = document.createElement('button');
+            btn.id = 'btn-convert-task';
+            btn.className = 'btn btn-gray';
+            btn.style.display = 'none';
+            btn.innerText = '🔄 タスクへ';
+            btn.onclick = () => executeConversion('event');
+            eventActionBar.insertBefore(btn, document.getElementById('btn-duplicate'));
+        }
+
+        const taskActionBar = document.querySelector('#task-editor-modal .action-bar');
+        if (taskActionBar && !document.getElementById('btn-convert-event')) {
+            const btn = document.createElement('button');
+            btn.id = 'btn-convert-event';
+            btn.className = 'btn btn-gray';
+            btn.style.display = 'none';
+            btn.innerText = '🔄 予定へ';
+            btn.onclick = () => executeConversion('task');
+            taskActionBar.insertBefore(btn, document.getElementById('task-btn-delete'));
+        }
     } catch (err) { showToast("初期化エラー: " + err.message); }
 });
 
