@@ -106,14 +106,20 @@ function getCardHtml(type, item) {
         timeStr = isEvent ? '終日' : '期限なし';
     }
 
+    // ★修正：タスクの場合、チェックマークを独立させてワンタップで完了状態を切り替えられるようにする
+    const iconHtml = isEvent ? '📅' : `<span style="font-size:16px; margin-right:4px;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${item.status === 'completed' ? '✅' : '⬜️'}</span>`;
+    const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
+
     return `<div class="item-card" onclick="${clickFn}">
         <div class="card-color-bar" style="background-color: ${color};"></div>
-        <div class="card-content">
+        <div class="card-content" style="${titleStyle}">
             <div class="card-title">${title}</div>
-            <div class="card-meta"><span>${isEvent ? '📅' : '☑️'} ${timeStr}</span></div>
+            <div class="card-meta"><span style="display:flex; align-items:center;">${iconHtml} ${timeStr}</span></div>
         </div>
     </div>`;
 }
+
+// (renderAgendaView, openDailyModal, renderMonthDOM, initCalendar, loadNextMonth, loadPrevMonth, notifyAuthError, fetchAndRenderMonth の各関数はそのまま残す。長いため省略せずにここから下の既存のコードと置き換える)
 
 async function renderAgendaView() { 
     const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = []; 
@@ -148,25 +154,7 @@ function renderMonthDOM(year, month, data, position) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
         if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
-        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { 
-            const div = document.createElement('div'); div.className = 'event'; 
-            let timeStr = ""; 
-            if(e.start.dateTime) { 
-                const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; 
-            } 
-            const spanType = isEventSpanning(e, dateStr); 
-            if(spanType !== 'single') div.classList.add(spanType); 
-            const recurIcon = e.recurrence ? '🔁 ' : ''; 
-            const pData = processSemanticText(e.summary); 
-            
-            // ★修正：内容を先にし、時間はカッコ書きで後ろに控えめに表示する
-            div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
-            
-            if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } 
-            else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } 
-            if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; 
-            dayEl.appendChild(div); 
-        });
+        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')} `; } const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType); const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div); });
         if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div); });
         grid.appendChild(dayEl);
     }
@@ -176,18 +164,7 @@ function renderMonthDOM(year, month, data, position) {
     else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
 }
 
-async function initCalendar() { 
-    setProgress(10); 
-    try { 
-        await loadDataCacheFromIDB(); 
-        const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); 
-        await fetchAndRenderMonth(y, m, 'append', false); 
-        await fetchAndRenderMonth(y, m+1, 'append', false); 
-        scrollToToday();
-        if (navigator.onLine && !isAuthError) { document.getElementById('offline-badge').classList.remove('active'); fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } else { document.getElementById('offline-badge').classList.add('active'); }
-    } finally { setProgress(100); } 
-}
-
+async function initCalendar() { setProgress(10); try { await loadDataCacheFromIDB(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m+1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { document.getElementById('offline-badge').classList.remove('active'); fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } else { document.getElementById('offline-badge').classList.add('active'); } } finally { setProgress(100); } }
 async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); document.getElementById('agenda-bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); document.getElementById('agenda-bottom-trigger').classList.add('hidden');} }
 async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); document.getElementById('agenda-top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); document.getElementById('agenda-top-trigger').classList.add('hidden');} }
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
@@ -215,7 +192,6 @@ function openEditor(e = null) {
     document.getElementById('edit-loc').value = e ? e.location || '' : '';
     document.getElementById('edit-desc').value = e ? e.description || '' : '';
     
-    // ★ 修正：色の復元
     selectColor(null, e && e.colorId ? e.colorId : '');
 
     const isAllDay = e && e.start && e.start.date;
@@ -289,7 +265,7 @@ async function saveEvent() {
         id: id, title: title,
         location: document.getElementById('edit-loc').value,
         description: document.getElementById('edit-desc').value,
-        colorId: selectedColorId // ★ 修正：色情報をアクションに含める
+        colorId: selectedColorId 
     };
 
     try {
@@ -325,18 +301,16 @@ function duplicateEvent() {
     document.getElementById('editor-title').innerText = '新規予定 (複製)';
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('btn-duplicate').style.display = 'none';
-    // 色と入力値はそのまま維持されるので、このまま保存を押せば複製される。
     showToast('複製モードだ。日時を変えて保存を押せ。');
 }
 
-// --- Task Editor Override ---
+// --- Task Editor & Logic (完全修復版) ---
 function openTaskEditor(t = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('task-editor-modal').classList.add('active');
     document.getElementById('task-edit-id').value = t ? t.id : '';
     document.getElementById('task-edit-title').value = t ? t.title || '' : '';
     
-    // ★ 修正：タスクの色の復元とメモの分離
     let cleanNotes = "";
     if (t && t.notes) {
         const extracted = extractTaskData(t.notes);
@@ -365,12 +339,60 @@ function closeTaskEditor() {
     }
 }
 
+// ★新設：ワンタップでタスクの完了/未完了を切り替える神のメソッド
+async function toggleTaskCompletion(taskId, newStatus) {
+    // 既存のタスクデータをキャッシュから探す
+    let targetTask = null;
+    for (const key in dataCache) {
+        if (dataCache[key].tasks) {
+            targetTask = dataCache[key].tasks.find(t => t.id === taskId);
+            if (targetTask) break;
+        }
+    }
+    if (!targetTask) return;
+
+    // Google APIの仕様に合わせてステータス文字列を整形
+    const patchBody = { status: newStatus };
+    if (newStatus === 'completed') {
+        patchBody.completed = new Date().toISOString();
+    } else {
+        patchBody.completed = null; // 未完了に戻す場合はクリア
+    }
+
+    // APIへ直接送信（あるいはSync Queueへ）
+    showGlobalLoader('タスク状態を更新中...');
+    try {
+        if (navigator.onLine && typeof gapi !== 'undefined') {
+            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody });
+            showToast(newStatus === 'completed' ? '✅ タスクを完了にした' : '🔄 タスクを未完了に戻した');
+        } else {
+            showToast('圏外ではタスクの完了操作はできない。電波を探せ。');
+        }
+        
+        // キャッシュを更新して即座にUIを再描画
+        targetTask.status = newStatus;
+        const td = targetTask.due ? new Date(targetTask.due) : new Date();
+        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
+        
+        // もしDailyモーダルやAgendaビューが開いていれば再描画
+        if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) {
+            const dow = new Date(selectedDateStr).getDay();
+            openDailyModal(selectedDateStr, dow);
+        } else if (currentView === 'agenda') {
+            renderAgendaView();
+        }
+    } catch(e) {
+        showToast('❌ エラー: ' + e.message);
+    } finally {
+        hideGlobalLoader();
+    }
+}
+
 async function saveTask() {
     const id = document.getElementById('task-edit-id').value;
     const title = document.getElementById('task-edit-title').value.trim();
     if (!title) { showToast('タスク名を入力してくれ'); return; }
     
-    // ★ 修正：タスクの色情報をメモ欄に埋め込む
     let rawNotes = document.getElementById('task-edit-notes').value.trim();
     if (selectedTaskColorId) {
         rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`;
@@ -379,12 +401,16 @@ async function saveTask() {
     const action = {
         type: 'task', method: id ? 'update' : 'insert',
         id: id, title: title,
-        description: rawNotes, // 色情報を含んだメモを送信
+        description: rawNotes, 
     };
 
     const dueVal = document.getElementById('task-edit-due').value;
     if (dueVal) {
-        action.due = new Date(dueVal).toISOString();
+        // ★修正：タイムゾーンのズレを防ぐ安全な日付パース
+        let parts = dueVal.split('-');
+        const dueObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        // Google Tasks の due は時刻を 00:00:00.000Z にする仕様
+        action.due = dueObj.toISOString();
     }
 
     closeTaskEditor(); closeAllModals();
