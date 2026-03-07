@@ -254,8 +254,18 @@ function closeEditor() {
 
 function toggleTimeInputs() {
     const isAllDay = document.getElementById('edit-allday').checked;
-    document.getElementById('edit-start').type = isAllDay ? 'date' : 'datetime-local';
-    document.getElementById('edit-end').type = isAllDay ? 'date' : 'datetime-local';
+    const startInput = document.getElementById('edit-start');
+    const endInput = document.getElementById('edit-end');
+    
+    // バグ修復: 型を切り替える前に現在の値を保持し、フォーマットを変換して再セットする
+    let startVal = startInput.value;
+    let endVal = endInput.value;
+    
+    startInput.type = isAllDay ? 'date' : 'datetime-local';
+    endInput.type = isAllDay ? 'date' : 'datetime-local';
+    
+    if (startVal) startInput.value = isAllDay ? startVal.split('T')[0] : (startVal.includes('T') ? startVal : startVal + 'T12:00');
+    if (endVal) endInput.value = isAllDay ? endVal.split('T')[0] : (endVal.includes('T') ? endVal : endVal + 'T13:00');
 }
 
 async function saveEvent() {
@@ -266,6 +276,7 @@ async function saveEvent() {
     const isAllDay = document.getElementById('edit-allday').checked;
     let startVal = document.getElementById('edit-start').value;
     let endVal = document.getElementById('edit-end').value;
+    if(!startVal || !endVal) { showToast('日時が不正だ'); return; }
     
     const action = {
         type: 'event', method: id ? 'update' : 'insert',
@@ -307,10 +318,9 @@ async function dispatchManualAction(action) {
     showGlobalLoader('処理中...');
     try {
         if (navigator.onLine) {
-            // jero_core.js の関数を呼び出す
             if(typeof executeApiAction === 'function') {
                 await executeApiAction(action);
-                showToast('✅ 予定を保存した');
+                showToast(action.type === 'event' ? '✅ 予定を保存した' : '✅ タスクを保存した');
             } else {
                 throw new Error('API通信関数が見つからない。リロードしてくれ。');
             }
@@ -321,10 +331,13 @@ async function dispatchManualAction(action) {
         
         if(typeof dataCache !== 'undefined') {
             for(let key in dataCache) { 
-                if(action.method === 'delete') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
+                if(action.method === 'delete') {
+                    if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
+                    if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
+                }
             }
         }
-        const td = action.start ? new Date(action.start) : new Date();
+        const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date());
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
     } catch (e) {
         showToast('❌ エラー: ' + e.message);
@@ -333,11 +346,62 @@ async function dispatchManualAction(action) {
     }
 }
 
-// --- Task & Recurrence Dummies (Reserved for future) ---
-function openTaskEditor(t) { showToast('タスクエディタは現在準備中だ'); }
-function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); }
-function openRecurrenceEditor() {} function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); } function updateRecDisplay() {} function applyRecurrence() {} function confirmDeleteTask() {} function saveTask() {}
+// --- The Manual Override for Tasks (タスクエディタ解放) ---
+function openTaskEditor(t = null) {
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('task-editor-modal').classList.add('active');
+    document.getElementById('task-edit-id').value = t ? t.id : '';
+    document.getElementById('task-edit-title').value = t ? t.title || '' : '';
+    document.getElementById('task-edit-notes').value = t ? t.notes || '' : '';
+    
+    const dueInput = document.getElementById('task-edit-due');
+    if (t && t.due) {
+        dueInput.value = new Date(t.due).toISOString().split('T')[0];
+    } else {
+        dueInput.value = selectedDateStr || new Date().toISOString().split('T')[0];
+    }
+    
+    document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク';
+    document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';
+}
 
+function closeTaskEditor() {
+    document.getElementById('task-editor-modal').classList.remove('active');
+    if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) {
+        document.getElementById('overlay').classList.remove('active');
+    }
+}
+
+async function saveTask() {
+    const id = document.getElementById('task-edit-id').value;
+    const title = document.getElementById('task-edit-title').value.trim();
+    if (!title) { showToast('タスク名を入力してくれ'); return; }
+    
+    const action = {
+        type: 'task', method: id ? 'update' : 'insert',
+        id: id, title: title,
+        description: document.getElementById('task-edit-notes').value,
+    };
+
+    const dueVal = document.getElementById('task-edit-due').value;
+    if (dueVal) {
+        action.due = new Date(dueVal).toISOString();
+    }
+
+    closeTaskEditor(); closeAllModals();
+    await dispatchManualAction(action);
+}
+
+async function confirmDeleteTask() {
+    const id = document.getElementById('task-edit-id').value;
+    if(!id || !confirm('このタスクを完全に消し去るか？')) return;
+    const action = { type: 'task', method: 'delete', id: id };
+    closeTaskEditor(); closeAllModals();
+    await dispatchManualAction(action);
+}
+
+// 繰り返し設定のダミー（将来拡張用）
+function openRecurrenceEditor() {} function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); } function updateRecDisplay() {} function applyRecurrence() {}
 
 // --- Online/Offline Event Listeners ---
 window.addEventListener('online', async () => {
