@@ -18,6 +18,137 @@ function loadSettings() {
     if(stVoice) stVoice.checked = voiceEnabled; 
     if(typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled;
 }
+
+// --- The Manual Override (手動エディタ＆同期ブリッジ) ---
+
+function openEditor(e = null) {
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('editor-modal').classList.add('active');
+    document.getElementById('edit-id').value = e ? e.id : '';
+    document.getElementById('edit-title').value = e ? e.summary || '' : '';
+    document.getElementById('edit-loc').value = e ? e.location || '' : '';
+    document.getElementById('edit-desc').value = e ? e.description || '' : '';
+    
+    const isAllDay = e && e.start && e.start.date;
+    const alldayToggle = document.getElementById('edit-allday');
+    alldayToggle.checked = isAllDay;
+    
+    const startInput = document.getElementById('edit-start');
+    const endInput = document.getElementById('edit-end');
+    
+    let st = new Date(); let ed = new Date(st.getTime() + 60*60*1000);
+    if(selectedDateStr && !e) { st = new Date(selectedDateStr + 'T12:00'); ed = new Date(selectedDateStr + 'T13:00'); }
+    
+    if (e && e.start) {
+        st = new Date(e.start.dateTime || e.start.date);
+        ed = new Date(e.end.dateTime || e.end.date);
+        if(isAllDay) ed.setDate(ed.getDate() - 1); 
+    }
+    
+    toggleTimeInputs();
+    
+    if (alldayToggle.checked) {
+        startInput.value = st.toISOString().split('T')[0];
+        endInput.value = ed.toISOString().split('T')[0];
+    } else {
+        const tzOffset = st.getTimezoneOffset() * 60000;
+        startInput.value = new Date(st.getTime() - tzOffset).toISOString().slice(0, 16);
+        endInput.value = new Date(ed.getTime() - tzOffset).toISOString().slice(0, 16);
+    }
+
+    document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定';
+    document.getElementById('btn-delete').style.display = e ? 'block' : 'none';
+    document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none';
+}
+
+function closeEditor() {
+    document.getElementById('editor-modal').classList.remove('active');
+    if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) {
+        document.getElementById('overlay').classList.remove('active');
+    }
+}
+
+function toggleTimeInputs() {
+    const isAllDay = document.getElementById('edit-allday').checked;
+    document.getElementById('edit-start').type = isAllDay ? 'date' : 'datetime-local';
+    document.getElementById('edit-end').type = isAllDay ? 'date' : 'datetime-local';
+}
+
+async function saveEvent() {
+    const id = document.getElementById('edit-id').value;
+    const title = document.getElementById('edit-title').value.trim();
+    if (!title) { showToast('タイトルを入力してくれ'); return; }
+    
+    const isAllDay = document.getElementById('edit-allday').checked;
+    let startVal = document.getElementById('edit-start').value;
+    let endVal = document.getElementById('edit-end').value;
+    
+    const action = {
+        type: 'event', method: id ? 'update' : 'insert',
+        id: id, title: title,
+        location: document.getElementById('edit-loc').value,
+        description: document.getElementById('edit-desc').value,
+    };
+
+    if (isAllDay) {
+        action.start = startVal;
+        const ed = new Date(endVal); ed.setDate(ed.getDate() + 1);
+        action.end = ed.toISOString().split('T')[0];
+    } else {
+        action.start = new Date(startVal).toISOString();
+        action.end = new Date(endVal).toISOString();
+    }
+
+    closeEditor(); closeAllModals();
+    await dispatchManualAction(action);
+}
+
+async function confirmDeleteEvent() {
+    const id = document.getElementById('edit-id').value;
+    if(!id || !confirm('この予定を完全に消し去るか？')) return;
+    const action = { type: 'event', method: 'delete', id: id };
+    closeEditor(); closeAllModals();
+    await dispatchManualAction(action);
+}
+
+function duplicateEvent() {
+    document.getElementById('edit-id').value = '';
+    document.getElementById('editor-title').innerText = '新規予定 (複製)';
+    document.getElementById('btn-delete').style.display = 'none';
+    document.getElementById('btn-duplicate').style.display = 'none';
+    showToast('複製モードだ。日時を変えて保存を押せ。');
+}
+
+// 手動入力データをインフラ(Sync Queue/API)へ直接流し込む中枢神経
+async function dispatchManualAction(action) {
+    showGlobalLoader('処理中...');
+    try {
+        if (navigator.onLine) {
+            await executeApiAction(action);
+            showToast('✅ 予定を保存した');
+        } else {
+            await saveToSyncQueue(action);
+            showToast('📦 圏外のためポストに保管した。電波回復時に送信する');
+        }
+        
+        if(typeof dataCache !== 'undefined') {
+            for(let key in dataCache) { 
+                if(action.method === 'delete') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
+            }
+        }
+        const td = action.start ? new Date(action.start) : new Date();
+        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
+    } catch (e) {
+        showToast('❌ エラー: ' + e.message);
+    } finally {
+        hideGlobalLoader();
+    }
+}
+
+// タスクエディタ等の未実装関数（今回は保留）
+function openTaskEditor(t) { showToast('タスクエディタは現在準備中だ'); }
+function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); }
+function openRecurrenceEditor() {} function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); } function updateRecDisplay() {} function applyRecurrence() {} function confirmDeleteTask() {} function saveTask() {}
 function saveAndApplySettings() { const th = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; localStorage.setItem('jero_theme',th); localStorage.setItem('jero_fs',fs); document.body.setAttribute('data-theme',th); document.documentElement.style.setProperty('--fs', fs+'px'); document.getElementById('fs-val').innerText=fs; }
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if(pb) { pb.style.width = p+'%'; if(p>=100) setTimeout(()=>pb.style.width='0%', 500); } }
 function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }
