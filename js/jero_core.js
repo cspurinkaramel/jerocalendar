@@ -248,11 +248,36 @@ async function executeSearch(action, containerEl) {
 }
 
 // --- The Sync Queue & API Execution ---
+// --- The Sync Queue & API Execution ---
 async function executeApiAction(action) {
     if (action.type === 'event') {
-        if (action.method === 'delete') { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id }); } 
-        else if (action.method === 'update') { const resource = { summary: action.title, location: action.location, description: action.description }; if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; } await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource }); } 
-        else { const resource = { summary: action.title, location: action.location, description: action.description }; if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } else { resource.start = { date: action.start }; resource.end = { date: action.end }; } await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); }
+        if (action.method === 'delete') { 
+            await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id }); 
+        } 
+        else if (action.method === 'update') { 
+            const resource = { summary: action.title, location: action.location, description: action.description }; 
+            if (action.start && action.start.includes('T')) { 
+                // 時間指定に変更する場合、終日(date)を明示的にnullにして消去する
+                resource.start = { dateTime: new Date(action.start).toISOString(), date: null }; 
+                resource.end = { dateTime: new Date(action.end).toISOString(), date: null }; 
+            } else { 
+                // 終日に変更する場合、時間指定(dateTime)を明示的にnullにして消去する
+                resource.start = { date: action.start, dateTime: null }; 
+                resource.end = { date: action.end, dateTime: null }; 
+            } 
+            await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource }); 
+        } 
+        else { 
+            const resource = { summary: action.title, location: action.location, description: action.description }; 
+            if (action.start && action.start.includes('T')) { 
+                resource.start = { dateTime: new Date(action.start).toISOString() }; 
+                resource.end = { dateTime: new Date(action.end).toISOString() }; 
+            } else { 
+                resource.start = { date: action.start }; 
+                resource.end = { date: action.end }; 
+            } 
+            await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); 
+        }
     } else {
         if (action.method === 'delete') { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id }); } 
         else if (action.method === 'update') { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: resource }); } 
