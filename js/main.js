@@ -1,4 +1,4 @@
-// JeroCalendar v8.0 Main Logic
+// JeroCalendar v8.1 Main Logic - The Sync Queue Foundation
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -8,7 +8,6 @@ const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c7
 let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
-// UI Base Fixes
 function initWeekdays() { const days = ['日','月','火','水','木','金','土']; const c = document.getElementById('weekdays'); if(c) c.innerHTML = days.map(d => `<div class="wd">${d}</div>`).join(''); }
 function loadSettings() { 
     const th = localStorage.getItem('jero_theme')||'light'; const fs = localStorage.getItem('jero_fs')||'10'; 
@@ -27,7 +26,7 @@ function closeSettings() { document.getElementById('settings-modal').classList.r
 function switchAccount() { localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); location.reload(); }
 function exportSettings() { showToast('未実装だ。機能拡充を待て。'); }
 function importSettings() { showToast('未実装だ。'); }
-function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？')) { indexedDB.deleteDatabase('JeroDB_v7'); localStorage.clear(); location.reload(); } }
+function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); location.reload(); } }
 
 function openEditor(e) { showToast('エディタは現在準備中だ'); }
 function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); }
@@ -40,8 +39,44 @@ function hideGlobalLoader() { document.getElementById('global-loader').classList
 const yieldUI = () => new Promise(r => setTimeout(r, 30));
 function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
+// --- IndexedDB & The Sync Queue Foundation ---
 let idb;
-function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v7', 2); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch(e) { clearTimeout(timeout); resolve(); } }); }
+function initIDB() { 
+    return new Promise((resolve) => { 
+        const timeout = setTimeout(() => { resolve(); }, 2000); 
+        try { 
+            // バージョンを上げて sync_queue を新設
+            const req = indexedDB.open('JeroDB_v8', 3); 
+            req.onupgradeneeded = (e) => { 
+                const db = e.target.result; 
+                if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); 
+                if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); 
+                if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); 
+            }; 
+            req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; 
+            req.onerror = (e) => { clearTimeout(timeout); resolve(); }; 
+        } catch(e) { clearTimeout(timeout); resolve(); } 
+    }); 
+}
+
+// Queue操作用ユーティリティ
+function saveToSyncQueue(actionPayload) {
+    return new Promise((resolve) => {
+        if(!idb) return resolve();
+        try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').put({ id: generateUUID(), payload: actionPayload, timestamp: Date.now() }); tx.oncomplete = () => resolve(); } catch(e) { resolve(); }
+    });
+}
+function getSyncQueue() {
+    return new Promise((resolve) => {
+        if(!idb) return resolve([]);
+        try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch(e) { resolve([]); }
+    });
+}
+function clearSyncQueueItem(id) {
+    if(!idb) return;
+    try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); } catch(e) {}
+}
+
 function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch(e) {} }
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 function saveImageToIDB(id, dataUrl) { return new Promise((resolve, reject) => { if(!idb) return resolve(); try { const tx = idb.transaction('images', 'readwrite'); tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e); tx.objectStore('images').put({ id: id, data: dataUrl }); } catch(err) { reject(err); } }); }
@@ -154,6 +189,17 @@ function renderMonthDOM(year, month, data, position) {
     else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
 }
 
+// --- Online/Offline Event Listeners ---
+window.addEventListener('online', async () => {
+    document.getElementById('offline-badge').classList.remove('active');
+    showToast('📶 電波が回復した。');
+    if(typeof processSyncQueue === 'function') processSyncQueue(); // 次のフェーズでjero_core.jsに実装する
+});
+window.addEventListener('offline', () => {
+    document.getElementById('offline-badge').classList.add('active');
+    showToast('⚡️ 圏外になった。変更はポスト（キュー）に保存する。');
+});
+
 document.addEventListener('DOMContentLoaded', async () => { 
     try { 
         await initIDB(); 
@@ -161,7 +207,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadDict(); 
         initColorPicker(); 
         initTaskColorPicker(); 
-        // Note: initSpeech() and initNotification() are handled in jero_core.js
         if(typeof initSpeech === 'function') initSpeech();
         if(typeof initNotification === 'function') initNotification();
     } catch (err) { showToast("初期化エラー: " + err.message); }
