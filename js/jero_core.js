@@ -27,11 +27,13 @@ function speakText(text) {
     let cleanText = text.replace(/https?:\/\/[^\s]+/g, 'リンク').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').replace(/[#*`_\[\]()【】]/g, ''); 
     if(!cleanText.trim()) return; 
     window.speechSynthesis.cancel(); 
-    const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'ja-JP'; u.rate = 1.1; u.pitch = 0.9; 
+    const u = new SpeechSynthesisUtterance(cleanText); 
+    u.lang = 'ja-JP'; 
+    u.rate = 1.15; // 軽快なテンポ（少し早め）
+    u.pitch = 1.7; // 猫らしい高音域（0.9から1.7へ変更）
     if (jeroVoice) u.voice = jeroVoice; 
     window.speechSynthesis.speak(u); 
 }
-
 function toggleSpeechRecognition() {
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
