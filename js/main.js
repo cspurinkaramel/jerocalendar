@@ -448,9 +448,9 @@ async function saveTask() {
 
     const dueVal = document.getElementById('task-edit-due').value;
     if (dueVal) {
-        let parts = dueVal.split('-');
-        const dueObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        action.due = dueObj.toISOString();
+        // ★ユーザー目線の修正：タイムゾーンのズレ（9時間マイナスで前日になる現象）を完全に防ぐ
+        // 日付文字列（YYYY-MM-DD）に強制的にUTCの0時を結合してGoogleへ送る
+        action.due = dueVal + 'T00:00:00.000Z';
     }
 
     closeTaskEditor(); closeAllModals();
@@ -465,7 +465,7 @@ async function confirmDeleteTask() {
     await dispatchManualAction(action);
 }
 
-// ★新設：The Alchemical Converter (錬金術的変換機構)
+// ★The Alchemical Converter (錬金術的変換機構)
 async function executeConversion(fromType) {
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
 
@@ -490,7 +490,8 @@ async function executeConversion(fromType) {
             let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal;
             let parts = dStr.split('-');
             redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            dueIso = redrawDate.toISOString();
+            // ★ユーザー目線の修正：変換元と「全く同じ日」を確実にGoogleに認識させる
+            dueIso = dStr + 'T00:00:00.000Z';
         }
 
         insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso };
