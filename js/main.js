@@ -28,12 +28,6 @@ function exportSettings() { showToast('未実装だ。機能拡充を待て。')
 function importSettings() { showToast('未実装だ。'); }
 function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); location.reload(); } }
 
-function openEditor(e) { showToast('エディタは現在準備中だ'); }
-function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); }
-function openTaskEditor(t) { showToast('タスクエディタは現在準備中だ'); }
-function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); }
-function confirmDeleteEvent() {} function duplicateEvent() {} function saveEvent() {} function openRecurrenceEditor() {} function closeRecurrenceEditor() { document.getElementById('recurrence-modal').classList.remove('active'); } function updateRecDisplay() {} function applyRecurrence() {} function confirmDeleteTask() {} function saveTask() {}
-
 function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
 function hideGlobalLoader() { document.getElementById('global-loader').classList.remove('active'); }
 const yieldUI = () => new Promise(r => setTimeout(r, 30));
