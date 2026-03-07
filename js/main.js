@@ -118,26 +118,68 @@ function getCardHtml(type, item) {
     </div>`;
 }
 
+// --- 修正箇所：renderAgendaView（完了済みタスクを後ろへ追いやる） ---
 async function renderAgendaView() { 
     const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = []; 
-    for (const monthKey in dataCache) { const data = dataCache[monthKey]; if(data.events) data.events.forEach(e => { const stDate = e.start.date ? new Date(e.start.date) : new Date(e.start.dateTime); if(stDate >= today || isEventSpanning(e, today.toISOString().split('T')[0]) !== 'single') { allItems.push({ type: 'event', dateObj: stDate, data: e }); } }); if(data.tasks) data.tasks.filter(t => t.due).forEach(t => { const dDate = new Date(t.due); if(dDate >= today) allItems.push({ type: 'task', dateObj: dDate, data: t }); }); } 
-    allItems.sort((a, b) => a.dateObj - b.dateObj); const grouped = {}; allItems.forEach(item => { const dStr = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}-${String(item.dateObj.getDate()).padStart(2,'0')}`; if(!grouped[dStr]) grouped[dStr] = []; grouped[dStr].push(item); }); const days = ['日','月','火','水','木','金','土']; 
+    for (const monthKey in dataCache) { 
+        const data = dataCache[monthKey]; 
+        if(data.events) data.events.forEach(e => { const stDate = e.start.date ? new Date(e.start.date) : new Date(e.start.dateTime); if(stDate >= today || isEventSpanning(e, today.toISOString().split('T')[0]) !== 'single') { allItems.push({ type: 'event', dateObj: stDate, data: e }); } }); 
+        if(data.tasks) data.tasks.filter(t => t.due).forEach(t => { const dDate = new Date(t.due); if(dDate >= today) allItems.push({ type: 'task', dateObj: dDate, data: t }); }); 
+    } 
+    
+    // 日付順にソート
+    allItems.sort((a, b) => a.dateObj - b.dateObj); 
+    const grouped = {}; 
+    allItems.forEach(item => { const dStr = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}-${String(item.dateObj.getDate()).padStart(2,'0')}`; if(!grouped[dStr]) grouped[dStr] = []; grouped[dStr].push(item); }); 
+    const days = ['日','月','火','水','木','金','土']; 
+    
     if(Object.keys(grouped).length === 0) { container.innerHTML = '<div style="padding: 30px; text-align: center; color: #888;">予定はありません。</div>'; return; } 
+    
     for (const [dStr, items] of Object.entries(grouped)) { 
         const dObj = new Date(dStr); const isToday = dObj.getTime() === today.getTime(); const dayHeader = document.createElement('div'); dayHeader.className = 'agenda-day-header'; dayHeader.innerText = `${dObj.getMonth()+1}月${dObj.getDate()}日 (${days[dObj.getDay()]}) ${isToday ? ' - 今日' : ''}`; if(isToday) dayHeader.style.color = '#ff3b30'; 
         const listCont = document.createElement('div'); listCont.className = 'agenda-list-container card-list'; 
+        
+        // ★ユーザー目線の修正：未完了を上に、完了済みを下にするソート処理
+        items.sort((a, b) => {
+            const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0;
+            const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0;
+            return aIsCompleted - bIsCompleted;
+        });
+
         for(const item of items) { listCont.innerHTML += getCardHtml(item.type, item.data); } 
         container.appendChild(dayHeader); container.appendChild(listCont); 
     } 
 }
 
+// --- 修正箇所：openDailyModal（完了済みタスクを後ろへ追いやる） ---
 async function openDailyModal(dateStr, dow) {
     selectedDateStr = dateStr; const days = ['日','月','火','水','木','金','土']; const [y, m, d] = dateStr.split('-'); document.getElementById('daily-date-title').innerText = `${parseInt(m)}月${parseInt(d)}日 (${days[dow]})`;
     const list = document.getElementById('daily-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
+    
+    let modalItems = [];
     if(data) {
-        if(data.events) { const events = data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }); for(const e of events) { hasItems = true; list.innerHTML += getCardHtml('event', e); } }
-        if(data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); for(const t of tasks) { hasItems = true; list.innerHTML += getCardHtml('task', t); } }
+        if(data.events) { 
+            const events = data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }); 
+            events.forEach(e => modalItems.push({type: 'event', data: e})); 
+        }
+        if(data.tasks) { 
+            const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); 
+            tasks.forEach(t => modalItems.push({type: 'task', data: t})); 
+        }
     }
+
+    // ★ユーザー目線の修正：未完了を上に、完了済みを下にするソート処理
+    modalItems.sort((a, b) => {
+        const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0;
+        const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0;
+        return aIsCompleted - bIsCompleted;
+    });
+
+    if(modalItems.length > 0) {
+        hasItems = true;
+        modalItems.forEach(item => { list.innerHTML += getCardHtml(item.type, item.data); });
+    }
+
     if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
     document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
 }
