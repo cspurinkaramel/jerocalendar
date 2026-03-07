@@ -276,7 +276,8 @@ async function saveEvent() {
     const isAllDay = document.getElementById('edit-allday').checked;
     let startVal = document.getElementById('edit-start').value;
     let endVal = document.getElementById('edit-end').value;
-    if(!startVal || !endVal) { showToast('日時が不正だ'); return; }
+    if(!startVal) { showToast('開始日時が不正だ'); return; }
+    if(!endVal) endVal = startVal; // 終了日が飛んでいた場合のフェイルセーフ
     
     const action = {
         type: 'event', method: id ? 'update' : 'insert',
@@ -285,13 +286,21 @@ async function saveEvent() {
         description: document.getElementById('edit-desc').value,
     };
 
-    if (isAllDay) {
-        action.start = startVal;
-        const ed = new Date(endVal); ed.setDate(ed.getDate() + 1);
-        action.end = ed.toISOString().split('T')[0];
-    } else {
-        action.start = new Date(startVal).toISOString();
-        action.end = new Date(endVal).toISOString();
+    try {
+        if (isAllDay) {
+            action.start = startVal;
+            // 安全な日付計算（Safariのサイレントクラッシュ対策）
+            let parts = endVal.split('-');
+            const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            ed.setDate(ed.getDate() + 1); // 終日は翌日を指定するGoogle API仕様
+            action.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
+        } else {
+            action.start = new Date(startVal).toISOString();
+            action.end = new Date(endVal).toISOString();
+        }
+    } catch (err) {
+        showToast('日時の処理でエラーが起きた。もう一度頼む。');
+        return;
     }
 
     closeEditor(); closeAllModals();
@@ -316,17 +325,27 @@ function duplicateEvent() {
 
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...');
+    
+    // UI文言の最適化（ユーザーの指摘を反映）
+    let msgAction = '保存';
+    if(action.method === 'insert') msgAction = '追加';
+    if(action.method === 'update') msgAction = '更新';
+    if(action.method === 'delete') msgAction = '削除';
+    const msgType = action.type === 'event' ? '予定' : 'タスク';
+    const successMsg = `✅ ${msgType}を${msgAction}した`;
+    const queueMsg = `📦 圏外のためポストに保管した。電波回復時に${msgAction}する`;
+
     try {
         if (navigator.onLine) {
             if(typeof executeApiAction === 'function') {
                 await executeApiAction(action);
-                showToast(action.type === 'event' ? '✅ 予定を保存した' : '✅ タスクを保存した');
+                showToast(successMsg); // 追加・更新・削除に応じた言葉が出る
             } else {
-                throw new Error('API通信関数が見つからない。リロードしてくれ。');
+                throw new Error('API通信関数が見つからない。');
             }
         } else {
             await saveToSyncQueue(action);
-            showToast('📦 圏外のためポストに保管した。電波回復時に送信する');
+            showToast(queueMsg);
         }
         
         if(typeof dataCache !== 'undefined') {
@@ -337,7 +356,14 @@ async function dispatchManualAction(action) {
                 }
             }
         }
-        const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date());
+        
+        // 安全な再描画日付の取得
+        const tdStr = action.start || action.due;
+        let td = new Date();
+        if (tdStr) {
+            if (tdStr.includes('T')) { td = new Date(tdStr); } 
+            else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); }
+        }
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
     } catch (e) {
         showToast('❌ エラー: ' + e.message);
