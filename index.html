@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <title>JeroCalendar v8.3</title>
+    <title>JeroCalendar v8.4</title>
     
     <link rel="stylesheet" href="./css/style.css?v=8.0">
     <script src="./assets/lib/pdfjs/pdf.min.js" defer></script>
@@ -96,7 +96,25 @@
         </div>
     </div>
 
-    <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;"><div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="dict-edit-idx"><div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div><div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div></div>
+    <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
+        <div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="dict-edit-idx">
+            <div class="form-group"><label style="font-size:12px; color:var(--accent); font-weight:bold;">① 主ルール (タップ入力される接頭辞)</label><input type="text" id="dict-edit-prefix" placeholder="例: 誕)" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-group"><label style="font-size:12px; color:#888;">② その他の検知キーワード (,区切り)</label><input type="text" id="dict-edit-aliases" placeholder="例: 誕生日, バースデー" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-row"><span>③ アイコン</span><div id="dict-edit-icon" onclick="openEmojiPicker()" style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">➕ 選択</div></div>
+            <div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div>
+            <div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div>
+    </div>
+
+    <div id="emoji-picker-modal" class="bottom-modal" style="z-index: 111; height: 60vh;">
+        <div class="modal-drag-area" onclick="closeEmojiPicker()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2>アイコン選択</h2><button class="close-btn" onclick="closeEmojiPicker()">✕</button></div>
+        <div class="modal-body" id="emoji-list-container" style="padding-bottom: 20px; overflow-y: auto;"></div>
+    </div>
     
     <div id="daily-modal" class="bottom-modal" style="z-index: 105;"><div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div><div class="modal-body"><div class="card-list" id="daily-list"></div></div><div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div></div>
     
