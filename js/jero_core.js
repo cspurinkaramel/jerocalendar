@@ -133,7 +133,37 @@ function closeJeroChat() { document.getElementById('jero-chat-modal').classList.
 function appendChatMessage(sender, text) { const el = document.createElement('div'); el.className = `jero-msg ${sender}`; el.innerText = text; document.getElementById('chat-history').appendChild(el); document.getElementById('chat-history').scrollTop = document.getElementById('chat-history').scrollHeight; return el; }
 
 let chatFileBase64 = null; let chatFileMime = null;
-function handleChatFileUpload(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = (evt) => { chatFileBase64 = evt.target.result.split(',')[1]; chatFileMime = file.type; document.getElementById('chat-file-name').innerText = file.name; document.getElementById('chat-attach-box').style.display = 'flex'; }; reader.readAsDataURL(file); }
+// --- Jero Core: 添付ファイルの最適ルーティング ---
+async function handleChatFileUpload(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+
+    if (file.type === 'application/pdf') {
+        // PDFの場合は、main.jsの重労働（画像化）へ回す
+        if (typeof processPDFFile === 'function') {
+            await processPDFFile(file);
+        } else {
+            showToast('PDF処理機能が見つからない。');
+        }
+    } else if (file.type.startsWith('image/')) {
+        // 画像（写真）の場合は直接脳内（Base64）へ取り込む
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            chatFileBase64 = evt.target.result.split(',')[1];
+            chatFileMime = file.type;
+            document.getElementById('chat-file-name').innerText = file.name;
+            document.getElementById('chat-attach-box').style.display = 'flex';
+            // 写真を添付したら自動で送信発火（お前の手間の削減）
+            document.getElementById('chat-input').value = "この画像を解析し、含まれる予定をすべて抽出してくれ。";
+            unlockAudioAndSend();
+        };
+        reader.readAsDataURL(file);
+    } else {
+        showToast('画像かPDFを選択してくれ。');
+    }
+    // 連続で同じファイルを選べるようにリセット
+    e.target.value = '';
+}
 function clearChatFile() { chatFileBase64 = null; chatFileMime = null; document.getElementById('chat-attach-box').style.display = 'none'; document.getElementById('chat-file-input').value = ''; }
 
 async function sendToJero() {
