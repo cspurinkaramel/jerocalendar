@@ -300,6 +300,7 @@ function openEditor(e = null) {
     // ★新設：タスクへ変換ボタンの表示制御
     const convertBtn = document.getElementById('btn-convert-task');
     if(convertBtn) convertBtn.style.display = e ? 'block' : 'none';
+    renderIconPalette('event-icon-palette', 'edit-title');
 }
 
 function closeEditor() {
@@ -411,6 +412,7 @@ function openTaskEditor(t = null) {
     // ★新設：予定へ変換ボタンの表示制御
     const convertBtn = document.getElementById('btn-convert-event');
     if(convertBtn) convertBtn.style.display = t ? 'block' : 'none';
+    renderIconPalette('task-icon-palette', 'task-edit-title');
 }
 
 function closeTaskEditor() {
