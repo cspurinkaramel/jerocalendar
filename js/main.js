@@ -1,4 +1,4 @@
-// JeroCalendar v8.3 Main Logic - The Alchemical Converter
+// JeroCalendar v8.4 Main Logic - UI/UX Overhaul
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -61,14 +61,91 @@ function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = 
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-// --- Utils & Dictionaries ---
+// --- ★改修: 辞書とアイコンピッカー機能 ---
+const EMOJI_LIST = [
+    { cat: "仕事・予定", icons: ["💻", "👥", "📝", "📞", "📅", "🚀", "⚠️", "🚩", "💼"] },
+    { cat: "生活・家事", icons: ["🏠", "🛒", "🧹", "🗑️", "👕", "🍽️", "✂️", "🏦", "📦", "🚙"] },
+    { cat: "健康・身体", icons: ["🏥", "💊", "🦷", "🏃", "🛌", "🛀", "🏋️", "🧘", "🩸"] },
+    { cat: "娯楽・祝祭", icons: ["🎉", "🎂", "🎁", "🍻", "🏖️", "✈️", "🎬", "🎮", "🎵"] },
+    { cat: "感情・状態", icons: ["✅", "❌", "❗", "❓", "💡", "🔥", "⭐", "💰", "🔒"] }
+];
+
 function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
 function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
-function renderDictUI() { const container = document.getElementById('dict-list'); if(!container) return; container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${item.keys.join(', ')}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
-function openDictEditor(idx = -1) { document.getElementById('dict-editor-modal').classList.add('active'); if (idx >= 0) { const item = advancedDict[idx]; document.getElementById('dict-edit-idx').value = idx; document.getElementById('dict-edit-keys').value = item.keys.join(', '); document.getElementById('dict-edit-icon').value = item.icon; document.getElementById('dict-edit-bg').value = item.bg; document.getElementById('dict-edit-txt').value = item.txt; document.getElementById('dict-editor-title').innerText = '辞書編集'; } else { document.getElementById('dict-edit-idx').value = -1; document.getElementById('dict-edit-keys').value = ''; document.getElementById('dict-edit-icon').value = ''; document.getElementById('dict-edit-bg').value = '#0a84ff'; document.getElementById('dict-edit-txt').value = '#ffffff'; document.getElementById('dict-editor-title').innerText = '新規追加'; } }
+
+function renderDictUI() { 
+    const container = document.getElementById('dict-list'); if(!container) return; container.innerHTML = ''; 
+    if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } 
+    advancedDict.forEach((item, idx) => { 
+        const primary = item.keys[0] || "(接頭辞なし)";
+        const el = document.createElement('div'); el.className = 'dict-item'; 
+        el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${primary}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; 
+        container.appendChild(el); 
+    }); 
+}
+
+function openDictEditor(idx = -1) { 
+    document.getElementById('dict-editor-modal').classList.add('active'); 
+    if (idx >= 0) { 
+        const item = advancedDict[idx]; 
+        document.getElementById('dict-edit-idx').value = idx; 
+        document.getElementById('dict-edit-prefix').value = item.keys[0] || ''; 
+        document.getElementById('dict-edit-aliases').value = item.keys.slice(1).join(', '); 
+        document.getElementById('dict-edit-icon').innerText = item.icon || '➕ 選択'; 
+        document.getElementById('dict-edit-bg').value = item.bg; 
+        document.getElementById('dict-edit-txt').value = item.txt; 
+        document.getElementById('dict-editor-title').innerText = '辞書編集'; 
+    } else { 
+        document.getElementById('dict-edit-idx').value = -1; 
+        document.getElementById('dict-edit-prefix').value = ''; 
+        document.getElementById('dict-edit-aliases').value = ''; 
+        document.getElementById('dict-edit-icon').innerText = '➕ 選択'; 
+        document.getElementById('dict-edit-bg').value = '#0a84ff'; 
+        document.getElementById('dict-edit-txt').value = '#ffffff'; 
+        document.getElementById('dict-editor-title').innerText = '新規追加'; 
+    } 
+}
 function closeDictEditor() { document.getElementById('dict-editor-modal').classList.remove('active'); }
-function saveDictItem() { const idx = parseInt(document.getElementById('dict-edit-idx').value); const keysRaw = document.getElementById('dict-edit-keys').value; const icon = document.getElementById('dict-edit-icon').value.trim(); const bg = document.getElementById('dict-edit-bg').value; const txt = document.getElementById('dict-edit-txt').value; if(!keysRaw || !icon) return; const keys = keysRaw.split(',').map(k => k.trim()).filter(k => k); const newItem = { keys, icon, bg, txt }; if(idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); saveDict(); closeDictEditor(); }
+
+function saveDictItem() { 
+    const idx = parseInt(document.getElementById('dict-edit-idx').value); 
+    const prefix = document.getElementById('dict-edit-prefix').value.trim(); 
+    const aliasesRaw = document.getElementById('dict-edit-aliases').value; 
+    const iconRaw = document.getElementById('dict-edit-icon').innerText; 
+    const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
+    const bg = document.getElementById('dict-edit-bg').value; 
+    const txt = document.getElementById('dict-edit-txt').value; 
+    
+    if(!prefix || !icon) { showToast('接頭辞とアイコンは必須だ。'); return; } 
+
+    let keys = [prefix];
+    if (aliasesRaw) {
+        const aliases = aliasesRaw.split(',').map(k => k.trim()).filter(k => k);
+        keys = keys.concat(aliases);
+    }
+    
+    const newItem = { keys, icon, bg, txt }; 
+    if(idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); 
+    saveDict(); closeDictEditor(); 
+}
+
 function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); }
+
+function openEmojiPicker() {
+    document.getElementById('emoji-picker-modal').classList.add('active');
+    const container = document.getElementById('emoji-list-container');
+    if (container.innerHTML !== '') return; 
+    let html = '';
+    EMOJI_LIST.forEach(group => {
+        html += `<div style="font-size:12px; font-weight:bold; color:#888; margin-top:10px; margin-bottom:5px;">${group.cat}</div><div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+        group.icons.forEach(icon => { html += `<div style="font-size:26px; padding:10px; background:var(--head-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer;" onclick="selectEmoji('${icon}')">${icon}</div>`; });
+        html += `</div>`;
+    });
+    container.innerHTML = html;
+}
+function closeEmojiPicker() { document.getElementById('emoji-picker-modal').classList.remove('active'); }
+function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText = icon; closeEmojiPicker(); }
+
 function processSemanticText(text) { if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null; for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if(matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } } return { text: resText, style: matchStyle }; }
 function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 
@@ -118,7 +195,6 @@ function getCardHtml(type, item) {
     </div>`;
 }
 
-// --- 修正箇所：renderAgendaView（完了済みタスクを後ろへ追いやる） ---
 async function renderAgendaView() { 
     const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = []; 
     for (const monthKey in dataCache) { 
@@ -126,60 +202,30 @@ async function renderAgendaView() {
         if(data.events) data.events.forEach(e => { const stDate = e.start.date ? new Date(e.start.date) : new Date(e.start.dateTime); if(stDate >= today || isEventSpanning(e, today.toISOString().split('T')[0]) !== 'single') { allItems.push({ type: 'event', dateObj: stDate, data: e }); } }); 
         if(data.tasks) data.tasks.filter(t => t.due).forEach(t => { const dDate = new Date(t.due); if(dDate >= today) allItems.push({ type: 'task', dateObj: dDate, data: t }); }); 
     } 
-    
-    // 日付順にソート
     allItems.sort((a, b) => a.dateObj - b.dateObj); 
     const grouped = {}; 
     allItems.forEach(item => { const dStr = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}-${String(item.dateObj.getDate()).padStart(2,'0')}`; if(!grouped[dStr]) grouped[dStr] = []; grouped[dStr].push(item); }); 
     const days = ['日','月','火','水','木','金','土']; 
-    
     if(Object.keys(grouped).length === 0) { container.innerHTML = '<div style="padding: 30px; text-align: center; color: #888;">予定はありません。</div>'; return; } 
-    
     for (const [dStr, items] of Object.entries(grouped)) { 
         const dObj = new Date(dStr); const isToday = dObj.getTime() === today.getTime(); const dayHeader = document.createElement('div'); dayHeader.className = 'agenda-day-header'; dayHeader.innerText = `${dObj.getMonth()+1}月${dObj.getDate()}日 (${days[dObj.getDay()]}) ${isToday ? ' - 今日' : ''}`; if(isToday) dayHeader.style.color = '#ff3b30'; 
         const listCont = document.createElement('div'); listCont.className = 'agenda-list-container card-list'; 
-        
-        // ★ユーザー目線の修正：未完了を上に、完了済みを下にするソート処理
-        items.sort((a, b) => {
-            const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0;
-            const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0;
-            return aIsCompleted - bIsCompleted;
-        });
-
+        items.sort((a, b) => { const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0; const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0; return aIsCompleted - bIsCompleted; });
         for(const item of items) { listCont.innerHTML += getCardHtml(item.type, item.data); } 
         container.appendChild(dayHeader); container.appendChild(listCont); 
     } 
 }
 
-// --- 修正箇所：openDailyModal（完了済みタスクを後ろへ追いやる） ---
 async function openDailyModal(dateStr, dow) {
     selectedDateStr = dateStr; const days = ['日','月','火','水','木','金','土']; const [y, m, d] = dateStr.split('-'); document.getElementById('daily-date-title').innerText = `${parseInt(m)}月${parseInt(d)}日 (${days[dow]})`;
     const list = document.getElementById('daily-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
-    
     let modalItems = [];
     if(data) {
-        if(data.events) { 
-            const events = data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }); 
-            events.forEach(e => modalItems.push({type: 'event', data: e})); 
-        }
-        if(data.tasks) { 
-            const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); 
-            tasks.forEach(t => modalItems.push({type: 'task', data: t})); 
-        }
+        if(data.events) { const events = data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({type: 'event', data: e})); }
+        if(data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({type: 'task', data: t})); }
     }
-
-    // ★ユーザー目線の修正：未完了を上に、完了済みを下にするソート処理
-    modalItems.sort((a, b) => {
-        const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0;
-        const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0;
-        return aIsCompleted - bIsCompleted;
-    });
-
-    if(modalItems.length > 0) {
-        hasItems = true;
-        modalItems.forEach(item => { list.innerHTML += getCardHtml(item.type, item.data); });
-    }
-
+    modalItems.sort((a, b) => { const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0; const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0; return aIsCompleted - bIsCompleted; });
+    if(modalItems.length > 0) { hasItems = true; modalItems.forEach(item => { list.innerHTML += getCardHtml(item.type, item.data); }); }
     if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
     document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
 }
@@ -222,39 +268,31 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
 
-
-// --- Icon Palette Rendering & Injection ---
+// --- ★新設: アイコンパレット注入機能 ---
 function renderIconPalette(targetId, inputId) {
     const palette = document.getElementById(targetId);
     if (!palette) return;
     palette.innerHTML = '';
     
-    // 辞書からアイコンボタンを生成
     advancedDict.forEach(item => {
-        if (!item.icon) return;
+        if (!item.icon || !item.keys || item.keys.length === 0) return;
+        const prefix = item.keys[0]; // 主ルール（タップで入力される文字）
         const btn = document.createElement('div');
-        btn.innerText = item.icon;
-        btn.style.cssText = `font-size: 20px; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;`;
+        // アイコンと接頭辞を両方表示して、何が入るか視覚的に教える
+        btn.innerHTML = `<span style="font-size:18px;">${item.icon}</span><span style="font-size:10px; color:#666; margin-left:4px; font-weight:bold;">${prefix}</span>`;
+        btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;`;
         btn.onclick = () => {
             const inputEl = document.getElementById(inputId);
-            // 接頭辞として「アイコン＋半角スペース」を追加
-            const prefix = item.icon + " ";
-            // 既にそのアイコンから始まっている場合は二重に追加しない
+            // まだ入力されていなければ接頭辞を追加
             if (!inputEl.value.startsWith(prefix)) {
-                inputEl.value = prefix + inputEl.value;
+                inputEl.value = prefix + " " + inputEl.value; // 半角スペースを自動付与
             }
         };
         palette.appendChild(btn);
     });
 }
 
-// openEditorとopenTaskEditorの末尾に、パレット描画を仕込む
-// （※すでに存在する openEditor 関数と openTaskEditor 関数の中の最後に、以下の1行をそれぞれ書き足すこと）
-// renderIconPalette('event-icon-palette', 'edit-title');  // openEditor内
-// renderIconPalette('task-icon-palette', 'task-edit-title'); // openTaskEditor内
-
 // --- The Manual Override (手動エディタ＆同期ブリッジ) ---
-
 function openEditor(e = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
@@ -262,7 +300,6 @@ function openEditor(e = null) {
     document.getElementById('edit-title').value = e ? e.summary || '' : '';
     document.getElementById('edit-loc').value = e ? e.location || '' : '';
     document.getElementById('edit-desc').value = e ? e.description || '' : '';
-    
     selectColor(null, e && e.colorId ? e.colorId : '');
 
     const isAllDay = e && e.start && e.start.date;
@@ -274,7 +311,6 @@ function openEditor(e = null) {
     
     let st = new Date(); let ed = new Date(st.getTime() + 60*60*1000);
     if(selectedDateStr && !e) { st = new Date(selectedDateStr + 'T12:00'); ed = new Date(selectedDateStr + 'T13:00'); }
-    
     if (e && e.start) {
         st = new Date(e.start.dateTime || e.start.date);
         ed = new Date(e.end.dateTime || e.end.date);
@@ -283,7 +319,6 @@ function openEditor(e = null) {
     
     startInput.type = isAllDay ? 'date' : 'datetime-local';
     endInput.type = isAllDay ? 'date' : 'datetime-local';
-    
     if (isAllDay) {
         startInput.value = st.toISOString().split('T')[0];
         endInput.value = ed.toISOString().split('T')[0];
@@ -296,10 +331,10 @@ function openEditor(e = null) {
     document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定';
     document.getElementById('btn-delete').style.display = e ? 'block' : 'none';
     document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none';
-    
-    // ★新設：タスクへ変換ボタンの表示制御
     const convertBtn = document.getElementById('btn-convert-task');
     if(convertBtn) convertBtn.style.display = e ? 'block' : 'none';
+
+    // ★追加: エディタ起動時にアイコンパレットを描画
     renderIconPalette('event-icon-palette', 'edit-title');
 }
 
@@ -314,13 +349,9 @@ function toggleTimeInputs() {
     const isAllDay = document.getElementById('edit-allday').checked;
     const startInput = document.getElementById('edit-start');
     const endInput = document.getElementById('edit-end');
-    
-    let startVal = startInput.value;
-    let endVal = endInput.value;
-    
+    let startVal = startInput.value; let endVal = endInput.value;
     startInput.type = isAllDay ? 'date' : 'datetime-local';
     endInput.type = isAllDay ? 'date' : 'datetime-local';
-    
     if (startVal) startInput.value = isAllDay ? startVal.split('T')[0] : (startVal.includes('T') ? startVal : startVal + 'T12:00');
     if (endVal) endInput.value = isAllDay ? endVal.split('T')[0] : (endVal.includes('T') ? endVal : endVal + 'T13:00');
 }
@@ -329,21 +360,13 @@ async function saveEvent() {
     const id = document.getElementById('edit-id').value;
     const title = document.getElementById('edit-title').value.trim();
     if (!title) { showToast('タイトルを入力してくれ'); return; }
-    
     const isAllDay = document.getElementById('edit-allday').checked;
     let startVal = document.getElementById('edit-start').value;
     let endVal = document.getElementById('edit-end').value;
     if(!startVal) { showToast('開始日時が不正だ'); return; }
     if(!endVal) endVal = startVal;
     
-    const action = {
-        type: 'event', method: id ? 'update' : 'insert',
-        id: id, title: title,
-        location: document.getElementById('edit-loc').value,
-        description: document.getElementById('edit-desc').value,
-        colorId: selectedColorId 
-    };
-
+    const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     try {
         if (isAllDay) {
             action.start = startVal;
@@ -355,21 +378,15 @@ async function saveEvent() {
             action.start = new Date(startVal).toISOString();
             action.end = new Date(endVal).toISOString();
         }
-    } catch (err) {
-        showToast('日時の処理でエラーが起きた。もう一度頼む。');
-        return;
-    }
-
-    closeEditor(); closeAllModals();
-    await dispatchManualAction(action);
+    } catch (err) { showToast('日時の処理でエラーが起きた。もう一度頼む。'); return; }
+    closeEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
 async function confirmDeleteEvent() {
     const id = document.getElementById('edit-id').value;
     if(!id || !confirm('この予定を完全に消し去るか？')) return;
     const action = { type: 'event', method: 'delete', id: id };
-    closeEditor(); closeAllModals();
-    await dispatchManualAction(action);
+    closeEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
 function duplicateEvent() {
@@ -394,24 +411,19 @@ function openTaskEditor(t = null) {
         const extracted = extractTaskData(t.notes);
         cleanNotes = extracted.cleanNotes;
         selectTaskColor(null, extracted.colorId);
-    } else {
-        selectTaskColor(null, '');
-    }
-    document.getElementById('task-edit-notes').value = cleanNotes;
+    } else { selectTaskColor(null, ''); }
     
+    document.getElementById('task-edit-notes').value = cleanNotes;
     const dueInput = document.getElementById('task-edit-due');
-    if (t && t.due) {
-        dueInput.value = new Date(t.due).toISOString().split('T')[0];
-    } else {
-        dueInput.value = selectedDateStr || new Date().toISOString().split('T')[0];
-    }
+    if (t && t.due) { dueInput.value = new Date(t.due).toISOString().split('T')[0]; } 
+    else { dueInput.value = selectedDateStr || new Date().toISOString().split('T')[0]; }
     
     document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク';
     document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';
-    
-    // ★新設：予定へ変換ボタンの表示制御
     const convertBtn = document.getElementById('btn-convert-event');
     if(convertBtn) convertBtn.style.display = t ? 'block' : 'none';
+
+    // ★追加: エディタ起動時にアイコンパレットを描画
     renderIconPalette('task-icon-palette', 'task-edit-title');
 }
 
@@ -424,108 +436,61 @@ function closeTaskEditor() {
 
 async function toggleTaskCompletion(taskId, newStatus) {
     let targetTask = null;
-    for (const key in dataCache) {
-        if (dataCache[key].tasks) {
-            targetTask = dataCache[key].tasks.find(t => t.id === taskId);
-            if (targetTask) break;
-        }
-    }
+    for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
     if (!targetTask) return;
-
     const patchBody = { status: newStatus };
-    if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } 
-    else { patchBody.completed = null; }
-
+    if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } else { patchBody.completed = null; }
     showGlobalLoader('タスク状態を更新中...');
     try {
-        if (navigator.onLine && typeof gapi !== 'undefined') {
-            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody });
-            showToast(newStatus === 'completed' ? '✅ タスクを完了にした' : '🔄 タスクを未完了に戻した');
-        } else {
-            showToast('圏外ではタスクの完了操作はできない。電波を探せ。');
-        }
-        
+        if (navigator.onLine && typeof gapi !== 'undefined') { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); showToast(newStatus === 'completed' ? '✅ タスクを完了にした' : '🔄 タスクを未完了に戻した'); } 
+        else { showToast('圏外ではタスクの完了操作はできない。電波を探せ。'); }
         targetTask.status = newStatus;
         const td = targetTask.due ? new Date(targetTask.due) : new Date();
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-        
-        if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) {
-            const dow = new Date(selectedDateStr).getDay();
-            openDailyModal(selectedDateStr, dow);
-        } else if (currentView === 'agenda') {
-            renderAgendaView();
-        }
-    } catch(e) {
-        showToast('❌ エラー: ' + e.message);
-    } finally {
-        hideGlobalLoader();
-    }
+        if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
+        else if (currentView === 'agenda') { renderAgendaView(); }
+    } catch(e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
 async function saveTask() {
     const id = document.getElementById('task-edit-id').value;
     const title = document.getElementById('task-edit-title').value.trim();
     if (!title) { showToast('タスク名を入力してくれ'); return; }
-    
     let rawNotes = document.getElementById('task-edit-notes').value.trim();
-    if (selectedTaskColorId) {
-        rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`;
-    }
-
-    const action = {
-        type: 'task', method: id ? 'update' : 'insert',
-        id: id, title: title,
-        description: rawNotes, 
-    };
-
+    if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
+    const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes };
     const dueVal = document.getElementById('task-edit-due').value;
-    if (dueVal) {
-        // ★ユーザー目線の修正：タイムゾーンのズレ（9時間マイナスで前日になる現象）を完全に防ぐ
-        // 日付文字列（YYYY-MM-DD）に強制的にUTCの0時を結合してGoogleへ送る
-        action.due = dueVal + 'T00:00:00.000Z';
-    }
-
-    closeTaskEditor(); closeAllModals();
-    await dispatchManualAction(action);
+    if (dueVal) { action.due = dueVal + 'T00:00:00.000Z'; }
+    closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
 async function confirmDeleteTask() {
     const id = document.getElementById('task-edit-id').value;
     if(!id || !confirm('このタスクを完全に消し去るか？')) return;
     const action = { type: 'task', method: 'delete', id: id };
-    closeTaskEditor(); closeAllModals();
-    await dispatchManualAction(action);
+    closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-// ★The Alchemical Converter (錬金術的変換機構)
+// ★The Alchemical Converter
 async function executeConversion(fromType) {
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
-
-    let deleteAction = null;
-    let insertAction = null;
-    let redrawDate = new Date();
-
+    let deleteAction = null; let insertAction = null; let redrawDate = new Date();
     if (fromType === 'event') {
         const id = document.getElementById('edit-id').value;
         const title = document.getElementById('edit-title').value.trim() || '無名タスク';
         const startVal = document.getElementById('edit-start').value;
         const notes = document.getElementById('edit-desc').value;
         const colorId = selectedColorId;
-
         if (id) deleteAction = { type: 'event', method: 'delete', id: id };
-
         let rawNotes = notes;
         if (colorId) rawNotes += (rawNotes ? '\n' : '') + `[c:${colorId}]`;
-        
         let dueIso = '';
         if (startVal) {
             let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal;
             let parts = dStr.split('-');
             redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            // ★ユーザー目線の修正：変換元と「全く同じ日」を確実にGoogleに認識させる
             dueIso = dStr + 'T00:00:00.000Z';
         }
-
         insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso };
     } else {
         const id = document.getElementById('task-edit-id').value;
@@ -533,9 +498,7 @@ async function executeConversion(fromType) {
         const dueVal = document.getElementById('task-edit-due').value;
         const notesVal = document.getElementById('task-edit-notes').value;
         const colorId = selectedTaskColorId;
-
         if (id) deleteAction = { type: 'task', method: 'delete', id: id };
-
         insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, colorId: colorId };
         if (dueVal) {
             let parts = dueVal.split('-');
@@ -561,51 +524,31 @@ async function executeConversion(fromType) {
             await saveToSyncQueue(insertAction);
             showToast('📦 圏外のためポストに保管した。電波回復時に変換する');
         }
-
         if (typeof dataCache !== 'undefined' && deleteAction) {
             for (let key in dataCache) {
-                if (deleteAction.type === 'event' && dataCache[key].events) {
-                    dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id);
-                }
-                if (deleteAction.type === 'task' && dataCache[key].tasks) {
-                    dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id);
-                }
+                if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); }
+                if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); }
             }
         }
-
         closeEditor(); closeTaskEditor(); closeAllModals();
         await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', navigator.onLine);
-    } catch (e) {
-        showToast('❌ 変換エラー: ' + e.message);
-    } finally {
-        hideGlobalLoader();
-    }
+    } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...');
-    
     let msgAction = '保存';
     if(action.method === 'insert') msgAction = '追加';
     if(action.method === 'update') msgAction = '更新';
     if(action.method === 'delete') msgAction = '削除';
     const msgType = action.type === 'event' ? '予定' : 'タスク';
-    const successMsg = `✅ ${msgType}を${msgAction}した`;
-    const queueMsg = `📦 圏外のためポストに保管した。電波回復時に${msgAction}する`;
-
     try {
         if (navigator.onLine) {
-            if(typeof executeApiAction === 'function') {
-                await executeApiAction(action);
-                showToast(successMsg); 
-            } else {
-                throw new Error('API通信関数が見つからない。');
-            }
+            if(typeof executeApiAction === 'function') { await executeApiAction(action); showToast(`✅ ${msgType}を${msgAction}した`); } 
+            else { throw new Error('API通信関数が見つからない。'); }
         } else {
-            await saveToSyncQueue(action);
-            showToast(queueMsg);
+            await saveToSyncQueue(action); showToast(`📦 圏外のためポストに保管した。電波回復時に${msgAction}する`);
         }
-        
         if(typeof dataCache !== 'undefined') {
             for(let key in dataCache) { 
                 if(action.method === 'delete') {
@@ -614,7 +557,6 @@ async function dispatchManualAction(action) {
                 }
             }
         }
-        
         const tdStr = action.start || action.due;
         let td = new Date();
         if (tdStr) {
@@ -622,23 +564,12 @@ async function dispatchManualAction(action) {
             else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); }
         }
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-    } catch (e) {
-        showToast('❌ エラー: ' + e.message);
-    } finally {
-        hideGlobalLoader();
-    }
+    } catch (e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
 // --- Online/Offline Event Listeners ---
-window.addEventListener('online', async () => {
-    document.getElementById('offline-badge').classList.remove('active');
-    showToast('📶 電波が回復した。');
-    if(typeof processSyncQueue === 'function') processSyncQueue(); 
-});
-window.addEventListener('offline', () => {
-    document.getElementById('offline-badge').classList.add('active');
-    showToast('⚡️ 圏外になった。変更はポスト（キュー）に保存する。');
-});
+window.addEventListener('online', async () => { document.getElementById('offline-badge').classList.remove('active'); showToast('📶 電波が回復した。'); if(typeof processSyncQueue === 'function') processSyncQueue(); });
+window.addEventListener('offline', () => { document.getElementById('offline-badge').classList.add('active'); showToast('⚡️ 圏外になった。変更はポスト（キュー）に保存する。'); });
 
 // --- Boot & GAPI Init ---
 document.addEventListener('DOMContentLoaded', async () => { 
@@ -651,26 +582,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(typeof initSpeech === 'function') initSpeech();
         if(typeof initNotification === 'function') initNotification();
         
-        // ★新設：DOMロード時に変換ボタンをハッキング的に仕込む
         const eventActionBar = document.querySelector('#editor-modal .action-bar');
         if (eventActionBar && !document.getElementById('btn-convert-task')) {
-            const btn = document.createElement('button');
-            btn.id = 'btn-convert-task';
-            btn.className = 'btn btn-gray';
-            btn.style.display = 'none';
-            btn.innerText = '🔄 タスクへ';
-            btn.onclick = () => executeConversion('event');
+            const btn = document.createElement('button'); btn.id = 'btn-convert-task'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 タスクへ'; btn.onclick = () => executeConversion('event');
             eventActionBar.insertBefore(btn, document.getElementById('btn-duplicate'));
         }
-
         const taskActionBar = document.querySelector('#task-editor-modal .action-bar');
         if (taskActionBar && !document.getElementById('btn-convert-event')) {
-            const btn = document.createElement('button');
-            btn.id = 'btn-convert-event';
-            btn.className = 'btn btn-gray';
-            btn.style.display = 'none';
-            btn.innerText = '🔄 予定へ';
-            btn.onclick = () => executeConversion('task');
+            const btn = document.createElement('button'); btn.id = 'btn-convert-event'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 予定へ'; btn.onclick = () => executeConversion('task');
             taskActionBar.insertBefore(btn, document.getElementById('task-btn-delete'));
         }
     } catch (err) { showToast("初期化エラー: " + err.message); }
@@ -681,41 +600,3 @@ async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: 
 function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
 function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time'); if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) { gapi.client.setToken({access_token: savedToken}); document.getElementById('auth-btn').style.display = 'none'; initCalendar(); } else { notifyAuthError(); } }
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
-
-// --- The Visionary Interface: PDF to AI Chat Analysis ---
-async function processPDFFile(file) { // e ではなく file を受け取る
-    showGlobalLoader('PDFを読み込み中...');
-    try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/lib/pdfjs/pdf.worker.min.js';
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
-        
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
-
-        chatFileBase64 = base64String;
-        chatFileMime = 'image/jpeg';
-        document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)';
-        document.getElementById('chat-attach-box').style.display = 'flex';
-        
-        // 既にチャット画面にいれば開く必要はないが、念のため
-        openJeroChat();
-        document.getElementById('chat-input').value = "このPDF画像を解析し、含まれる予定をすべて抽出してくれ。";
-        unlockAudioAndSend();
-
-    } catch (error) {
-        console.error('PDF処理エラー:', error);
-        showToast('❌ PDFの読み込みに失敗した。');
-    } finally {
-        hideGlobalLoader(); 
-    }
-}
