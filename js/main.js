@@ -1,4 +1,4 @@
-// JeroCalendar v8.4 Main Logic - UI/UX Overhaul
+// JeroCalendar v8.5 Main Logic - Immortal Data & Morimori Palette
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -25,9 +25,59 @@ function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m
 function openSettings() { document.getElementById('overlay').classList.add('active'); document.getElementById('settings-modal').classList.add('active'); }
 function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
 function switchAccount() { localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); location.reload(); }
-function exportSettings() { showToast('未実装だ。機能拡充を待て。'); }
-function importSettings() { showToast('未実装だ。'); }
-function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); location.reload(); } }
+
+// ★ The Immortal Data Protocol (設定の書き出しと読み込み)
+function exportSettings() { 
+    const data = {
+        theme: localStorage.getItem('jero_theme'),
+        fs: localStorage.getItem('jero_fs'),
+        voice: localStorage.getItem('jero_voice_enabled'),
+        gemini_key: localStorage.getItem('jero_gemini_key'),
+        gemini_prompt: localStorage.getItem('jero_gemini_prompt'),
+        dict: localStorage.getItem('jero_adv_dict')
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); 
+}
+
+function importSettings() { 
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = JSON.parse(evt.target.result);
+                if(data.theme) localStorage.setItem('jero_theme', data.theme);
+                if(data.fs) localStorage.setItem('jero_fs', data.fs);
+                if(data.voice) localStorage.setItem('jero_voice_enabled', data.voice);
+                if(data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key);
+                if(data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt);
+                if(data.dict) {
+                    localStorage.setItem('jero_adv_dict', data.dict);
+                    advancedDict = JSON.parse(data.dict);
+                }
+                showToast('✅ 過去の記憶（データ）を完全に復元した。再起動するぞ。');
+                setTimeout(() => location.reload(), 1500);
+            } catch (err) {
+                showToast('❌ ファイルが壊れているか、形式が違うぞ。');
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？（事前に「データ書出」をしておくことを強く勧めるぞ）')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); location.reload(); } }
 
 function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
 function hideGlobalLoader() { document.getElementById('global-loader').classList.remove('active'); }
@@ -61,13 +111,14 @@ function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = 
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-// --- ★改修: 辞書とアイコンピッカー機能 ---
+// --- ★ The Morimori Palette (特盛り絵文字リスト) ---
 const EMOJI_LIST = [
-    { cat: "仕事・予定", icons: ["💻", "👥", "📝", "📞", "📅", "🚀", "⚠️", "🚩", "💼"] },
-    { cat: "生活・家事", icons: ["🏠", "🛒", "🧹", "🗑️", "👕", "🍽️", "✂️", "🏦", "📦", "🚙"] },
-    { cat: "健康・身体", icons: ["🏥", "💊", "🦷", "🏃", "🛌", "🛀", "🏋️", "🧘", "🩸"] },
-    { cat: "娯楽・祝祭", icons: ["🎉", "🎂", "🎁", "🍻", "🏖️", "✈️", "🎬", "🎮", "🎵"] },
-    { cat: "感情・状態", icons: ["✅", "❌", "❗", "❓", "💡", "🔥", "⭐", "💰", "🔒"] }
+    { cat: "顔・感情", icons: ["😀","😂","🥰","😎","🤔","😭","😡","😴","🤯","😇","😈","👻","👽","🤖","💩","💡"] },
+    { cat: "仕事・学校", icons: ["💻","📱","📞","🔋","📅","📈","📂","✏️","✂️","🗑️","🚩","⚠️","✅","❌","🏫","🎓"] },
+    { cat: "生活・家事", icons: ["🏠","🛒","🧹","👕","🍽️","🍳","🍱","🍙","☕","🍺","🍷","💊","🏥","🛀","🛌","💰"] },
+    { cat: "乗り物・場所", icons: ["🚗","🚌","🚃","🚄","✈️","🛳️","🚥","⛽","🗻","🏕️","🏖️","🏢","⛩️","🎡","♨️","📍"] },
+    { cat: "動物・自然", icons: ["🐈","🐕","🐇","🐻","🐤","🐟","🌲","🌸","🌻","🍁","🍄","🌍","☀️","🌙","⭐","🔥"] },
+    { cat: "娯楽・祝祭", icons: ["🎮","🎬","🎵","🎨","📖","⚽","⚾","🎾","🏊","🚴","🏆","🎉","🎂","🎁","🎈","🎫"] }
 ];
 
 function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
@@ -141,6 +192,8 @@ function openEmojiPicker() {
         group.icons.forEach(icon => { html += `<div style="font-size:26px; padding:10px; background:var(--head-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer;" onclick="selectEmoji('${icon}')">${icon}</div>`; });
         html += `</div>`;
     });
+    // OSネイティブのキーボードを開くための隠し入力補助
+    html += `<div style="margin-top:20px; text-align:center;"><button class="btn-gray" style="padding:10px 20px; border-radius:20px; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="document.getElementById('dict-edit-icon').innerText = '➕ 選択'; closeEmojiPicker(); showToast('一覧にない場合は、OSの絵文字キーボードを使って手入力してくれ。');">その他の絵文字を使う</button></div>`;
     container.innerHTML = html;
 }
 function closeEmojiPicker() { document.getElementById('emoji-picker-modal').classList.remove('active'); }
@@ -154,7 +207,6 @@ function selectColor(el, id) { document.querySelectorAll('#color-picker .color-o
 
 function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
 function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'rgb(52, 199, 89)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedTaskColorId = id; }
-
 
 // --- Calendar Rendering & Logic ---
 function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
@@ -268,7 +320,6 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
 
-// --- ★新設: アイコンパレット注入機能 ---
 function renderIconPalette(targetId, inputId) {
     const palette = document.getElementById(targetId);
     if (!palette) return;
@@ -278,14 +329,12 @@ function renderIconPalette(targetId, inputId) {
         if (!item.icon || !item.keys || item.keys.length === 0) return;
         const prefix = item.keys[0]; // 主ルール（タップで入力される文字）
         const btn = document.createElement('div');
-        // アイコンと接頭辞を両方表示して、何が入るか視覚的に教える
         btn.innerHTML = `<span style="font-size:18px;">${item.icon}</span><span style="font-size:10px; color:#666; margin-left:4px; font-weight:bold;">${prefix}</span>`;
         btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;`;
         btn.onclick = () => {
             const inputEl = document.getElementById(inputId);
-            // まだ入力されていなければ接頭辞を追加
             if (!inputEl.value.startsWith(prefix)) {
-                inputEl.value = prefix + " " + inputEl.value; // 半角スペースを自動付与
+                inputEl.value = prefix + " " + inputEl.value; 
             }
         };
         palette.appendChild(btn);
@@ -334,7 +383,6 @@ function openEditor(e = null) {
     const convertBtn = document.getElementById('btn-convert-task');
     if(convertBtn) convertBtn.style.display = e ? 'block' : 'none';
 
-    // ★追加: エディタ起動時にアイコンパレットを描画
     renderIconPalette('event-icon-palette', 'edit-title');
 }
 
@@ -423,7 +471,6 @@ function openTaskEditor(t = null) {
     const convertBtn = document.getElementById('btn-convert-event');
     if(convertBtn) convertBtn.style.display = t ? 'block' : 'none';
 
-    // ★追加: エディタ起動時にアイコンパレットを描画
     renderIconPalette('task-icon-palette', 'task-edit-title');
 }
 
@@ -565,6 +612,43 @@ async function dispatchManualAction(action) {
         }
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
     } catch (e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
+}
+
+// --- The Visionary Interface: PDF to AI Chat Analysis ---
+async function processPDFFile(file) {
+    showGlobalLoader('PDFを読み込み中...');
+    try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/lib/pdfjs/pdf.worker.min.js';
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
+
+        chatFileBase64 = base64String;
+        chatFileMime = 'image/jpeg';
+        document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)';
+        document.getElementById('chat-attach-box').style.display = 'flex';
+        
+        openJeroChat();
+        document.getElementById('chat-input').value = "このPDF画像を解析し、含まれる予定をすべて抽出してくれ。";
+        unlockAudioAndSend();
+
+    } catch (error) {
+        console.error('PDF処理エラー:', error);
+        showToast('❌ PDFの読み込みに失敗した。');
+    } finally {
+        hideGlobalLoader(); 
+    }
 }
 
 // --- Online/Offline Event Listeners ---
