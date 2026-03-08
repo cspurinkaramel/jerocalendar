@@ -223,6 +223,36 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
 }
 
 
+// --- Icon Palette Rendering & Injection ---
+function renderIconPalette(targetId, inputId) {
+    const palette = document.getElementById(targetId);
+    if (!palette) return;
+    palette.innerHTML = '';
+    
+    // 辞書からアイコンボタンを生成
+    advancedDict.forEach(item => {
+        if (!item.icon) return;
+        const btn = document.createElement('div');
+        btn.innerText = item.icon;
+        btn.style.cssText = `font-size: 20px; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;`;
+        btn.onclick = () => {
+            const inputEl = document.getElementById(inputId);
+            // 接頭辞として「アイコン＋半角スペース」を追加
+            const prefix = item.icon + " ";
+            // 既にそのアイコンから始まっている場合は二重に追加しない
+            if (!inputEl.value.startsWith(prefix)) {
+                inputEl.value = prefix + inputEl.value;
+            }
+        };
+        palette.appendChild(btn);
+    });
+}
+
+// openEditorとopenTaskEditorの末尾に、パレット描画を仕込む
+// （※すでに存在する openEditor 関数と openTaskEditor 関数の中の最後に、以下の1行をそれぞれ書き足すこと）
+// renderIconPalette('event-icon-palette', 'edit-title');  // openEditor内
+// renderIconPalette('task-icon-palette', 'task-edit-title'); // openTaskEditor内
+
 // --- The Manual Override (手動エディタ＆同期ブリッジ) ---
 
 function openEditor(e = null) {
@@ -651,15 +681,8 @@ function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
 
 // --- The Visionary Interface: PDF to AI Chat Analysis ---
-async function processPDFFile(e) {
-    const file = e.target.files[0];
-    if (!file || file.type !== 'application/pdf') {
-        showToast('PDFファイルを選択してくれ。');
-        return;
-    }
-
+async function processPDFFile(file) { // e ではなく file を受け取る
     showGlobalLoader('PDFを読み込み中...');
-    
     try {
         pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/lib/pdfjs/pdf.worker.min.js';
         const arrayBuffer = await file.arrayBuffer();
@@ -677,17 +700,13 @@ async function processPDFFile(e) {
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
         const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
 
-        // --- ここからが「転ばぬ先の杖」の賢いルーティングだ ---
-        // 既存のチャット添付ファイル機構に抽出した画像をセット
         chatFileBase64 = base64String;
         chatFileMime = 'image/jpeg';
         document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)';
         document.getElementById('chat-attach-box').style.display = 'flex';
         
-        // チャット画面を強制起動
+        // 既にチャット画面にいれば開く必要はないが、念のため
         openJeroChat();
-        
-        // プロンプトを自動入力し、私（ジェロ）への送信処理を発火
         document.getElementById('chat-input').value = "このPDF画像を解析し、含まれる予定をすべて抽出してくれ。";
         unlockAudioAndSend();
 
@@ -696,7 +715,5 @@ async function processPDFFile(e) {
         showToast('❌ PDFの読み込みに失敗した。');
     } finally {
         hideGlobalLoader(); 
-        // 同じファイルを再度選べるようにリセット
-        e.target.value = ''; 
     }
 }
