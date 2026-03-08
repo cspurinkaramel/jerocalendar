@@ -95,18 +95,57 @@
             <button class="btn btn-blue" onclick="unlockAudioAndSend()" style="border-radius:20px; padding:12px 20px;">送信</button>
         </div>
     </div>
-    <div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div>
-    <div id="event-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
 
-    <div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div>
-    <div id="task-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;"><div class="modal-drag-area" onclick="closeDictEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="dict-edit-idx"><div class="form-group"><label style="font-size:12px; color:#888;">検知キーワード (,区切り)</label><input type="text" id="dict-edit-keys" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-group"><label style="font-size:12px; color:#888;">置換アイコン (絵文字)</label><input type="text" id="dict-edit-icon" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div><div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div><div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div></div>
+    
     <div id="daily-modal" class="bottom-modal" style="z-index: 105;"><div class="modal-drag-area" onclick="closeAllModals()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="daily-date-title"></h2><button class="close-btn" onclick="closeAllModals()">✕</button></div><div class="modal-body"><div class="card-list" id="daily-list"></div></div><div class="action-bar"><button class="btn btn-blue" onclick="openEditor()">＋ 予定</button><button class="btn btn-green" onclick="openTaskEditor()">＋ タスク</button></div></div>
-    <div id="editor-modal" class="bottom-modal" style="z-index: 106;"><div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="edit-id"><div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div><div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div><div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div><div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div><input type="hidden" id="edit-recurrence-rule"><div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div><div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div><div class="color-palette" id="color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="confirmDeleteEvent(this)">削除</button><button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div></div>
+    
+    <div id="editor-modal" class="bottom-modal" style="z-index: 106;">
+        <div class="modal-drag-area" onclick="closeEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-id">
+            <div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div>
+            <div id="event-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
+            
+            <div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div>
+            <div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div>
+            <div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div>
+            <div class="form-row" style="cursor: pointer;" onclick="openRecurrenceEditor()"><span>繰り返し</span><div style="display:flex; align-items:center; gap:8px;"><span id="edit-recurrence-display" style="color:var(--accent); font-weight:bold;">なし</span><span style="color:#888;">＞</span></div></div>
+            <input type="hidden" id="edit-recurrence-rule">
+            <div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div>
+            <div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div>
+            <div class="attach-area">
+                <div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div>
+                <input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div>
+            </div>
+            <div class="color-palette" id="color-picker"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="confirmDeleteEvent(this)">削除</button><button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div>
+    </div>
+    
     <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;"><div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div><div class="modal-body"><div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div><div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div></div><div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div></div>
-    <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;"><div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="task-edit-id"><div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div><div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div><div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div><div class="color-palette" id="task-color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="confirmDeleteTask(this)">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div></div>
-    <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""></div>
-
+    
+    <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;">
+        <div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div>
+        <div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="task-edit-id">
+            <div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div>
+            <div id="task-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
+            
+            <div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div>
+            <div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div>
+            <div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div>
+            <div class="attach-area">
+                <div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div>
+                <input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div>
+            </div>
+            <div class="color-palette" id="task-color-picker"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="confirmDeleteTask(this)">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div>
+    </div>
+    
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src="" onclick="event.stopPropagation()"></div>
 
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
