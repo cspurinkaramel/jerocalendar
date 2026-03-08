@@ -704,7 +704,8 @@ async function testPDFToImage(e) {
 
     } catch (error) {
         console.error('PDF解析エラー:', error);
-        showToast('❌ PDFの処理に失敗した。');
+        alert('【ジェロへの報告用データ】\n' + error.name + '\n' + error.message);
+        showToast('❌ エラーが発生した。');
     } finally {
         hideGlobalLoader();
         // 同じファイルを再度選べるようにinputをリセット
