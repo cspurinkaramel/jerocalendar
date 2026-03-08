@@ -7,6 +7,8 @@ const ASSETS_TO_CACHE = [
     './css/style.css',
     './js/main.js',
     './js/jero_core.js',
+    './assets/lib/pdfjs/pdf.min.js',
+    './assets/lib/pdfjs/pdf.worker.min.js'
     './manifest.json'
 ];
 
