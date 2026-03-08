@@ -6,18 +6,26 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <title>JeroCalendar v8.0</title>
+    <title>JeroCalendar v8.3</title>
     
     <link rel="stylesheet" href="./css/style.css?v=8.0">
+    <script src="./assets/lib/pdfjs/pdf.min.js" defer></script>
 </head>
 <body>
     <div id="toast"></div>
     <div id="global-loader"><div class="big-spinner"></div><div class="loader-text" id="loader-msg">処理中...</div></div>
 
     <div id="top-bar">
-        <div class="nav-group"><button class="icon-btn" onclick="scrollToToday()">◎</button><button class="icon-btn" onclick="openSettings()">⚙️</button></div>
+        <div class="nav-group">
+            <button class="icon-btn" onclick="scrollToToday()">◎</button>
+            <button class="icon-btn" onclick="openSettings()">⚙️</button>
+        </div>
         <div id="month-display">表示中...</div>
-        <div class="nav-group"><button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button><button class="icon-btn" id="view-toggle-btn" onclick="toggleView()">📝</button></div>
+        <div class="nav-group">
+            <button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button>
+            <button class="icon-btn" onclick="document.getElementById('test-pdf-uploader').click()" style="font-size: 16px;" title="PDF解析テスト">📄</button>
+            <button class="icon-btn" id="view-toggle-btn" onclick="toggleView()">📝</button>
+        </div>
         <div id="progress-bar"></div>
     </div>
     
@@ -95,6 +103,8 @@
     <div id="recurrence-modal" class="bottom-modal" style="z-index: 108;"><div class="modal-drag-area" onclick="closeRecurrenceEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2>繰り返しの詳細</h2><button class="close-btn" onclick="closeRecurrenceEditor()">✕</button></div><div class="modal-body"><div class="form-row"><span>頻度</span><select id="rec-freq" onchange="updateRecDisplay()"><option value="">繰り返さない</option><option value="DAILY">毎日</option><option value="WEEKLY">毎週</option><option value="MONTHLY">毎月</option><option value="YEARLY">毎年</option></select></div><div class="form-row" id="rec-until-row" style="display:none;"><span>終了日</span><div style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="rec-has-until" onchange="updateRecDisplay()"><input type="date" id="rec-until-date" onchange="updateRecDisplay()" style="width:120px;"></div></div></div><div class="action-bar"><button class="btn btn-blue" onclick="applyRecurrence()">決定</button></div></div>
     <div id="task-editor-modal" class="bottom-modal" style="z-index: 107;"><div class="modal-drag-area" onclick="closeTaskEditor()"><div class="modal-drag"></div></div><div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div><div class="modal-body"><input type="hidden" id="task-edit-id"><div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div><div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div><div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div><div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div><div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div><div class="color-palette" id="task-color-picker"></div></div><div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="confirmDeleteTask(this)">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div></div>
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""></div>
+
+    <input type="file" id="test-pdf-uploader" accept="application/pdf" style="display:none;" onchange="testPDFToImage(event)">
 
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
