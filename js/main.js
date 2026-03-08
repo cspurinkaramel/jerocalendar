@@ -1,4 +1,4 @@
-// JeroCalendar v8.5 Main Logic - Immortal Data & Morimori Palette
+// JeroCalendar v8.5 Main Logic - Immortal Data & Ultra Morimori Palette
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -45,7 +45,6 @@ function exportSettings() {
     URL.revokeObjectURL(url);
     showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); 
 }
-
 function importSettings() { 
     const input = document.createElement('input');
     input.type = 'file';
@@ -169,20 +168,13 @@ function saveDictItem() {
     const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
     const bg = document.getElementById('dict-edit-bg').value; 
     const txt = document.getElementById('dict-edit-txt').value; 
-    
     if(!prefix || !icon) { showToast('接頭辞とアイコンは必須だ。'); return; } 
-
     let keys = [prefix];
-    if (aliasesRaw) {
-        const aliases = aliasesRaw.split(',').map(k => k.trim()).filter(k => k);
-        keys = keys.concat(aliases);
-    }
-    
+    if (aliasesRaw) { const aliases = aliasesRaw.split(',').map(k => k.trim()).filter(k => k); keys = keys.concat(aliases); }
     const newItem = { keys, icon, bg, txt }; 
     if(idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); 
     saveDict(); closeDictEditor(); 
 }
-
 function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); }
 
 function openEmojiPicker() {
@@ -195,7 +187,6 @@ function openEmojiPicker() {
         group.icons.forEach(icon => { html += `<div style="font-size:26px; padding:10px; background:var(--head-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer;" onclick="selectEmoji('${icon}')">${icon}</div>`; });
         html += `</div>`;
     });
-    // OSネイティブのキーボードを開くための隠し入力補助
     html += `<div style="margin-top:20px; text-align:center;"><button class="btn-gray" style="padding:10px 20px; border-radius:20px; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="document.getElementById('dict-edit-icon').innerText = '➕ 選択'; closeEmojiPicker(); showToast('一覧にない場合は、OSの絵文字キーボードを使って手入力してくれ。');">その他の絵文字を使う</button></div>`;
     container.innerHTML = html;
 }
@@ -228,26 +219,13 @@ function getCardHtml(type, item) {
     const title = isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)');
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
-    
     let timeStr = "";
-    if(isEvent && item.start && item.start.dateTime) {
-        const d = new Date(item.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-    } else if (!isEvent && item.due) {
-        timeStr = new Date(item.due).toLocaleDateString('ja-JP');
-    } else {
-        timeStr = isEvent ? '終日' : '期限なし';
-    }
-
+    if(isEvent && item.start && item.start.dateTime) { const d = new Date(item.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; } 
+    else if (!isEvent && item.due) { timeStr = new Date(item.due).toLocaleDateString('ja-JP'); } 
+    else { timeStr = isEvent ? '終日' : '期限なし'; }
     const iconHtml = isEvent ? '📅' : `<span style="font-size:16px; margin-right:4px;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${item.status === 'completed' ? '✅' : '⬜️'}</span>`;
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
-
-    return `<div class="item-card" onclick="${clickFn}">
-        <div class="card-color-bar" style="background-color: ${color};"></div>
-        <div class="card-content" style="${titleStyle}">
-            <div class="card-title">${title}</div>
-            <div class="card-meta"><span style="display:flex; align-items:center;">${iconHtml} ${timeStr}</span></div>
-        </div>
-    </div>`;
+    return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}"><div class="card-title">${title}</div><div class="card-meta"><span style="display:flex; align-items:center;">${iconHtml} ${timeStr}</span></div></div></div>`;
 }
 
 async function renderAgendaView() { 
@@ -291,399 +269,4 @@ function renderMonthDOM(year, month, data, position) {
     const sortedEvents = [...data.events].sort((a, b) => { const aAllDay = a.start.date ? 1 : 0; const bAllDay = b.start.date ? 1 : 0; if(aAllDay !== bAllDay) return bAllDay - aAllDay; return 0; });
     const today = new Date();
     for (let i = 1; i <= daysInMonth; i++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
-        if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
-        dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
-        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType); const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div); });
-        if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div); });
-        grid.appendChild(dayEl);
-    }
-    const container = document.getElementById('calendar-wrapper');
-    if(position === 'append') container.appendChild(wrapper); 
-    else if(position === 'prepend') container.insertBefore(wrapper, container.firstChild);
-    else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
-}
-
-async function initCalendar() { setProgress(10); try { await loadDataCacheFromIDB(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m+1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { document.getElementById('offline-badge').classList.remove('active'); fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } else { document.getElementById('offline-badge').classList.add('active'); } } finally { setProgress(100); } }
-async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); document.getElementById('agenda-bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); document.getElementById('agenda-bottom-trigger').classList.add('hidden');} }
-async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); document.getElementById('agenda-top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); document.getElementById('agenda-top-trigger').classList.add('hidden');} }
-function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
-
-async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
-    if (isAuthError) return; const monthKey = `${year}-${month}`; const startOfMonth = new Date(year, month, 1).toISOString(); const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
-    let needsRender = false;
-    if (forceFetch || !dataCache[monthKey]) { 
-        if (!navigator.onLine) { if (!dataCache[monthKey]) showToast('オフラインのためデータが取得できません。'); return; }
-        let events = [], tasks = [], authErrorDetected = false; 
-        try { const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
-        try { const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
-        if (authErrorDetected) { notifyAuthError(); return; } 
-        dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); needsRender = true;
-    } else { if (!document.getElementById(`month-${year}-${month}`)) needsRender = true; }
-    if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
-}
-
-function renderIconPalette(targetId, inputId) {
-    const palette = document.getElementById(targetId);
-    if (!palette) return;
-    palette.innerHTML = '';
-    
-    advancedDict.forEach(item => {
-        if (!item.icon || !item.keys || item.keys.length === 0) return;
-        const prefix = item.keys[0]; // 主ルール（タップで入力される文字）
-        const btn = document.createElement('div');
-        btn.innerHTML = `<span style="font-size:18px;">${item.icon}</span><span style="font-size:10px; color:#666; margin-left:4px; font-weight:bold;">${prefix}</span>`;
-        btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;`;
-        btn.onclick = () => {
-            const inputEl = document.getElementById(inputId);
-            if (!inputEl.value.startsWith(prefix)) {
-                inputEl.value = prefix + " " + inputEl.value; 
-            }
-        };
-        palette.appendChild(btn);
-    });
-}
-
-// --- The Manual Override (手動エディタ＆同期ブリッジ) ---
-function openEditor(e = null) {
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('editor-modal').classList.add('active');
-    document.getElementById('edit-id').value = e ? e.id : '';
-    document.getElementById('edit-title').value = e ? e.summary || '' : '';
-    document.getElementById('edit-loc').value = e ? e.location || '' : '';
-    document.getElementById('edit-desc').value = e ? e.description || '' : '';
-    selectColor(null, e && e.colorId ? e.colorId : '');
-
-    const isAllDay = e && e.start && e.start.date;
-    const alldayToggle = document.getElementById('edit-allday');
-    alldayToggle.checked = isAllDay;
-    
-    const startInput = document.getElementById('edit-start');
-    const endInput = document.getElementById('edit-end');
-    
-    let st = new Date(); let ed = new Date(st.getTime() + 60*60*1000);
-    if(selectedDateStr && !e) { st = new Date(selectedDateStr + 'T12:00'); ed = new Date(selectedDateStr + 'T13:00'); }
-    if (e && e.start) {
-        st = new Date(e.start.dateTime || e.start.date);
-        ed = new Date(e.end.dateTime || e.end.date);
-        if(isAllDay) ed.setDate(ed.getDate() - 1); 
-    }
-    
-    startInput.type = isAllDay ? 'date' : 'datetime-local';
-    endInput.type = isAllDay ? 'date' : 'datetime-local';
-    if (isAllDay) {
-        startInput.value = st.toISOString().split('T')[0];
-        endInput.value = ed.toISOString().split('T')[0];
-    } else {
-        const tzOffset = st.getTimezoneOffset() * 60000;
-        startInput.value = new Date(st.getTime() - tzOffset).toISOString().slice(0, 16);
-        endInput.value = new Date(ed.getTime() - tzOffset).toISOString().slice(0, 16);
-    }
-
-    document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定';
-    document.getElementById('btn-delete').style.display = e ? 'block' : 'none';
-    document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none';
-    const convertBtn = document.getElementById('btn-convert-task');
-    if(convertBtn) convertBtn.style.display = e ? 'block' : 'none';
-
-    renderIconPalette('event-icon-palette', 'edit-title');
-}
-
-function closeEditor() {
-    document.getElementById('editor-modal').classList.remove('active');
-    if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) {
-        document.getElementById('overlay').classList.remove('active');
-    }
-}
-
-function toggleTimeInputs() {
-    const isAllDay = document.getElementById('edit-allday').checked;
-    const startInput = document.getElementById('edit-start');
-    const endInput = document.getElementById('edit-end');
-    let startVal = startInput.value; let endVal = endInput.value;
-    startInput.type = isAllDay ? 'date' : 'datetime-local';
-    endInput.type = isAllDay ? 'date' : 'datetime-local';
-    if (startVal) startInput.value = isAllDay ? startVal.split('T')[0] : (startVal.includes('T') ? startVal : startVal + 'T12:00');
-    if (endVal) endInput.value = isAllDay ? endVal.split('T')[0] : (endVal.includes('T') ? endVal : endVal + 'T13:00');
-}
-
-async function saveEvent() {
-    const id = document.getElementById('edit-id').value;
-    const title = document.getElementById('edit-title').value.trim();
-    if (!title) { showToast('タイトルを入力してくれ'); return; }
-    const isAllDay = document.getElementById('edit-allday').checked;
-    let startVal = document.getElementById('edit-start').value;
-    let endVal = document.getElementById('edit-end').value;
-    if(!startVal) { showToast('開始日時が不正だ'); return; }
-    if(!endVal) endVal = startVal;
-    
-    const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
-    try {
-        if (isAllDay) {
-            action.start = startVal;
-            let parts = endVal.split('-');
-            const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            ed.setDate(ed.getDate() + 1);
-            action.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
-        } else {
-            action.start = new Date(startVal).toISOString();
-            action.end = new Date(endVal).toISOString();
-        }
-    } catch (err) { showToast('日時の処理でエラーが起きた。もう一度頼む。'); return; }
-    closeEditor(); closeAllModals(); await dispatchManualAction(action);
-}
-
-async function confirmDeleteEvent() {
-    const id = document.getElementById('edit-id').value;
-    if(!id || !confirm('この予定を完全に消し去るか？')) return;
-    const action = { type: 'event', method: 'delete', id: id };
-    closeEditor(); closeAllModals(); await dispatchManualAction(action);
-}
-
-function duplicateEvent() {
-    document.getElementById('edit-id').value = '';
-    document.getElementById('editor-title').innerText = '新規予定 (複製)';
-    document.getElementById('btn-delete').style.display = 'none';
-    document.getElementById('btn-duplicate').style.display = 'none';
-    const convertBtn = document.getElementById('btn-convert-task');
-    if(convertBtn) convertBtn.style.display = 'none';
-    showToast('複製モードだ。日時を変えて保存を押せ。');
-}
-
-// --- Task Editor ---
-function openTaskEditor(t = null) {
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('task-editor-modal').classList.add('active');
-    document.getElementById('task-edit-id').value = t ? t.id : '';
-    document.getElementById('task-edit-title').value = t ? t.title || '' : '';
-    
-    let cleanNotes = "";
-    if (t && t.notes) {
-        const extracted = extractTaskData(t.notes);
-        cleanNotes = extracted.cleanNotes;
-        selectTaskColor(null, extracted.colorId);
-    } else { selectTaskColor(null, ''); }
-    
-    document.getElementById('task-edit-notes').value = cleanNotes;
-    const dueInput = document.getElementById('task-edit-due');
-    if (t && t.due) { dueInput.value = new Date(t.due).toISOString().split('T')[0]; } 
-    else { dueInput.value = selectedDateStr || new Date().toISOString().split('T')[0]; }
-    
-    document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク';
-    document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';
-    const convertBtn = document.getElementById('btn-convert-event');
-    if(convertBtn) convertBtn.style.display = t ? 'block' : 'none';
-
-    renderIconPalette('task-icon-palette', 'task-edit-title');
-}
-
-function closeTaskEditor() {
-    document.getElementById('task-editor-modal').classList.remove('active');
-    if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) {
-        document.getElementById('overlay').classList.remove('active');
-    }
-}
-
-async function toggleTaskCompletion(taskId, newStatus) {
-    let targetTask = null;
-    for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
-    if (!targetTask) return;
-    const patchBody = { status: newStatus };
-    if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } else { patchBody.completed = null; }
-    showGlobalLoader('タスク状態を更新中...');
-    try {
-        if (navigator.onLine && typeof gapi !== 'undefined') { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); showToast(newStatus === 'completed' ? '✅ タスクを完了にした' : '🔄 タスクを未完了に戻した'); } 
-        else { showToast('圏外ではタスクの完了操作はできない。電波を探せ。'); }
-        targetTask.status = newStatus;
-        const td = targetTask.due ? new Date(targetTask.due) : new Date();
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-        if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
-        else if (currentView === 'agenda') { renderAgendaView(); }
-    } catch(e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
-}
-
-async function saveTask() {
-    const id = document.getElementById('task-edit-id').value;
-    const title = document.getElementById('task-edit-title').value.trim();
-    if (!title) { showToast('タスク名を入力してくれ'); return; }
-    let rawNotes = document.getElementById('task-edit-notes').value.trim();
-    if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
-    const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes };
-    const dueVal = document.getElementById('task-edit-due').value;
-    if (dueVal) { action.due = dueVal + 'T00:00:00.000Z'; }
-    closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
-}
-
-async function confirmDeleteTask() {
-    const id = document.getElementById('task-edit-id').value;
-    if(!id || !confirm('このタスクを完全に消し去るか？')) return;
-    const action = { type: 'task', method: 'delete', id: id };
-    closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
-}
-
-// ★The Alchemical Converter
-async function executeConversion(fromType) {
-    if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
-    let deleteAction = null; let insertAction = null; let redrawDate = new Date();
-    if (fromType === 'event') {
-        const id = document.getElementById('edit-id').value;
-        const title = document.getElementById('edit-title').value.trim() || '無名タスク';
-        const startVal = document.getElementById('edit-start').value;
-        const notes = document.getElementById('edit-desc').value;
-        const colorId = selectedColorId;
-        if (id) deleteAction = { type: 'event', method: 'delete', id: id };
-        let rawNotes = notes;
-        if (colorId) rawNotes += (rawNotes ? '\n' : '') + `[c:${colorId}]`;
-        let dueIso = '';
-        if (startVal) {
-            let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal;
-            let parts = dStr.split('-');
-            redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            dueIso = dStr + 'T00:00:00.000Z';
-        }
-        insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso };
-    } else {
-        const id = document.getElementById('task-edit-id').value;
-        const title = document.getElementById('task-edit-title').value.trim() || '無名予定';
-        const dueVal = document.getElementById('task-edit-due').value;
-        const notesVal = document.getElementById('task-edit-notes').value;
-        const colorId = selectedTaskColorId;
-        if (id) deleteAction = { type: 'task', method: 'delete', id: id };
-        insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, colorId: colorId };
-        if (dueVal) {
-            let parts = dueVal.split('-');
-            redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            insertAction.start = dueVal;
-            const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1);
-            insertAction.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
-        } else {
-            insertAction.start = new Date().toISOString().split('T')[0];
-            const tmrw = new Date(); tmrw.setDate(tmrw.getDate()+1);
-            insertAction.end = tmrw.toISOString().split('T')[0];
-        }
-    }
-
-    showGlobalLoader('変換中...');
-    try {
-        if (navigator.onLine) {
-            if (deleteAction) await executeApiAction(deleteAction);
-            await executeApiAction(insertAction);
-            showToast('✅ 変換を完了した');
-        } else {
-            if (deleteAction) await saveToSyncQueue(deleteAction);
-            await saveToSyncQueue(insertAction);
-            showToast('📦 圏外のためポストに保管した。電波回復時に変換する');
-        }
-        if (typeof dataCache !== 'undefined' && deleteAction) {
-            for (let key in dataCache) {
-                if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); }
-                if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); }
-            }
-        }
-        closeEditor(); closeTaskEditor(); closeAllModals();
-        await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', navigator.onLine);
-    } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
-}
-
-async function dispatchManualAction(action) {
-    showGlobalLoader('処理中...');
-    let msgAction = '保存';
-    if(action.method === 'insert') msgAction = '追加';
-    if(action.method === 'update') msgAction = '更新';
-    if(action.method === 'delete') msgAction = '削除';
-    const msgType = action.type === 'event' ? '予定' : 'タスク';
-    try {
-        if (navigator.onLine) {
-            if(typeof executeApiAction === 'function') { await executeApiAction(action); showToast(`✅ ${msgType}を${msgAction}した`); } 
-            else { throw new Error('API通信関数が見つからない。'); }
-        } else {
-            await saveToSyncQueue(action); showToast(`📦 圏外のためポストに保管した。電波回復時に${msgAction}する`);
-        }
-        if(typeof dataCache !== 'undefined') {
-            for(let key in dataCache) { 
-                if(action.method === 'delete') {
-                    if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
-                    if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
-                }
-            }
-        }
-        const tdStr = action.start || action.due;
-        let td = new Date();
-        if (tdStr) {
-            if (tdStr.includes('T')) { td = new Date(tdStr); } 
-            else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); }
-        }
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-    } catch (e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
-}
-
-// --- The Visionary Interface: PDF to AI Chat Analysis ---
-async function processPDFFile(file) {
-    showGlobalLoader('PDFを読み込み中...');
-    try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/lib/pdfjs/pdf.worker.min.js';
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
-        
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
-
-        chatFileBase64 = base64String;
-        chatFileMime = 'image/jpeg';
-        document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)';
-        document.getElementById('chat-attach-box').style.display = 'flex';
-        
-        openJeroChat();
-        document.getElementById('chat-input').value = "このPDF画像を解析し、含まれる予定をすべて抽出してくれ。";
-        unlockAudioAndSend();
-
-    } catch (error) {
-        console.error('PDF処理エラー:', error);
-        showToast('❌ PDFの読み込みに失敗した。');
-    } finally {
-        hideGlobalLoader(); 
-    }
-}
-
-// --- Online/Offline Event Listeners ---
-window.addEventListener('online', async () => { document.getElementById('offline-badge').classList.remove('active'); showToast('📶 電波が回復した。'); if(typeof processSyncQueue === 'function') processSyncQueue(); });
-window.addEventListener('offline', () => { document.getElementById('offline-badge').classList.add('active'); showToast('⚡️ 圏外になった。変更はポスト（キュー）に保存する。'); });
-
-// --- Boot & GAPI Init ---
-document.addEventListener('DOMContentLoaded', async () => { 
-    try { 
-        await initIDB(); 
-        loadSettings(); 
-        loadDict(); 
-        initColorPicker(); 
-        initTaskColorPicker(); 
-        if(typeof initSpeech === 'function') initSpeech();
-        if(typeof initNotification === 'function') initNotification();
-        
-        const eventActionBar = document.querySelector('#editor-modal .action-bar');
-        if (eventActionBar && !document.getElementById('btn-convert-task')) {
-            const btn = document.createElement('button'); btn.id = 'btn-convert-task'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 タスクへ'; btn.onclick = () => executeConversion('event');
-            eventActionBar.insertBefore(btn, document.getElementById('btn-duplicate'));
-        }
-        const taskActionBar = document.querySelector('#task-editor-modal .action-bar');
-        if (taskActionBar && !document.getElementById('btn-convert-event')) {
-            const btn = document.createElement('button'); btn.id = 'btn-convert-event'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 予定へ'; btn.onclick = () => executeConversion('task');
-            taskActionBar.insertBefore(btn, document.getElementById('task-btn-delete'));
-        }
-    } catch (err) { showToast("初期化エラー: " + err.message); }
-});
-
-function gapiLoaded() { gapi.load('client', initializeGapiClient); }
-async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
-function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
-function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time'); if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) { gapi.client.setToken({access_token: savedToken}); document.getElementById('auth-btn').style.display = 'none'; initCalendar(); } else { notifyAuthError(); } }
-async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(
