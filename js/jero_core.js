@@ -207,7 +207,8 @@ async function sendToJero() {
                 if (action.method === "update") { btnText = "更新"; btnClass = "btn-yellow"; actionLabel = "変更"; }
                 if (action.method === "delete") { btnText = "削除"; btnClass = "btn-red"; actionLabel = "削除"; }
 
-                html += `<div id="draft-card-${draftIdx}" style="background:var(--card-bg); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.05);"><div style="font-size:13px; line-height:1.3; flex:1; margin-right:10px;"><span style="font-size:10px; background:var(--border); padding:2px 4px; border-radius:4px; margin-bottom:4px; display:inline-block; font-weight:bold;">${actionLabel}</span><br><strong>${action.title || "名称不明"}</strong><br><span style="color:#666; font-size:11px;">${timeStr}</span></div><button class="${btnClass}" style="padding:6px 12px; font-size:12px; border-radius:6px; min-width:60px; font-weight:bold; border:none; color:white;" onclick="commitDraft(${draftIdx})">${btnText}</button></div>`;
+                // 【変更後】まるごと差し替え
+                html += `<div id="draft-card-${draftIdx}" style="background:var(--card-bg); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.05);"><div style="font-size:13px; line-height:1.3; flex:1; margin-right:10px;"><span style="font-size:10px; background:var(--border); padding:2px 4px; border-radius:4px; margin-bottom:4px; display:inline-block; font-weight:bold;">${actionLabel}</span><br><strong>${action.title || "名称不明"}</strong><br><span style="color:#666; font-size:11px;">${timeStr}</span></div><div style="display:flex; gap:6px;"><button class="btn-gray" style="padding:6px 10px; font-size:12px; border-radius:6px; font-weight:bold; border:none; color:white; cursor:pointer;" onclick="editDraft(${draftIdx})">編集</button><button class="${btnClass}" style="padding:6px 10px; font-size:12px; border-radius:6px; font-weight:bold; border:none; color:white; cursor:pointer;" onclick="commitDraft(${draftIdx})">${btnText}</button></div></div>`;
             }
             html += `</div>`; thinkingEl.innerHTML = html;
         }
@@ -341,3 +342,51 @@ async function processSyncQueue() {
     }
 }
 
+// --- The Manual Override Bridge: AI Draft to Editor ---
+function editDraft(idx) {
+    const action = pendingDrafts[idx];
+    
+    // 編集に入るため、チャット画面は一旦閉じる
+    closeJeroChat();
+
+    if (action.type === 'event') {
+        // AIのアクションデータを、openEditorが読めるGoogle Calendar API形式に変換
+        const draftEvent = {
+            id: action.method === 'update' ? action.id : '',
+            summary: action.title || '',
+            description: action.description || '',
+            location: action.location || ''
+        };
+
+        if (action.start) {
+            if (action.start.includes('T')) {
+                draftEvent.start = { dateTime: action.start };
+                draftEvent.end = { dateTime: action.end || action.start };
+            } else {
+                draftEvent.start = { date: action.start };
+                draftEvent.end = { date: action.end || action.start };
+            }
+        }
+        // 既存のエディタを起動
+        openEditor(draftEvent);
+
+    } else {
+        // タスク用のアダプター
+        const draftTask = {
+            id: action.method === 'update' ? action.id : '',
+            title: action.title || '',
+            notes: action.description || '',
+            due: action.due || ''
+        };
+        // 既存のタスクエディタを起動
+        openTaskEditor(draftTask);
+    }
+
+    // チャット側のボタンを「編集中」の表示に変えておく
+    const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
+    if(btn) { 
+        btn.innerText = "手動済"; 
+        btn.className = "btn-gray"; 
+        btn.disabled = true;
+    }
+}
