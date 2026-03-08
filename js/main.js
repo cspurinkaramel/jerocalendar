@@ -649,8 +649,8 @@ async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: 
 function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
 function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time'); if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) { gapi.client.setToken({access_token: savedToken}); document.getElementById('auth-btn').style.display = 'none'; initCalendar(); } else { notifyAuthError(); } }
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
-// --- The Visionary Interface: PDF to Image Test ---
-// --- The Visionary Interface: PDF to AI Analysis ---
+
+// --- The Visionary Interface: PDF to AI Chat Analysis ---
 async function processPDFFile(e) {
     const file = e.target.files[0];
     if (!file || file.type !== 'application/pdf') {
@@ -675,20 +675,28 @@ async function processPDFFile(e) {
         canvas.height = viewport.height;
 
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // DataURLのプレフィックスを除去
+        const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
+
+        // --- ここからが「転ばぬ先の杖」の賢いルーティングだ ---
+        // 既存のチャット添付ファイル機構に抽出した画像をセット
+        chatFileBase64 = base64String;
+        chatFileMime = 'image/jpeg';
+        document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)';
+        document.getElementById('chat-attach-box').style.display = 'flex';
         
-        // 画像化が完了したら、即座にAIコアの解析エンジンへ引き渡す
-        if (typeof analyzeVisionData === 'function') {
-            analyzeVisionData(base64String);
-        } else {
-            throw new Error('AIエンジン(analyzeVisionData)が見つからない。');
-        }
+        // チャット画面を強制起動
+        openJeroChat();
+        
+        // プロンプトを自動入力し、私（ジェロ）への送信処理を発火
+        document.getElementById('chat-input').value = "このPDF画像を解析し、含まれる予定をすべて抽出してくれ。";
+        unlockAudioAndSend();
 
     } catch (error) {
         console.error('PDF処理エラー:', error);
         showToast('❌ PDFの読み込みに失敗した。');
-        hideGlobalLoader(); // AIへ渡せなかった場合のみここでローダーを消す
     } finally {
+        hideGlobalLoader(); 
+        // 同じファイルを再度選べるようにリセット
         e.target.value = ''; 
     }
 }
