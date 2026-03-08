@@ -1,4 +1,4 @@
-// JeroCalendar v8.5 Main Logic - Immortal Data & Ultra Morimori Palette
+// JeroCalendar v8.6 Main Logic - Architecture Repaired
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -26,56 +26,14 @@ function openSettings() { document.getElementById('overlay').classList.add('acti
 function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
 function switchAccount() { localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); location.reload(); }
 
-// ★ The Immortal Data Protocol (設定の書き出しと読み込み)
 function exportSettings() { 
-    const data = {
-        theme: localStorage.getItem('jero_theme'),
-        fs: localStorage.getItem('jero_fs'),
-        voice: localStorage.getItem('jero_voice_enabled'),
-        gemini_key: localStorage.getItem('jero_gemini_key'),
-        gemini_prompt: localStorage.getItem('jero_gemini_prompt'),
-        dict: localStorage.getItem('jero_adv_dict')
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); 
+    const data = { theme: localStorage.getItem('jero_theme'), fs: localStorage.getItem('jero_fs'), voice: localStorage.getItem('jero_voice_enabled'), gemini_key: localStorage.getItem('jero_gemini_key'), gemini_prompt: localStorage.getItem('jero_gemini_prompt'), dict: localStorage.getItem('jero_adv_dict') };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); 
 }
 function importSettings() { 
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-            try {
-                const data = JSON.parse(evt.target.result);
-                if(data.theme) localStorage.setItem('jero_theme', data.theme);
-                if(data.fs) localStorage.setItem('jero_fs', data.fs);
-                if(data.voice) localStorage.setItem('jero_voice_enabled', data.voice);
-                if(data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key);
-                if(data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt);
-                if(data.dict) {
-                    localStorage.setItem('jero_adv_dict', data.dict);
-                    advancedDict = JSON.parse(data.dict);
-                }
-                showToast('✅ 過去の記憶（データ）を完全に復元した。再起動するぞ。');
-                setTimeout(() => location.reload(), 1500);
-            } catch (err) {
-                showToast('❌ ファイルが壊れているか、形式が違うぞ。');
-            }
-        };
-        reader.readAsText(file);
-    };
-    input.click();
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/json';
+    input.onchange = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (evt) => { try { const data = JSON.parse(evt.target.result); if(data.theme) localStorage.setItem('jero_theme', data.theme); if(data.fs) localStorage.setItem('jero_fs', data.fs); if(data.voice) localStorage.setItem('jero_voice_enabled', data.voice); if(data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key); if(data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt); if(data.dict) { localStorage.setItem('jero_adv_dict', data.dict); advancedDict = JSON.parse(data.dict); } showToast('✅ 過去の記憶（データ）を完全に復元した。再起動するぞ。'); setTimeout(() => location.reload(), 1500); } catch (err) { showToast('❌ ファイルが壊れているか、形式が違うぞ。'); } }; reader.readAsText(file); }; input.click();
 }
-
 function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？（事前に「データ書出」をしておくことを強く勧めるぞ）')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); location.reload(); } }
 
 function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
@@ -85,27 +43,10 @@ function showToast(msg) { const toast = document.getElementById('toast'); toast.
 
 // --- IndexedDB & The Sync Queue Foundation ---
 let idb;
-function initIDB() { 
-    return new Promise((resolve) => { 
-        const timeout = setTimeout(() => { resolve(); }, 2000); 
-        try { 
-            const req = indexedDB.open('JeroDB_v8', 3); 
-            req.onupgradeneeded = (e) => { 
-                const db = e.target.result; 
-                if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); 
-                if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); 
-                if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); 
-            }; 
-            req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; 
-            req.onerror = (e) => { clearTimeout(timeout); resolve(); }; 
-        } catch(e) { clearTimeout(timeout); resolve(); } 
-    }); 
-}
-
+function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v8', 3); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch(e) { clearTimeout(timeout); resolve(); } }); }
 function saveToSyncQueue(actionPayload) { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').put({ id: generateUUID(), payload: actionPayload, timestamp: Date.now() }); tx.oncomplete = () => resolve(); } catch(e) { resolve(); } }); }
 function getSyncQueue() { return new Promise((resolve) => { if(!idb) return resolve([]); try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch(e) { resolve([]); } }); }
 function clearSyncQueueItem(id) { if(!idb) return; try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); } catch(e) {} }
-
 function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch(e) {} }
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
@@ -319,7 +260,6 @@ function renderIconPalette(targetId, inputId) {
     });
 }
 
-// --- The Manual Override (手動エディタ＆同期ブリッジ) ---
 function openEditor(e = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
@@ -376,7 +316,6 @@ async function confirmDeleteEvent() { const id = document.getElementById('edit-i
 
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if(convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。日時を変えて保存を押せ。'); }
 
-// --- Task Editor ---
 function openTaskEditor(t = null) {
     document.getElementById('overlay').classList.add('active'); document.getElementById('task-editor-modal').classList.add('active');
     document.getElementById('task-edit-id').value = t ? t.id : ''; document.getElementById('task-edit-title').value = t ? t.title || '' : '';
@@ -416,7 +355,6 @@ async function saveTask() {
 
 async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if(!id || !confirm('このタスクを完全に消し去るか？')) return; const action = { type: 'task', method: 'delete', id: id }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
-// ★The Alchemical Converter
 async function executeConversion(fromType) {
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
     let deleteAction = null; let insertAction = null; let redrawDate = new Date();
@@ -453,10 +391,13 @@ async function dispatchManualAction(action) {
     } catch (e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
+// ★修復：PDF.jsのWorkerをインターネット上の公式倉庫(CDN)から直接呼び出す
 async function processPDFFile(file) {
     showGlobalLoader('PDFを読み込み中...');
     try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/lib/pdfjs/pdf.worker.min.js';
+        // CDN経由でWorkerを読み込むことで、GitHubの配置ミスを無効化する
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        
         const arrayBuffer = await file.arrayBuffer(); const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer }); const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1); const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height;
