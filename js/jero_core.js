@@ -20,7 +20,7 @@ function unlockAudioContext() {
     if (!isVoiceEnabled || !window.speechSynthesis) return; 
     const u = new SpeechSynthesisUtterance(''); u.volume = 0; window.speechSynthesis.speak(u); 
 }
-function unlockAudioAndSend() { unlockAudioContext(); sendToJero(); }
+function unlockAudioAndSend() { unlockAudioContext(); (); }
 function unlockAudioAndStartSpeech() { unlockAudioContext(); toggleSpeechRecognition(); }
 function speakText(text) { 
     if (!isVoiceEnabled || !window.speechSynthesis || !text) return; 
@@ -184,6 +184,7 @@ async function sendToJero() {
     const tzOffset = (new Date()).getTimezoneOffset() * 60000; const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, -1);
     const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
 
+// --- 【変更後】 ---
     let currentDataSummary = [];
     if(typeof dataCache !== 'undefined') {
         for (const monthKey in dataCache) {
@@ -192,7 +193,18 @@ async function sendToJero() {
             if(data.tasks) data.tasks.forEach(t => { if(t.status !== 'completed') currentDataSummary.push({ id: t.id, type: 'task', title: t.title, due: t.due }); });
         }
     }
-    const contextDataStr = "\n\n【現在の予定データ】\n" + JSON.stringify(currentDataSummary);
+    
+    // ★ここから追加：お前の辞書を私の脳内メモリに変換する処理
+    let dictContext = "";
+    if (typeof advancedDict !== 'undefined' && advancedDict.length > 0) {
+        // AIが理解しやすいように、辞書を軽量なルールリストに変換する
+        const aiDictRules = advancedDict.map(d => {
+            return `キーワード: [${d.keys.join(', ')}] -> タイトルの先頭に必ず「${d.icon} ${d.keys[0]} 」を付与しろ。`;
+        });
+        dictContext = "\n\n【お前の絶対遵守ルール：視覚装飾辞書】\n抽出した予定/タスク名が以下のキーワードに関連する場合、必ず指示された文字をタイトルの先頭に付与してから出力しろ。\n" + aiDictRules.join('\n');
+    }
+
+    const contextDataStr = "\n\n【現在の予定データ】\n" + JSON.stringify(currentDataSummary) + dictContext;
 
     const payloadParts = [];
     if (text) payloadParts.push({ text: text + contextDataStr });
