@@ -649,3 +649,65 @@ async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: 
 function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
 function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time'); if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) { gapi.client.setToken({access_token: savedToken}); document.getElementById('auth-btn').style.display = 'none'; initCalendar(); } else { notifyAuthError(); } }
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
+// --- The Visionary Interface: PDF to Image Test ---
+async function testPDFToImage(e) {
+    const file = e.target.files[0];
+    if (!file || file.type !== 'application/pdf') {
+        showToast('PDFファイルを選択してくれ。');
+        return;
+    }
+
+    // 既存のローダーを流用して視覚的フィードバックを提供
+    showGlobalLoader('PDFを画像化中...');
+    
+    try {
+        // PDF.jsのWorkerパスを指定（相対パスでローカルを参照）
+        pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/lib/pdfjs/pdf.worker.min.js';
+
+        // iOSのメモリ制限を回避するためArrayBufferで読み込む
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        // 結合テストとして、まずは1ページ目のみを取得
+        const page = await pdf.getPage(1);
+        
+        // 【重要】解像度の設定（1.5倍）。文字が潰れる場合は2.0等へ引き上げる
+        const scale = 1.5; 
+        const viewport = page.getViewport({ scale: scale });
+
+        // DOMには追加せず、メモリ上だけでCanvasを展開
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        // Canvasへ描画
+        await page.render({
+            canvasContext: ctx,
+            viewport: viewport
+        }).promise;
+
+        // 軽量なJPEG形式（品質0.8）でBase64化
+        const base64String = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // 既存の画像ビューア機構を再利用して結果を大写しにする
+        const viewerSrc = document.getElementById('img-viewer-src');
+        const viewer = document.getElementById('img-viewer');
+        
+        if (viewerSrc && viewer) {
+            viewerSrc.src = base64String;
+            viewer.classList.add('active');
+        }
+        
+        showToast('✅ 画像化成功。ピンチアウトで文字が読めるか確認してくれ。');
+
+    } catch (error) {
+        console.error('PDF解析エラー:', error);
+        showToast('❌ PDFの処理に失敗した。');
+    } finally {
+        hideGlobalLoader();
+        // 同じファイルを再度選べるようにinputをリセット
+        e.target.value = ''; 
+    }
+}
