@@ -1,13 +1,10 @@
-// Jero Core Engine v8.6 - Syntax & Error Fixes
+// Jero Core Engine v8.6.1 - Time Paradox Fix
 let isVoiceEnabled = false; let jeroVoice = null; let recognition = null; let isRecording = false;
 
 function initSpeech() { let voices = window.speechSynthesis.getVoices(); jeroVoice = voices.find(v => v.lang === 'ja-JP'); if(!voices.length) { window.speechSynthesis.onvoiceschanged = () => { jeroVoice = window.speechSynthesis.getVoices().find(v => v.lang === 'ja-JP'); }; } }
 function toggleVoiceSetting() { isVoiceEnabled = document.getElementById('st-voice').checked; localStorage.setItem('jero_voice_enabled', isVoiceEnabled); if(isVoiceEnabled) unlockAudioContext(); }
 function unlockAudioContext() { if (!isVoiceEnabled || !window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(''); u.volume = 0; window.speechSynthesis.speak(u); }
-
-// ★修復：構文エラーを取り除いた
 function unlockAudioAndSend() { unlockAudioContext(); sendToJero(); }
-
 function unlockAudioAndStartSpeech() { unlockAudioContext(); toggleSpeechRecognition(); }
 function speakText(text) { if (!isVoiceEnabled || !window.speechSynthesis || !text) return; let cleanText = text.replace(/https?:\/\/[^\s]+/g, 'リンク').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').replace(/[#*`_\[\]()【】]/g, ''); if(!cleanText.trim()) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'ja-JP'; u.rate = 1.15; u.pitch = 1.7; if (jeroVoice) u.voice = jeroVoice; window.speechSynthesis.speak(u); }
 
@@ -265,7 +262,11 @@ async function commitDraft(idx) {
         else { if(typeof saveToSyncQueue === 'function') { await saveToSyncQueue(action); btn.innerText = "📦 保留(キュー)"; btn.className = "btn-yellow"; showToast("圏外のためポストに保管した。電波回復時に自動送信するぞ。"); } else { throw new Error("Sync Queueが見つからない"); } }
         if(typeof dataCache !== 'undefined') { for(let key in dataCache) { if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); } } }
         if(typeof fetchAndRenderMonth !== 'undefined' && navigator.onLine) { const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date()); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true); }
-    } catch(e) { btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; showToast("APIエラー: " + (e.result && e.result.error ? e.result.error.message : e.message)); }
+    } catch(e) { 
+        btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; 
+        const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "通信エラー");
+        showToast("APIエラー: " + errMsg); 
+    }
 }
 
 async function processSyncQueue() {
@@ -277,12 +278,31 @@ async function processSyncQueue() {
     if (successCount > 0) { showToast(`✅ ${successCount}件の保留データを送信完了した。`); if(typeof triggerFullReRender !== 'undefined') triggerFullReRender(); }
 }
 
+// ★修正：タイムパラドックス（終了日の過去化）を防ぐ強力なアダプター
 function editDraft(idx) {
     const action = pendingDrafts[idx];
     closeJeroChat();
     if (action.type === 'event') {
         const draftEvent = { id: action.method === 'update' ? action.id : '', summary: action.title || '', description: action.description || '', location: action.location || '' };
-        if (action.start) { if (action.start.includes('T')) { draftEvent.start = { dateTime: action.start }; draftEvent.end = { dateTime: action.end || action.start }; } else { draftEvent.start = { date: action.start }; draftEvent.end = { date: action.end || action.start }; } }
+        
+        if (action.start) { 
+            if (action.start.includes('T')) { 
+                draftEvent.start = { dateTime: action.start }; 
+                draftEvent.end = { dateTime: action.end || action.start }; 
+            } else { 
+                // 終日予定の場合の処理
+                draftEvent.start = { date: action.start }; 
+                let edStr = action.end || action.start;
+                // AIが開始と終了を同じ日に設定していた場合、強制的に翌日へ補正する
+                if (edStr === action.start) {
+                    let parts = action.start.split('-');
+                    let ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    ed.setDate(ed.getDate() + 1); // 1日進める
+                    edStr = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
+                }
+                draftEvent.end = { date: edStr }; 
+            } 
+        }
         openEditor(draftEvent);
     } else {
         const draftTask = { id: action.method === 'update' ? action.id : '', title: action.title || '', notes: action.description || '', due: action.due || '' };
