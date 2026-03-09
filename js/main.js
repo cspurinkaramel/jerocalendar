@@ -1,4 +1,4 @@
-// JeroCalendar v8.6 Main Logic - Architecture Repaired
+// JeroCalendar v8.6.2 Main Logic - Final Polish
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -8,40 +8,22 @@ const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c7
 let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
-// --- UI Base Functions ---
 function initWeekdays() { const days = ['日','月','火','水','木','金','土']; const c = document.getElementById('weekdays'); if(c) c.innerHTML = days.map(d => `<div class="wd">${d}</div>`).join(''); }
-function loadSettings() { 
-    const th = localStorage.getItem('jero_theme')||'light'; const fs = localStorage.getItem('jero_fs')||'10'; 
-    document.getElementById('st-theme').value=th; document.getElementById('st-fs').value=fs; 
-    document.body.setAttribute('data-theme',th); document.documentElement.style.setProperty('--fs', fs+'px'); document.getElementById('fs-val').innerText=fs; 
-    const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true';
-    const stVoice = document.getElementById('st-voice');
-    if(stVoice) stVoice.checked = voiceEnabled; 
-    if(typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled;
-}
+function loadSettings() { const th = localStorage.getItem('jero_theme')||'light'; const fs = localStorage.getItem('jero_fs')||'10'; document.getElementById('st-theme').value=th; document.getElementById('st-fs').value=fs; document.body.setAttribute('data-theme',th); document.documentElement.style.setProperty('--fs', fs+'px'); document.getElementById('fs-val').innerText=fs; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if(stVoice) stVoice.checked = voiceEnabled; if(typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; }
 function saveAndApplySettings() { const th = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; localStorage.setItem('jero_theme',th); localStorage.setItem('jero_fs',fs); document.body.setAttribute('data-theme',th); document.documentElement.style.setProperty('--fs', fs+'px'); document.getElementById('fs-val').innerText=fs; }
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if(pb) { pb.style.width = p+'%'; if(p>=100) setTimeout(()=>pb.style.width='0%', 500); } }
 function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }
 function openSettings() { document.getElementById('overlay').classList.add('active'); document.getElementById('settings-modal').classList.add('active'); }
 function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
 function switchAccount() { localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); location.reload(); }
-
-function exportSettings() { 
-    const data = { theme: localStorage.getItem('jero_theme'), fs: localStorage.getItem('jero_fs'), voice: localStorage.getItem('jero_voice_enabled'), gemini_key: localStorage.getItem('jero_gemini_key'), gemini_prompt: localStorage.getItem('jero_gemini_prompt'), dict: localStorage.getItem('jero_adv_dict') };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); 
-}
-function importSettings() { 
-    const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/json';
-    input.onchange = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (evt) => { try { const data = JSON.parse(evt.target.result); if(data.theme) localStorage.setItem('jero_theme', data.theme); if(data.fs) localStorage.setItem('jero_fs', data.fs); if(data.voice) localStorage.setItem('jero_voice_enabled', data.voice); if(data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key); if(data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt); if(data.dict) { localStorage.setItem('jero_adv_dict', data.dict); advancedDict = JSON.parse(data.dict); } showToast('✅ 過去の記憶（データ）を完全に復元した。再起動するぞ。'); setTimeout(() => location.reload(), 1500); } catch (err) { showToast('❌ ファイルが壊れているか、形式が違うぞ。'); } }; reader.readAsText(file); }; input.click();
-}
+function exportSettings() { const data = { theme: localStorage.getItem('jero_theme'), fs: localStorage.getItem('jero_fs'), voice: localStorage.getItem('jero_voice_enabled'), gemini_key: localStorage.getItem('jero_gemini_key'), gemini_prompt: localStorage.getItem('jero_gemini_prompt'), dict: localStorage.getItem('jero_adv_dict') }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); }
+function importSettings() { const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/json'; input.onchange = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (evt) => { try { const data = JSON.parse(evt.target.result); if(data.theme) localStorage.setItem('jero_theme', data.theme); if(data.fs) localStorage.setItem('jero_fs', data.fs); if(data.voice) localStorage.setItem('jero_voice_enabled', data.voice); if(data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key); if(data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt); if(data.dict) { localStorage.setItem('jero_adv_dict', data.dict); advancedDict = JSON.parse(data.dict); } showToast('✅ 過去の記憶（データ）を完全に復元した。再起動するぞ。'); setTimeout(() => location.reload(), 1500); } catch (err) { showToast('❌ ファイルが壊れているか、形式が違うぞ。'); } }; reader.readAsText(file); }; input.click(); }
 function executeEmergencyReset() { if(confirm('全キャッシュを消去するか？（事前に「データ書出」をしておくことを強く勧めるぞ）')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); location.reload(); } }
-
 function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
 function hideGlobalLoader() { document.getElementById('global-loader').classList.remove('active'); }
 const yieldUI = () => new Promise(r => setTimeout(r, 30));
 function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
-// --- IndexedDB & The Sync Queue Foundation ---
 let idb;
 function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v8', 3); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch(e) { clearTimeout(timeout); resolve(); } }); }
 function saveToSyncQueue(actionPayload) { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').put({ id: generateUUID(), payload: actionPayload, timestamp: Date.now() }); tx.oncomplete = () => resolve(); } catch(e) { resolve(); } }); }
@@ -51,7 +33,6 @@ function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = 
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-// --- ★ The Ultra Morimori Palette (極盛絵文字リスト・約270種) ---
 const EMOJI_LIST = [
     { cat: "顔・感情", icons: ["😀","😂","🥰","😎","🤔","😭","😡","😴","🤯","😇","😈","👻","👽","🤖","💩","💡","😆","😅","😊","😉","😍","😘","😋","😜","🤪","🤫","🤭","🤮","🤧","😷"] },
     { cat: "仕事・学校", icons: ["💻","📱","📞","🔋","📅","📈","📂","✏️","✂️","🗑️","🚩","⚠️","✅","❌","🏫","🎓","💼","📌","📎","📏","📖","📚","📝","✉️","📧","🔍","🔑","🔒","🔓","🛠️"] },
@@ -66,71 +47,12 @@ const EMOJI_LIST = [
 
 function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
 function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
-
-function renderDictUI() { 
-    const container = document.getElementById('dict-list'); if(!container) return; container.innerHTML = ''; 
-    if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } 
-    advancedDict.forEach((item, idx) => { 
-        const primary = item.keys[0] || "(接頭辞なし)";
-        const el = document.createElement('div'); el.className = 'dict-item'; 
-        el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${primary}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; 
-        container.appendChild(el); 
-    }); 
-}
-
-function openDictEditor(idx = -1) { 
-    document.getElementById('dict-editor-modal').classList.add('active'); 
-    if (idx >= 0) { 
-        const item = advancedDict[idx]; 
-        document.getElementById('dict-edit-idx').value = idx; 
-        document.getElementById('dict-edit-prefix').value = item.keys[0] || ''; 
-        document.getElementById('dict-edit-aliases').value = item.keys.slice(1).join(', '); 
-        document.getElementById('dict-edit-icon').innerText = item.icon || '➕ 選択'; 
-        document.getElementById('dict-edit-bg').value = item.bg; 
-        document.getElementById('dict-edit-txt').value = item.txt; 
-        document.getElementById('dict-editor-title').innerText = '辞書編集'; 
-    } else { 
-        document.getElementById('dict-edit-idx').value = -1; 
-        document.getElementById('dict-edit-prefix').value = ''; 
-        document.getElementById('dict-edit-aliases').value = ''; 
-        document.getElementById('dict-edit-icon').innerText = '➕ 選択'; 
-        document.getElementById('dict-edit-bg').value = '#0a84ff'; 
-        document.getElementById('dict-edit-txt').value = '#ffffff'; 
-        document.getElementById('dict-editor-title').innerText = '新規追加'; 
-    } 
-}
+function renderDictUI() { const container = document.getElementById('dict-list'); if(!container) return; container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const primary = item.keys[0] || "(接頭辞なし)"; const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${primary}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
+function openDictEditor(idx = -1) { document.getElementById('dict-editor-modal').classList.add('active'); if (idx >= 0) { const item = advancedDict[idx]; document.getElementById('dict-edit-idx').value = idx; document.getElementById('dict-edit-prefix').value = item.keys[0] || ''; document.getElementById('dict-edit-aliases').value = item.keys.slice(1).join(', '); document.getElementById('dict-edit-icon').innerText = item.icon || '➕ 選択'; document.getElementById('dict-edit-bg').value = item.bg; document.getElementById('dict-edit-txt').value = item.txt; document.getElementById('dict-editor-title').innerText = '辞書編集'; } else { document.getElementById('dict-edit-idx').value = -1; document.getElementById('dict-edit-prefix').value = ''; document.getElementById('dict-edit-aliases').value = ''; document.getElementById('dict-edit-icon').innerText = '➕ 選択'; document.getElementById('dict-edit-bg').value = '#0a84ff'; document.getElementById('dict-edit-txt').value = '#ffffff'; document.getElementById('dict-editor-title').innerText = '新規追加'; } }
 function closeDictEditor() { document.getElementById('dict-editor-modal').classList.remove('active'); }
-
-function saveDictItem() { 
-    const idx = parseInt(document.getElementById('dict-edit-idx').value); 
-    const prefix = document.getElementById('dict-edit-prefix').value.trim(); 
-    const aliasesRaw = document.getElementById('dict-edit-aliases').value; 
-    const iconRaw = document.getElementById('dict-edit-icon').innerText; 
-    const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
-    const bg = document.getElementById('dict-edit-bg').value; 
-    const txt = document.getElementById('dict-edit-txt').value; 
-    if(!prefix || !icon) { showToast('接頭辞とアイコンは必須だ。'); return; } 
-    let keys = [prefix];
-    if (aliasesRaw) { const aliases = aliasesRaw.split(',').map(k => k.trim()).filter(k => k); keys = keys.concat(aliases); }
-    const newItem = { keys, icon, bg, txt }; 
-    if(idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); 
-    saveDict(); closeDictEditor(); 
-}
+function saveDictItem() { const idx = parseInt(document.getElementById('dict-edit-idx').value); const prefix = document.getElementById('dict-edit-prefix').value.trim(); const aliasesRaw = document.getElementById('dict-edit-aliases').value; const iconRaw = document.getElementById('dict-edit-icon').innerText; const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim(); const bg = document.getElementById('dict-edit-bg').value; const txt = document.getElementById('dict-edit-txt').value; if(!prefix || !icon) { showToast('接頭辞とアイコンは必須だ。'); return; } let keys = [prefix]; if (aliasesRaw) { const aliases = aliasesRaw.split(',').map(k => k.trim()).filter(k => k); keys = keys.concat(aliases); } const newItem = { keys, icon, bg, txt }; if(idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); saveDict(); closeDictEditor(); }
 function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); }
-
-function openEmojiPicker() {
-    document.getElementById('emoji-picker-modal').classList.add('active');
-    const container = document.getElementById('emoji-list-container');
-    if (container.innerHTML !== '') return; 
-    let html = '';
-    EMOJI_LIST.forEach(group => {
-        html += `<div style="font-size:12px; font-weight:bold; color:#888; margin-top:10px; margin-bottom:5px;">${group.cat}</div><div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-        group.icons.forEach(icon => { html += `<div style="font-size:26px; padding:10px; background:var(--head-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer;" onclick="selectEmoji('${icon}')">${icon}</div>`; });
-        html += `</div>`;
-    });
-    html += `<div style="margin-top:20px; text-align:center;"><button class="btn-gray" style="padding:10px 20px; border-radius:20px; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="document.getElementById('dict-edit-icon').innerText = '➕ 選択'; closeEmojiPicker(); showToast('一覧にない場合は、OSの絵文字キーボードを使って手入力してくれ。');">その他の絵文字を使う</button></div>`;
-    container.innerHTML = html;
-}
+function openEmojiPicker() { document.getElementById('emoji-picker-modal').classList.add('active'); const container = document.getElementById('emoji-list-container'); if (container.innerHTML !== '') return; let html = ''; EMOJI_LIST.forEach(group => { html += `<div style="font-size:12px; font-weight:bold; color:#888; margin-top:10px; margin-bottom:5px;">${group.cat}</div><div style="display:flex; flex-wrap:wrap; gap:8px;">`; group.icons.forEach(icon => { html += `<div style="font-size:26px; padding:10px; background:var(--head-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer;" onclick="selectEmoji('${icon}')">${icon}</div>`; }); html += `</div>`; }); html += `<div style="margin-top:20px; text-align:center;"><button class="btn-gray" style="padding:10px 20px; border-radius:20px; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="document.getElementById('dict-edit-icon').innerText = '➕ 選択'; closeEmojiPicker(); showToast('一覧にない場合は、OSの絵文字キーボードを使って手入力してくれ。');">その他の絵文字を使う</button></div>`; container.innerHTML = html; }
 function closeEmojiPicker() { document.getElementById('emoji-picker-modal').classList.remove('active'); }
 function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText = icon; closeEmojiPicker(); }
 
@@ -139,11 +61,9 @@ function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "
 
 function initColorPicker() { const picker = document.getElementById('color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
 function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'var(--accent)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedColorId = id; }
-
 function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
 function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'rgb(52, 199, 89)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedTaskColorId = id; }
 
-// --- Calendar Rendering & Logic ---
 function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
 document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
 function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
@@ -270,16 +190,27 @@ function openEditor(e = null) {
     selectColor(null, e && e.colorId ? e.colorId : '');
     const isAllDay = e && e.start && e.start.date;
     const alldayToggle = document.getElementById('edit-allday');
-    alldayToggle.checked = isAllDay;
+    alldayToggle.checked = !!isAllDay;
     const startInput = document.getElementById('edit-start');
     const endInput = document.getElementById('edit-end');
     let st = new Date(); let ed = new Date(st.getTime() + 60*60*1000);
     if(selectedDateStr && !e) { st = new Date(selectedDateStr + 'T12:00'); ed = new Date(selectedDateStr + 'T13:00'); }
-    if (e && e.start) { st = new Date(e.start.dateTime || e.start.date); ed = new Date(e.end.dateTime || e.end.date); if(isAllDay) ed.setDate(ed.getDate() - 1); }
+    if (e && e.start) { 
+        st = new Date(e.start.dateTime || e.start.date); 
+        ed = new Date(e.end.dateTime || e.end.date); 
+        if(isAllDay) ed.setDate(ed.getDate() - 1); 
+    }
     startInput.type = isAllDay ? 'date' : 'datetime-local';
     endInput.type = isAllDay ? 'date' : 'datetime-local';
-    if (isAllDay) { startInput.value = st.toISOString().split('T')[0]; endInput.value = ed.toISOString().split('T')[0]; } 
-    else { const tzOffset = st.getTimezoneOffset() * 60000; startInput.value = new Date(st.getTime() - tzOffset).toISOString().slice(0, 16); endInput.value = new Date(ed.getTime() - tzOffset).toISOString().slice(0, 16); }
+    if (isAllDay) { 
+        startInput.value = st.toISOString().split('T')[0]; 
+        endInput.value = ed.toISOString().split('T')[0]; 
+    } 
+    else { 
+        const tzOffset = st.getTimezoneOffset() * 60000; 
+        startInput.value = new Date(st.getTime() - tzOffset).toISOString().slice(0, 16); 
+        endInput.value = new Date(ed.getTime() - tzOffset).toISOString().slice(0, 16); 
+    }
     document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定';
     document.getElementById('btn-delete').style.display = e ? 'block' : 'none';
     document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none';
@@ -306,7 +237,13 @@ async function saveEvent() {
     if(!startVal) { showToast('開始日時が不正だ'); return; } if(!endVal) endVal = startVal;
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     try {
-        if (isAllDay) { action.start = startVal; let parts = endVal.split('-'); const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); ed.setDate(ed.getDate() + 1); action.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`; } 
+        if (isAllDay) { 
+            action.start = startVal; 
+            let parts = endVal.split('-'); 
+            const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); 
+            ed.setDate(ed.getDate() + 1); 
+            action.end = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`; 
+        } 
         else { action.start = new Date(startVal).toISOString(); action.end = new Date(endVal).toISOString(); }
     } catch (err) { showToast('日時の処理でエラーが起きた。もう一度頼む。'); return; }
     closeEditor(); closeAllModals(); await dispatchManualAction(action);
@@ -380,6 +317,7 @@ async function executeConversion(fromType) {
     } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
+// ★修正：エラー解読の強化（undefinedの撲滅）
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...'); let msgAction = '保存'; if(action.method === 'insert') msgAction = '追加'; if(action.method === 'update') msgAction = '更新'; if(action.method === 'delete') msgAction = '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク';
     try {
@@ -388,16 +326,17 @@ async function dispatchManualAction(action) {
         if(typeof dataCache !== 'undefined') { for(let key in dataCache) { if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); } } }
         const tdStr = action.start || action.due; let td = new Date(); if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); } }
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-    } catch (e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
+    } catch (e) { 
+        // undefinedにならないよう、Googleのエラーオブジェクトから安全にメッセージを抽出
+        const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "不正なデータです");
+        showToast('❌ エラー: ' + errMsg); 
+    } finally { hideGlobalLoader(); }
 }
 
-// ★修復：PDF.jsのWorkerをインターネット上の公式倉庫(CDN)から直接呼び出す
 async function processPDFFile(file) {
     showGlobalLoader('PDFを読み込み中...');
     try {
-        // CDN経由でWorkerを読み込むことで、GitHubの配置ミスを無効化する
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        
         const arrayBuffer = await file.arrayBuffer(); const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer }); const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1); const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height;
@@ -405,7 +344,7 @@ async function processPDFFile(file) {
         const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
         chatFileBase64 = base64String; chatFileMime = 'image/jpeg';
         document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)'; document.getElementById('chat-attach-box').style.display = 'flex';
-        openJeroChat(); document.getElementById('chat-input').value = "このPDF画像を解析し、含まれる予定をすべて抽出してくれ。"; unlockAudioAndSend();
+        openJeroChat(); document.getElementById('chat-input').value = "この画像を解析し、含まれる予定をすべて抽出してくれ。"; unlockAudioAndSend();
     } catch (error) { console.error('PDF処理エラー:', error); showToast('❌ PDFの読み込みに失敗した。'); } finally { hideGlobalLoader(); }
 }
 
