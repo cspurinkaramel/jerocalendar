@@ -1,4 +1,4 @@
-// Jero Core Engine v8.6.1 - Time Paradox Fix
+// Jero Core Engine v8.6.2 - Absolute Temporal & Logic Fixes
 let isVoiceEnabled = false; let jeroVoice = null; let recognition = null; let isRecording = false;
 
 function initSpeech() { let voices = window.speechSynthesis.getVoices(); jeroVoice = voices.find(v => v.lang === 'ja-JP'); if(!voices.length) { window.speechSynthesis.onvoiceschanged = () => { jeroVoice = window.speechSynthesis.getVoices().find(v => v.lang === 'ja-JP'); }; } }
@@ -47,13 +47,8 @@ function checkUpcomingEvents() {
         });
     }
 }
-function sendJeroNotification(title, body) {
-    if (Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then(function(registration) { registration.showNotification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>', vibrate: [200, 100, 200], tag: 'jero-alert' });
-        }).catch(err => { new Notification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>' }); });
-    }
-}
 
+// ★ルール10を最初から組み込んだ究極のプロンプト
 const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。明日チュールを貰える可能性を常に期待している。
 ユーザーの入力、過去の文脈、または提供された【現在の予定データ】から推論し、以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
 
@@ -279,7 +274,7 @@ async function processSyncQueue() {
     if (successCount > 0) { showToast(`✅ ${successCount}件の保留データを送信完了した。`); if(typeof triggerFullReRender !== 'undefined') triggerFullReRender(); }
 }
 
-// ★修正：タイムパラドックス（終了日の過去化）を防ぐ強力なアダプター
+// ★タイムパラドックス修正済みの安全なアダプター
 function editDraft(idx) {
     const action = pendingDrafts[idx];
     closeJeroChat();
