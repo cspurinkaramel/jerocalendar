@@ -6,8 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <title>JeroCalendar v8.7</title>
-    <link rel="stylesheet" href="./css/style.css?v=8.7">
+    <title>JeroCalendar v8.8</title>
+    <link rel="stylesheet" href="./css/style.css?v=8.8">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" defer></script>
 </head>
 <body>
@@ -56,12 +56,17 @@
         <div class="modal-header"><h2 style="display:flex; align-items:center; gap:8px;">Jero Core 🐈 <button onclick="clearJeroMemory()" style="background:none; border:none; font-size:14px; cursor:pointer; padding:4px;" title="記憶をリセット">🧹</button></h2><button class="close-btn" onclick="closeJeroChat()">✕</button></div>
         <div class="modal-body" id="chat-history" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; background: var(--bg);"></div>
         <div class="chat-attach-box" id="chat-attach-box" style="display:none;"><span>📎</span><span id="chat-file-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span><button onclick="clearChatFile()" style="background:none; border:none; color:red; font-weight:bold;">✕</button></div>
+        
         <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px; align-items:flex-end;">
-            <button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()" style="margin-bottom:2px;">📎</button>
+            <button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()" style="margin-bottom:2px; flex-shrink:0;">📎</button>
             <input type="file" id="chat-file-input" accept="image/*,application/pdf" style="display:none;" onchange="handleChatFileUpload(event)">
-            <button id="mic-btn" class="chat-file-btn" onclick="unlockAudioAndStartSpeech()" style="margin-bottom:2px;">🎤</button>
-            <textarea id="chat-input" placeholder="予定や検索ワードをどうぞ..." rows="1" style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px; resize:none; min-height:44px; max-height:120px; line-height:1.4;" oninput="this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';"></textarea>
-            <button class="btn btn-blue" onclick="unlockAudioAndSend()" style="border-radius:20px; padding:12px 20px; margin-bottom:2px;">送信</button>
+            <button id="mic-btn" class="chat-file-btn" onclick="unlockAudioAndStartSpeech()" style="margin-bottom:2px; flex-shrink:0;">🎤</button>
+            
+            <textarea id="chat-input" placeholder="予定や検索ワードをどうぞ..." rows="1" style="flex:1; padding:10px 15px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px; resize:none; min-height:44px; max-height:120px; line-height:1.4;" oninput="this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';"></textarea>
+            
+            <button onclick="unlockAudioAndSend()" style="background:var(--accent); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; justify-content:center; align-items:center; margin-bottom:2px; flex-shrink:0; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+            </button>
         </div>
     </div>
 
@@ -94,7 +99,7 @@
             <input type="hidden" id="edit-id">
             <div class="form-group" style="display:flex; align-items:center; gap:8px;">
                 <input type="text" id="edit-title" placeholder="タイトル" style="font-size:20px; font-weight:bold; flex:1;">
-                <button class="icon-btn" onclick="startDictation('edit-title')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border);">🎤</button>
+                <button class="icon-btn" onclick="startDictation('edit-title')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border); flex-shrink:0;">🎤</button>
             </div>
             <div id="event-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
             
@@ -107,7 +112,7 @@
             
             <div class="form-group" style="display:flex; align-items:flex-start; gap:8px;">
                 <textarea id="edit-desc" placeholder="≡ メモを追加" style="flex:1;"></textarea>
-                <button class="icon-btn" onclick="startDictation('edit-desc')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border); margin-top:5px;">🎤</button>
+                <button class="icon-btn" onclick="startDictation('edit-desc')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border); margin-top:5px; flex-shrink:0;">🎤</button>
             </div>
 
             <div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div>
@@ -125,7 +130,7 @@
             <input type="hidden" id="task-edit-id">
             <div class="form-group" style="display:flex; align-items:center; gap:8px;">
                 <input type="text" id="task-edit-title" placeholder="タスク名" style="font-size:20px; font-weight:bold; flex:1;">
-                <button class="icon-btn" onclick="startDictation('task-edit-title')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border);">🎤</button>
+                <button class="icon-btn" onclick="startDictation('task-edit-title')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border); flex-shrink:0;">🎤</button>
             </div>
             <div id="task-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
             
@@ -134,7 +139,7 @@
             
             <div class="form-group" style="display:flex; align-items:flex-start; gap:8px;">
                 <textarea id="task-edit-notes" placeholder="≡ 詳細を追加" style="flex:1;"></textarea>
-                <button class="icon-btn" onclick="startDictation('task-edit-notes')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border); margin-top:5px;">🎤</button>
+                <button class="icon-btn" onclick="startDictation('task-edit-notes')" style="font-size:18px; background:var(--head-bg); border-radius:50%; width:40px; height:40px; border:1px solid var(--border); margin-top:5px; flex-shrink:0;">🎤</button>
             </div>
 
             <div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div>
@@ -147,7 +152,7 @@
 
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script src="./js/main.js?v=8.7" defer></script>
-    <script src="./js/jero_core.js?v=8.7" defer></script>
+    <script src="./js/main.js?v=8.8" defer></script>
+    <script src="./js/jero_core.js?v=8.8" defer></script>
 </body>
 </html>

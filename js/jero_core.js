@@ -22,6 +22,62 @@ function toggleSpeechRecognition() {
     } catch(e) { console.error(e); isRecording = false; recognition = null; }
 }
 
+// ★追加：各テキスト入力欄への直接音声入力（ディクテーション）機能
+function startDictation(targetId) {
+    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
+    
+    const targetEl = document.getElementById(targetId);
+    if (!targetEl) return;
+
+    if (isRecording && recognition) { recognition.stop(); return; }
+
+    try {
+        recognition = new SpeechRecognition(); 
+        recognition.lang = 'ja-JP'; 
+        recognition.interimResults = false; 
+        recognition.maxAlternatives = 1;
+
+        const originalPlaceholder = targetEl.placeholder;
+        
+        recognition.onstart = function() { 
+            isRecording = true; 
+            showGlobalLoader("音声を聞き取っているぞ...");
+            targetEl.placeholder = "音声入力中..."; 
+        };
+        
+        recognition.onresult = function(event) { 
+            const transcript = event.results[0][0].transcript;
+            // テキストエリア（複数行）なら改行して追記、1行入力ならスペースを空けて追記
+            if (targetEl.tagName.toLowerCase() === 'textarea') {
+                targetEl.value = targetEl.value + (targetEl.value ? '\n' : '') + transcript;
+                targetEl.style.height = 'auto';
+                targetEl.style.height = (targetEl.scrollHeight) + 'px';
+            } else {
+                targetEl.value = targetEl.value + (targetEl.value ? ' ' : '') + transcript;
+            }
+        };
+        
+        recognition.onerror = function(event) { 
+            if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); 
+        };
+        
+        recognition.onend = function() { 
+            isRecording = false; 
+            hideGlobalLoader();
+            targetEl.placeholder = originalPlaceholder; 
+            recognition = null; 
+        };
+        
+        recognition.start();
+    } catch(e) { 
+        console.error(e); 
+        isRecording = false; 
+        recognition = null; 
+        hideGlobalLoader();
+    }
+}
+
 let notifiedEventIds = new Set();
 function initNotification() { if (!("Notification" in window)) return; setInterval(checkUpcomingEvents, 60000); }
 function requestNotificationPermission() {
