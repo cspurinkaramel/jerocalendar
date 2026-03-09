@@ -8,17 +8,22 @@ function unlockAudioAndSend() { unlockAudioContext(); sendToJero(); }
 function unlockAudioAndStartSpeech() { unlockAudioContext(); toggleSpeechRecognition(); }
 function speakText(text) { if (!isVoiceEnabled || !window.speechSynthesis || !text) return; let cleanText = text.replace(/https?:\/\/[^\s]+/g, 'リンク').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').replace(/[#*`_\[\]()【】]/g, ''); if(!cleanText.trim()) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'ja-JP'; u.rate = 1.15; u.pitch = 1.7; if (jeroVoice) u.voice = jeroVoice; window.speechSynthesis.speak(u); }
 
-// ★追加：マイクを完全に強制終了（ハードキル）するための共通関数
-function forceStopMicrophone() {
+// ★究極進化：マイクを完全に強制終了（ハードキル＋エア抜き）するための共通関数
+async function forceStopMicrophone() {
+    // 1. まずは既存の音声認識の神経を物理的に切断し、息の根を止める
     if (recognition) {
         try {
-            recognition.abort(); // stop()ではなくabort()でハードウェアから強制切断
+            recognition.onstart = null;
+            recognition.onresult = null;
+            recognition.onerror = null;
+            recognition.onend = null;
+            recognition.abort(); 
         } catch(e) { console.error("マイク強制終了エラー:", e); }
     }
     isRecording = false;
     recognition = null;
     
-    // UIの強制リセット
+    // 2. UIの強制リセット（見た目を平時に戻す）
     const micBtn = document.getElementById('mic-btn');
     if (micBtn) micBtn.classList.remove('mic-active');
     
@@ -28,8 +33,21 @@ function forceStopMicrophone() {
     }
     
     if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
-}
 
+    // 3. 【新設】iOS Safari用 強制マイク解放機構（配管のエア抜き）
+    // ダミーで一瞬だけマイクの配管を開き、自らの手で強烈にバルブを閉める
+    try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // 一瞬だけマイクを掴む
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 掴んだ配管（トラック）を全て強制停止する
+            stream.getTracks().forEach(track => track.stop());
+        }
+    } catch(err) {
+        // マイク権限がない等のエラーは想定内なので無視する
+        console.log("マイク解放プロセス完了（エア抜き済）");
+    }
+}
 // ★追加：iOS Safari対策（画面が隠れたりバックグラウンドに行った瞬間に元栓を閉める）
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && isRecording) {
