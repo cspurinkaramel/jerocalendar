@@ -1,4 +1,4 @@
-// Jero Core Engine v8.8 - Visual Feedback & Dictation
+// Jero Core Engine v8.8 - Visual Feedback & Dictation (iOS Mic Fix)
 let isVoiceEnabled = false; let jeroVoice = null; let recognition = null; let isRecording = false;
 
 function initSpeech() { let voices = window.speechSynthesis.getVoices(); jeroVoice = voices.find(v => v.lang === 'ja-JP'); if(!voices.length) { window.speechSynthesis.onvoiceschanged = () => { jeroVoice = window.speechSynthesis.getVoices().find(v => v.lang === 'ja-JP'); }; } }
@@ -8,18 +8,68 @@ function unlockAudioAndSend() { unlockAudioContext(); sendToJero(); }
 function unlockAudioAndStartSpeech() { unlockAudioContext(); toggleSpeechRecognition(); }
 function speakText(text) { if (!isVoiceEnabled || !window.speechSynthesis || !text) return; let cleanText = text.replace(/https?:\/\/[^\s]+/g, 'リンク').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').replace(/[#*`_\[\]()【】]/g, ''); if(!cleanText.trim()) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'ja-JP'; u.rate = 1.15; u.pitch = 1.7; if (jeroVoice) u.voice = jeroVoice; window.speechSynthesis.speak(u); }
 
+// ★追加：マイクを完全に強制終了（ハードキル）するための共通関数
+function forceStopMicrophone() {
+    if (recognition) {
+        try {
+            recognition.abort(); // stop()ではなくabort()でハードウェアから強制切断
+        } catch(e) { console.error("マイク強制終了エラー:", e); }
+    }
+    isRecording = false;
+    recognition = null;
+    
+    // UIの強制リセット
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) micBtn.classList.remove('mic-active');
+    
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput && chatInput.placeholder === "音声を認識中...") {
+        chatInput.placeholder = "予定や検索ワードをどうぞ...";
+    }
+    
+    if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+}
+
+// ★追加：iOS Safari対策（画面が隠れたりバックグラウンドに行った瞬間に元栓を閉める）
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && isRecording) {
+        forceStopMicrophone();
+    }
+});
+
 function toggleSpeechRecognition() {
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
-    if (isRecording && recognition) { recognition.stop(); return; }
+    
+    // ★修復：stop() ではなく forceStopMicrophone() を呼ぶ
+    if (isRecording && recognition) { forceStopMicrophone(); return; }
+    
     try {
-        recognition = new SpeechRecognition(); recognition.lang = 'ja-JP'; recognition.interimResults = false; recognition.maxAlternatives = 1;
-        recognition.onstart = function() { isRecording = true; document.getElementById('mic-btn').classList.add('mic-active'); document.getElementById('chat-input').placeholder = "音声を認識中..."; };
-        recognition.onresult = function(event) { document.getElementById('chat-input').value = event.results[0][0].transcript; document.getElementById('chat-input').dispatchEvent(new Event('input')); };
-        recognition.onerror = function(event) { if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); };
-        recognition.onend = function() { isRecording = false; document.getElementById('mic-btn').classList.remove('mic-active'); document.getElementById('chat-input').placeholder = "予定や検索ワードをどうぞ..."; recognition = null; };
+        recognition = new SpeechRecognition(); 
+        recognition.lang = 'ja-JP'; 
+        recognition.interimResults = false; 
+        recognition.maxAlternatives = 1;
+        
+        recognition.onstart = function() { 
+            isRecording = true; 
+            document.getElementById('mic-btn').classList.add('mic-active'); 
+            document.getElementById('chat-input').placeholder = "音声を認識中..."; 
+        };
+        recognition.onresult = function(event) { 
+            document.getElementById('chat-input').value = event.results[0][0].transcript; 
+            document.getElementById('chat-input').dispatchEvent(new Event('input')); 
+        };
+        recognition.onerror = function(event) { 
+            if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); 
+            // エラー時も確実にリセット
+            forceStopMicrophone();
+        };
+        recognition.onend = function() { 
+            // 正常終了時も確実にUIと状態をリセット
+            forceStopMicrophone();
+        };
         recognition.start();
-    } catch(e) { console.error(e); isRecording = false; recognition = null; }
+    } catch(e) { console.error(e); forceStopMicrophone(); }
 }
 
 // ★修復：エディタ用の音声入力機能（マイクボタンの配線）
@@ -29,7 +79,9 @@ function startDictation(targetId) {
     
     const targetEl = document.getElementById(targetId);
     if (!targetEl) return;
-    if (isRecording && recognition) { recognition.stop(); return; }
+    
+    // ★修復：stop() ではなく forceStopMicrophone() を呼ぶ
+    if (isRecording && recognition) { forceStopMicrophone(); return; }
 
     try {
         recognition = new SpeechRecognition(); 
@@ -40,7 +92,7 @@ function startDictation(targetId) {
         
         recognition.onstart = function() { 
             isRecording = true; 
-            showGlobalLoader("音声を聞き取っているぞ...");
+            if(typeof showGlobalLoader === 'function') showGlobalLoader("音声を聞き取っているぞ...");
             targetEl.placeholder = "音声入力中..."; 
         };
         
@@ -54,10 +106,17 @@ function startDictation(targetId) {
             }
         };
         
-        recognition.onerror = function(event) { if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); };
-        recognition.onend = function() { isRecording = false; hideGlobalLoader(); targetEl.placeholder = originalPlaceholder; recognition = null; };
+        recognition.onerror = function(event) { 
+            if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); 
+            targetEl.placeholder = originalPlaceholder;
+            forceStopMicrophone();
+        };
+        recognition.onend = function() { 
+            targetEl.placeholder = originalPlaceholder;
+            forceStopMicrophone();
+        };
         recognition.start();
-    } catch(e) { console.error(e); isRecording = false; recognition = null; hideGlobalLoader(); }
+    } catch(e) { console.error(e); targetEl.placeholder = originalPlaceholder; forceStopMicrophone(); }
 }
 
 let notifiedEventIds = new Set();
