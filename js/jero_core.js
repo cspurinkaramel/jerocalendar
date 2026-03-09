@@ -77,8 +77,14 @@ function toggleSpeechRecognition() {
             document.getElementById('chat-input').value = event.results[0][0].transcript; 
             document.getElementById('chat-input').dispatchEvent(new Event('input')); 
         };
-        recognition.onerror = function(event) { 
-            if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); 
+recognition.onerror = function(event) { 
+            // ゴーストエラー（実害のないエラー）を無視するリスト
+            const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
+            
+            // 無視リストに含まれていない、本当の異常時のみ通知する
+            if (!ignoredErrors.includes(event.error)) {
+                showToast("音声認識エラー: " + event.error); 
+            }
             // エラー時も確実にリセット
             forceStopMicrophone();
         };
@@ -125,7 +131,11 @@ function startDictation(targetId) {
         };
         
         recognition.onerror = function(event) { 
-            if(event.error !== 'aborted') showToast("音声認識エラー: " + event.error); 
+            const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
+            
+            if (!ignoredErrors.includes(event.error)) {
+                showToast("音声認識エラー: " + event.error); 
+            }
             targetEl.placeholder = originalPlaceholder;
             forceStopMicrophone();
         };
