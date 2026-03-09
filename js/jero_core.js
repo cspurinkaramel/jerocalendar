@@ -59,7 +59,7 @@ function toggleSpeechRecognition() {
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
     
-    // ★修復：stop() ではなく forceStopMicrophone() を呼ぶ
+    // 手動で2回押された場合は強制終了（ここでダイアログが出るのはOSの仕様として許容する）
     if (isRecording && recognition) { forceStopMicrophone(); return; }
     
     try {
@@ -73,30 +73,29 @@ function toggleSpeechRecognition() {
             document.getElementById('mic-btn').classList.add('mic-active'); 
             document.getElementById('chat-input').placeholder = "音声を認識中..."; 
         };
+        
         recognition.onresult = function(event) { 
             document.getElementById('chat-input').value = event.results[0][0].transcript; 
             document.getElementById('chat-input').dispatchEvent(new Event('input')); 
-        };
-recognition.onerror = function(event) { 
-            // ゴーストエラー（実害のないエラー）を無視するリスト
-            const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
             
-            // 無視リストに含まれていない、本当の異常時のみ通知する
-            if (!ignoredErrors.includes(event.error)) {
-                showToast("音声認識エラー: " + event.error); 
-            }
-            // エラー時も確実にリセット
+            // ★【内部暗殺】テキストを受け取った瞬間に内部からクリーンな終了を宣言する
+            try { recognition.stop(); } catch(e){}
+        };
+        
+        recognition.onerror = function(event) { 
+            const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
+            if (!ignoredErrors.includes(event.error)) { showToast("音声認識エラー: " + event.error); }
             forceStopMicrophone();
         };
+        
         recognition.onend = function() { 
-            // 正常終了時も確実にUIと状態をリセット
             forceStopMicrophone();
         };
+        
         recognition.start();
     } catch(e) { console.error(e); forceStopMicrophone(); }
 }
 
-// ★修復：エディタ用の音声入力機能（マイクボタンの配線）
 function startDictation(targetId) {
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
@@ -104,7 +103,6 @@ function startDictation(targetId) {
     const targetEl = document.getElementById(targetId);
     if (!targetEl) return;
     
-    // ★修復：stop() ではなく forceStopMicrophone() を呼ぶ
     if (isRecording && recognition) { forceStopMicrophone(); return; }
 
     try {
@@ -128,21 +126,23 @@ function startDictation(targetId) {
             } else {
                 targetEl.value = targetEl.value + (targetEl.value ? ' ' : '') + transcript;
             }
+            
+            // ★【内部暗殺】テキストを受け取った瞬間に内部からクリーンな終了を宣言する
+            try { recognition.stop(); } catch(e){}
         };
         
         recognition.onerror = function(event) { 
             const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
-            
-            if (!ignoredErrors.includes(event.error)) {
-                showToast("音声認識エラー: " + event.error); 
-            }
+            if (!ignoredErrors.includes(event.error)) { showToast("音声認識エラー: " + event.error); }
             targetEl.placeholder = originalPlaceholder;
             forceStopMicrophone();
         };
+        
         recognition.onend = function() { 
             targetEl.placeholder = originalPlaceholder;
             forceStopMicrophone();
         };
+        
         recognition.start();
     } catch(e) { console.error(e); targetEl.placeholder = originalPlaceholder; forceStopMicrophone(); }
 }
