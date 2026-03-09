@@ -6,30 +6,22 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <title>JeroCalendar v8.6</title>
-    
-    <link rel="stylesheet" href="./css/style.css?v=8.6">
+    <title>JeroCalendar v8.6.2</title>
+    <link rel="stylesheet" href="./css/style.css?v=8.6.2">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" defer></script>
 </head>
 <body>
     <div id="toast"></div>
     <div id="global-loader"><div class="big-spinner"></div><div class="loader-text" id="loader-msg">処理中...</div></div>
-
+    
     <div id="top-bar">
-        <div class="nav-group">
-            <button class="icon-btn" onclick="scrollToToday()">◎</button>
-            <button class="icon-btn" onclick="openSettings()">⚙️</button>
-        </div>
+        <div class="nav-group"><button class="icon-btn" onclick="scrollToToday()">◎</button><button class="icon-btn" onclick="openSettings()">⚙️</button></div>
         <div id="month-display">表示中...</div>
-        <div class="nav-group">
-            <button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button>
-            <button class="icon-btn" id="view-toggle-btn" onclick="toggleView()">📝</button>
-        </div>
+        <div class="nav-group"><button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button><button class="icon-btn" id="view-toggle-btn" onclick="toggleView()">📝</button></div>
         <div id="progress-bar"></div>
     </div>
     
     <div id="offline-badge">⚡️ オフライン (キャッシュ表示中・AI使用不可)</div>
-
     <div id="calendar-view"><div id="weekdays"></div><div id="scroll-container"><div id="top-trigger" class="loader-container hidden"><div class="spinner"></div></div><div id="calendar-wrapper"></div><div id="bottom-trigger" class="loader-container hidden"><div class="spinner"></div></div></div></div>
     <div id="agenda-view"><div id="agenda-top-trigger" class="loader-container hidden"><div class="spinner"></div></div><div id="agenda-content"></div><div id="agenda-bottom-trigger" class="loader-container hidden"><div class="spinner"></div></div></div>
     <div id="overlay" onclick="closeAllModals()"></div>
@@ -39,40 +31,16 @@
     <div id="settings-modal" class="bottom-modal" style="z-index: 104;">
         <div class="modal-drag-area" onclick="closeSettings()"><div class="modal-drag"></div></div>
         <div class="modal-header" style="flex-direction: column; align-items: flex-start; padding-bottom: 10px;">
-            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;"><h2 id="settings-title">設定・管理</h2><button class="close-btn" onclick="closeSettings()">✕</button></div>
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;"><h2>設定・管理</h2><button class="close-btn" onclick="closeSettings()">✕</button></div>
             <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-top:6px;"><div id="account-info" style="font-size:12px; font-weight:600; color:var(--accent);">アカウント確認中...</div><button class="btn-gray" style="padding:4px 8px; border-radius:4px; font-size:10px; border:none; cursor:pointer; color:white;" onclick="switchAccount()">切替 / 解除</button></div>
         </div>
         <div class="modal-body">
             <div class="setting-row"><label>UIテーマ</label><select id="st-theme" onchange="saveAndApplySettings()"><option value="light">ライトモード</option><option value="dark">ダークモード</option></select></div>
-            <div class="setting-row"><label>カレンダー文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
-            
-            <div class="setting-row">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label style="color: var(--accent);">ジェロの肉声 (音声合成)</label>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="st-voice" onchange="toggleVoiceSetting()">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">返答をスピーカーから発話する。タップ時にiOSの制限を自動解除する。</div>
-            </div>
-
-            <div class="setting-row">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label style="color: var(--accent);">Jero Alert (プッシュ通知)</label>
-                    <span id="notif-status" style="font-size:12px; font-weight:bold; color:#ff3b30;">未設定</span>
-                </div>
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">予定の10分前に通知を送るぞ。ホーム画面に追加した状態でのみ動作する。</div>
-                <button class="btn-blue" style="padding: 8px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer; margin-top:8px;" onclick="requestNotificationPermission()">通知を許可する</button>
-            </div>
-            <div class="setting-row">
-                <label style="color: var(--accent);">Jero Core 思考エンジン</label>
-                <div style="font-size: 12px; color: #888; margin-bottom: 4px;">Google AI StudioのAPIキー</div>
-                <input type="password" id="st-gemini-key" placeholder="APIキーを入力" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); margin-bottom: 10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size: 12px; font-weight: bold;">AI マニュアル (System Prompt)</span><button class="btn-gray" style="padding:2px 6px; border-radius:4px; font-size:10px; border:none; cursor:pointer; color:white;" onclick="resetPrompt()">初期化</button></div>
-                <textarea id="st-gemini-prompt" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); height: 150px; font-size: 11px; resize: none; margin-top: 5px;"></textarea>
-            </div>
-            <div class="setting-row"><div style="display:flex; justify-content:space-between; align-items:center;"><label>視覚圧縮・装飾辞書</label><button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button></div><div class="dict-container" id="dict-list"></div></div>
+            <div class="setting-row"><label>文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs" min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
+            <div class="setting-row"><div style="display:flex; justify-content:space-between; align-items:center;"><label style="color: var(--accent);">肉声 (音声合成)</label><label class="toggle-switch"><input type="checkbox" id="st-voice" onchange="toggleVoiceSetting()"><span class="slider"></span></label></div></div>
+            <div class="setting-row"><div style="display:flex; justify-content:space-between; align-items:center;"><label style="color: var(--accent);">Jero Alert</label><span id="notif-status" style="font-size:12px; font-weight:bold; color:#ff3b30;">未設定</span></div><button class="btn-blue" style="padding: 8px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer; margin-top:8px;" onclick="requestNotificationPermission()">通知を許可する</button></div>
+            <div class="setting-row"><label style="color: var(--accent);">Jero Core 思考エンジン</label><input type="password" id="st-gemini-key" placeholder="APIキーを入力" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); margin-bottom: 10px;"><div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size: 12px; font-weight: bold;">AI マニュアル</span><button class="btn-gray" style="padding:2px 6px; border-radius:4px; font-size:10px; border:none; cursor:pointer; color:white;" onclick="resetPrompt()">初期化</button></div><textarea id="st-gemini-prompt" onchange="saveGeminiSettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); height: 150px; font-size: 11px; resize: none; margin-top: 5px;"></textarea></div>
+            <div class="setting-row"><div style="display:flex; justify-content:space-between; align-items:center;"><label>装飾辞書</label><button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button></div><div class="dict-container" id="dict-list"></div></div>
             <div class="setting-row"><label>システム拡張</label><div style="display:flex; gap:10px;"><button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="exportSettings()">データ書出</button><button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="importSettings()">データ読込</button></div><button class="btn btn-red" style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 キャッシュ完全リセット</button></div>
         </div>
         <div class="action-bar" style="padding: 15px 20px;"><button class="btn btn-blue" onclick="closeSettings()">完了 (閉じる)</button></div>
@@ -80,20 +48,10 @@
 
     <div id="jero-chat-modal" class="bottom-modal" style="z-index: 110; height: 85vh;">
         <div class="modal-drag-area" onclick="closeJeroChat()"><div class="modal-drag"></div></div>
-        <div class="modal-header">
-            <h2 style="display:flex; align-items:center; gap:8px;">Jero Core 🐈 <button onclick="clearJeroMemory()" style="background:none; border:none; font-size:14px; cursor:pointer; padding:4px;" title="記憶をリセット">🧹</button></h2>
-            <button class="close-btn" onclick="closeJeroChat()">✕</button>
-        </div>
+        <div class="modal-header"><h2 style="display:flex; align-items:center; gap:8px;">Jero Core 🐈 <button onclick="clearJeroMemory()" style="background:none; border:none; font-size:14px; cursor:pointer; padding:4px;" title="記憶をリセット">🧹</button></h2><button class="close-btn" onclick="closeJeroChat()">✕</button></div>
         <div class="modal-body" id="chat-history" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; background: var(--bg);"></div>
         <div class="chat-attach-box" id="chat-attach-box" style="display:none;"><span>📎</span><span id="chat-file-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span><button onclick="clearChatFile()" style="background:none; border:none; color:red; font-weight:bold;">✕</button></div>
-        
-        <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px; align-items:center;">
-            <button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()" style="margin-right: 2px;">📎</button>
-            <input type="file" id="chat-file-input" accept="image/*,application/pdf" style="display:none;" onchange="handleChatFileUpload(event)">
-            <button id="mic-btn" class="chat-file-btn" onclick="unlockAudioAndStartSpeech()" style="margin-right: 4px;">🎤</button>
-            <input type="text" id="chat-input" placeholder="予定や検索ワードをどうぞ..." style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px;">
-            <button class="btn btn-blue" onclick="unlockAudioAndSend()" style="border-radius:20px; padding:12px 20px;">送信</button>
-        </div>
+        <div class="action-bar" style="padding: 10px 15px; display:flex; gap:8px; align-items:center;"><button class="chat-file-btn" onclick="document.getElementById('chat-file-input').click()" style="margin-right: 2px;">📎</button><input type="file" id="chat-file-input" accept="image/*,application/pdf" style="display:none;" onchange="handleChatFileUpload(event)"><button id="mic-btn" class="chat-file-btn" onclick="unlockAudioAndStartSpeech()" style="margin-right: 4px;">🎤</button><input type="text" id="chat-input" placeholder="予定や検索ワードをどうぞ..." style="flex:1; padding:12px; border-radius:20px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:16px;"><button class="btn btn-blue" onclick="unlockAudioAndSend()" style="border-radius:20px; padding:12px 20px;">送信</button></div>
     </div>
 
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
@@ -101,8 +59,8 @@
         <div class="modal-header"><h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button></div>
         <div class="modal-body">
             <input type="hidden" id="dict-edit-idx">
-            <div class="form-group"><label style="font-size:12px; color:var(--accent); font-weight:bold;">① 主ルール (タップ入力される接頭辞)</label><input type="text" id="dict-edit-prefix" placeholder="例: 誕)" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
-            <div class="form-group"><label style="font-size:12px; color:#888;">② その他の検知キーワード (,区切り)</label><input type="text" id="dict-edit-aliases" placeholder="例: 誕生日, バースデー" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-group"><label style="font-size:12px; color:var(--accent); font-weight:bold;">① 主ルール</label><input type="text" id="dict-edit-prefix" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-group"><label style="font-size:12px; color:#888;">② 検知キーワード</label><input type="text" id="dict-edit-aliases" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
             <div class="form-row"><span>③ アイコン</span><div id="dict-edit-icon" onclick="openEmojiPicker()" style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">➕ 選択</div></div>
             <div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg" style="border:none; width:40px; height:40px; background:transparent;"></div>
             <div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt" style="border:none; width:40px; height:40px; background:transparent;"></div>
@@ -123,9 +81,8 @@
         <div class="modal-header"><h2 id="editor-title">新規予定</h2><button class="close-btn" onclick="closeEditor()">✕</button></div>
         <div class="modal-body">
             <input type="hidden" id="edit-id">
-            <div class="form-group"><input type="text" id="edit-title" placeholder="タイトルを入力" style="font-size:20px; font-weight:bold;"></div>
+            <div class="form-group"><input type="text" id="edit-title" placeholder="タイトル" style="font-size:20px; font-weight:bold;"></div>
             <div id="event-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
-            
             <div class="form-row"><span>終日</span><input type="checkbox" id="edit-allday" class="toggle" onchange="toggleTimeInputs()"></div>
             <div class="form-row"><span>開始</span><input type="datetime-local" id="edit-start"></div>
             <div class="form-row"><span>終了</span><input type="datetime-local" id="edit-end"></div>
@@ -133,10 +90,7 @@
             <input type="hidden" id="edit-recurrence-rule">
             <div class="form-group"><input type="text" id="edit-loc" placeholder="📍 場所を追加"></div>
             <div class="form-group"><textarea id="edit-desc" placeholder="≡ メモを追加"></textarea></div>
-            <div class="attach-area">
-                <div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div>
-                <input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div>
-            </div>
+            <div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'edit-attach-preview')"><div id="edit-attach-preview" class="preview-container"></div></div>
             <div class="color-palette" id="color-picker"></div>
         </div>
         <div class="action-bar"><button class="btn btn-gray" onclick="closeEditor()">取消</button><button class="btn btn-red" id="btn-delete" style="display:none;" onclick="confirmDeleteEvent(this)">削除</button><button class="btn btn-yellow" id="btn-duplicate" style="display:none;" onclick="duplicateEvent()">複製</button><button class="btn btn-blue" onclick="saveEvent()">保存</button></div>
@@ -149,16 +103,12 @@
         <div class="modal-header"><h2 id="task-editor-title">新規タスク</h2><button class="close-btn" onclick="closeTaskEditor()">✕</button></div>
         <div class="modal-body">
             <input type="hidden" id="task-edit-id">
-            <div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名を入力" style="font-size:20px; font-weight:bold;"></div>
+            <div class="form-group"><input type="text" id="task-edit-title" placeholder="タスク名" style="font-size:20px; font-weight:bold;"></div>
             <div id="task-icon-palette" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
-            
             <div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div>
             <div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence"><option value="">しない</option><option value="DAILY">毎日（翌日）</option><option value="WEEKLY">毎週（+7日）</option><option value="MONTHLY">毎月（+1ヶ月）</option></select></div>
             <div class="form-group"><textarea id="task-edit-notes" placeholder="≡ 詳細を追加"></textarea></div>
-            <div class="attach-area">
-                <div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div>
-                <input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div>
-            </div>
+            <div class="attach-area"><div class="attach-buttons"><button class="btn-attach" onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file" id="task-file-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event, 'task-attach-preview')"><div id="task-attach-preview" class="preview-container"></div></div>
             <div class="color-palette" id="task-color-picker"></div>
         </div>
         <div class="action-bar"><button class="btn btn-gray" onclick="closeTaskEditor()">取消</button><button class="btn btn-red" id="task-btn-delete" style="display:none;" onclick="confirmDeleteTask(this)">削除</button><button class="btn btn-green" onclick="saveTask()">保存</button></div>
@@ -168,7 +118,7 @@
 
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script src="./js/main.js?v=8.6" defer></script>
-    <script src="./js/jero_core.js?v=8.6" defer></script>
+    <script src="./js/main.js?v=8.6.2" defer></script>
+    <script src="./js/jero_core.js?v=8.6.2" defer></script>
 </body>
 </html>
