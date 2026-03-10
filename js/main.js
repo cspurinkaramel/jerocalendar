@@ -86,6 +86,7 @@ function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return
 
 function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
 
+// ★修正版 getCardHtml (文字色をより強力に適用する)
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
@@ -94,7 +95,7 @@ function getCardHtml(type, item) {
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
     
-    // ★UD適用：背景色から最適な文字色を算出
+    // ★UD適用：背景色から最適な文字色を算出（黒か白）
     const textColor = getContrastYIQ(color);
     
     let timeHtml = "";
@@ -108,20 +109,19 @@ function getCardHtml(type, item) {
                 endTimeStr = `${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`;
             }
             const fullTimeStr = endTimeStr ? `${timeStr} 〜 ${endTimeStr}` : timeStr;
-            // ★文字色を textColor に変更
-            timeHtml = `<span class="time-text" style="color: ${textColor};" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
+            // styleに強制適用
+            timeHtml = `<span class="time-text" style="color: ${textColor} !important;" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
         }
     } else {
         const checkIcon = item.status === 'completed' ? '✅' : '⬜️';
-        timeHtml = `<span style="font-size:16px; margin-right:4px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
+        timeHtml = `<span style="font-size:16px; margin-right:4px; cursor:pointer; color: ${textColor} !important;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
     }
     
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     
-    // ★文字色(color)を textColor に変更
-    return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}; color: ${textColor};">${timeHtml}<div class="card-title" style="color: ${textColor};">${title}</div></div></div>`;
+    // card-content と card-title の両方に文字色を強制適用
+    return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}; color: ${textColor} !important;">${timeHtml}<div class="card-title" style="color: ${textColor} !important;">${title}</div></div></div>`;
 }
-
 // ★新設：ひょこっと出るポップアップ関数
 function showTimePopup(el, text, colorCode) {
     document.querySelectorAll('.time-popup').forEach(p => p.remove());
