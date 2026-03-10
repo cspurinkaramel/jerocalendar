@@ -92,25 +92,46 @@
         .day.selected { background-color: rgba(0, 122, 255, 0.1) !important; box-shadow: inset 0 0 0 1.5px var(--accent) !important; }
         #daily-modal { display: none !important; } 
         
-/* ★カードデザインの極限圧縮と崩れ防止（1行化） */
-        .card-list { padding: 8px !important; gap: 6px !important; }
+/* ★カードデザインの極限圧縮（文字の高さ限界まで余白を削る） */
+        .card-list { padding: 4px 8px !important; gap: 4px !important; }
         .item-card { 
             background: var(--card-bg); 
-            border-radius: 8px; 
-            padding: 8px 12px; 
-            box-shadow: 0 1px 3px var(--card-shadow); 
+            border-radius: 6px; 
+            padding: 4px 10px !important; /* 上下左右の余白を極限圧縮 */
+            box-shadow: 0 1px 2px var(--card-shadow); 
             display: flex; 
             align-items: center; 
-            gap: 10px; 
+            gap: 8px !important; 
             cursor: pointer; 
-            /* ↓これが最も重要：リサイズ時にカードが潰れるのを物理的に防ぎ、スクロールさせる */
             flex-shrink: 0 !important; 
-            height: 28px; /* 高さを固定して密度を極限まで上げる */
+            height: 24px !important; /* 高さを極限まで低く設定 */
         }
         .card-content { flex: 1; display: flex; align-items: center; gap: 8px; overflow: hidden; flex-direction: row !important; }
-        .card-title { font-size: 14px; font-weight: 600; color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 !important; }
-        .badge-allday { font-size: 10px; font-weight: bold; color: white; padding: 2px 5px; border-radius: 4px; flex-shrink: 0;}
-        .time-text { font-size: 13px; font-weight: bold; flex-shrink: 0; min-width: 40px; text-align: center;}
+        .card-title { font-size: 13px !important; font-weight: 600; color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 !important; }
+        
+        .time-text { font-size: 12px !important; font-weight: bold; flex-shrink: 0; min-width: 36px; text-align: center; padding: 2px 4px; border-radius: 4px; transition: background 0.2s;}
+        .time-text:active { background: rgba(0,0,0,0.1); } /* タップした瞬間のフィードバック */
+        
+        /* ★ひょこっと出る「かわいい」ポップアップ（ツールチップ）の基礎設計 */
+        .time-popup {
+            position: fixed;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0;
+            transform: translateY(8px) scale(0.9);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 生き物のように少しバウンスさせる */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            color: #fff;
+        }
+        .time-popup.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        
     </style>
         
     <div id="agenda-view"><div id="agenda-top-trigger" class="loader-container hidden"><div class="spinner"></div></div><div id="agenda-content"></div><div id="agenda-bottom-trigger" class="loader-container hidden"><div class="spinner"></div></div></div>

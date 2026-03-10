@@ -75,6 +75,7 @@ function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventO
 
 // ★究極圧縮：リストの項目をすべて「1行」に押し込み、視覚的ノイズを排除する
 // ★究極圧縮：バッジを全廃し、機能そのものを識別子とする
+// ★究極圧縮：時間をタップした際のイベントを仕込む
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
@@ -88,14 +89,21 @@ function getCardHtml(type, item) {
         if (item.start && item.start.dateTime) {
             const d = new Date(item.start.dateTime);
             const timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-            // 時間指定：数字（時間）だけを色付きでシンプルに表示
-            timeHtml = `<span class="time-text" style="color: ${color};">${timeStr}</span>`;
+            
+            // ★終了時間を計算してポップアップ用に文字列を生成
+            let endTimeStr = "";
+            if (item.end && item.end.dateTime) {
+                const ed = new Date(item.end.dateTime);
+                endTimeStr = `${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`;
+            }
+            const fullTimeStr = endTimeStr ? `${timeStr} 〜 ${endTimeStr}` : timeStr;
+            
+            // ★onclickにevent.stopPropagation()を入れて、カードを開く動作をキャンセルしつつポップアップを呼ぶ
+            timeHtml = `<span class="time-text" style="color: ${color};" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
         } else {
-            // 終日予定：究極の引き算。何も表示しない。
             timeHtml = ``;
         }
     } else {
-        // タスク：チェックボックス自体が最大の識別子。「タ」バッジは消去。
         const checkIcon = item.status === 'completed' ? '✅' : '⬜️';
         timeHtml = `<span style="font-size:16px; margin-right:4px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
     }
@@ -103,6 +111,35 @@ function getCardHtml(type, item) {
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     
     return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
+}
+
+// ★新設：ひょこっと出るポップアップ関数
+function showTimePopup(el, text, colorCode) {
+    // 古いポップアップが残っていれば消す
+    document.querySelectorAll('.time-popup').forEach(p => p.remove());
+    
+    const popup = document.createElement('div');
+    popup.className = 'time-popup';
+    popup.style.backgroundColor = colorCode;
+    
+    // 吹き出しの「しっぽ」も予定と同じ色で作る
+    popup.innerHTML = `${text}<span style="position:absolute; bottom:-4px; left:14px; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid ${colorCode};"></span>`;
+    
+    // タップされた時間の「真上」に配置する計算
+    const rect = el.getBoundingClientRect();
+    popup.style.top = (rect.top - 32) + 'px';
+    popup.style.left = (rect.left - 4) + 'px';
+    
+    document.body.appendChild(popup);
+    
+    // アニメーション発動（少し遅らせることでCSSのtransitionを効かせる）
+    setTimeout(() => popup.classList.add('show'), 10);
+    
+    // 2秒後に自動でフェードアウトして消滅
+    setTimeout(() => { 
+        popup.classList.remove('show'); 
+        setTimeout(() => popup.remove(), 200);
+    }, 2000);
 }
 
 async function renderAgendaView() { 
