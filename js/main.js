@@ -110,18 +110,29 @@ async function renderAgendaView() {
     } 
 }
 
+// 4. モーダルを廃止し、下部のリスト領域に予定を表示する仕組みに変更
 async function openDailyModal(dateStr, dow) {
-    selectedDateStr = dateStr; const days = ['日','月','火','水','木','金','土']; const [y, m, d] = dateStr.split('-'); document.getElementById('daily-date-title').innerText = `${parseInt(m)}月${parseInt(d)}日 (${days[dow]})`;
-    const list = document.getElementById('daily-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
+    selectedDateStr = dateStr; const days = ['日','月','火','水','木','金','土']; const [y, m, d] = dateStr.split('-'); 
+    
+    // カレンダーの選択ハイライトを更新
+    document.querySelectorAll('.day').forEach(el => el.classList.remove('selected'));
+    const selectedCell = document.getElementById(`cell-${dateStr}`);
+    if (selectedCell) selectedCell.classList.add('selected');
+
+    // 下部ビューのヘッダーをカッコよく更新
+    document.getElementById('bottom-detail-date').innerHTML = `<span style="font-size:24px; font-weight:300;">${parseInt(d)}</span> <span style="font-size:12px; color:#888;">${days[dow]}</span>`;
+
+    const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; 
+    const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
     let modalItems = [];
     if(data) {
         if(data.events) { const events = data.events.filter(e => { if(!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({type: 'event', data: e})); }
         if(data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({type: 'task', data: t})); }
     }
     modalItems.sort((a, b) => { const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0; const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0; return aIsCompleted - bIsCompleted; });
+    
     if(modalItems.length > 0) { hasItems = true; modalItems.forEach(item => { list.innerHTML += getCardHtml(item.type, item.data); }); }
     if(!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
-    document.getElementById('overlay').classList.add('active'); setTimeout(() => document.getElementById('daily-modal').classList.add('active'), 10);
 }
 
 function renderMonthDOM(year, month, data, position) {
@@ -148,6 +159,7 @@ async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching ||
 async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); document.getElementById('agenda-top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); document.getElementById('agenda-top-trigger').classList.add('hidden');} }
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
 
+// 3. データ取得時にエラーが出たら、サイレントリフレッシュを試みる
 async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
     if (isAuthError) return; const monthKey = `${year}-${month}`; const startOfMonth = new Date(year, month, 1).toISOString(); const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
     let needsRender = false;
@@ -156,11 +168,24 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
         let events = [], tasks = [], authErrorDetected = false; 
         try { const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
         try { const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
-        if (authErrorDetected) { notifyAuthError(); return; } 
+        
+        // エラー検知時、裏で鍵を取り直してもう一度だけリトライする
+        if (authErrorDetected) { 
+            const recovered = await attemptSilentRefresh();
+            if (recovered) {
+                try { 
+                    const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; 
+                    const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; 
+                    authErrorDetected = false;
+                } catch(e) { authErrorDetected = true; }
+            }
+            if (authErrorDetected) { notifyAuthError(); return; } 
+        } 
         dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); needsRender = true;
     } else { if (!document.getElementById(`month-${year}-${month}`)) needsRender = true; }
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
+
 
 function renderIconPalette(targetId, inputId) {
     const palette = document.getElementById(targetId);
@@ -365,5 +390,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 function gapiLoaded() { gapi.load('client', initializeGapiClient); }
 async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
 function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
-function checkAutoLogin() { const savedToken = localStorage.getItem('jero_token'); const savedTime = localStorage.getItem('jero_token_time'); if (savedToken && savedTime && (Date.now() - savedTime < 3500000)) { gapi.client.setToken({access_token: savedToken}); document.getElementById('auth-btn').style.display = 'none'; initCalendar(); } else { notifyAuthError(); } }
+// 1. 鍵アイコンを出しにくくする：58分制限の撤廃
+function checkAutoLogin() { 
+    const savedToken = localStorage.getItem('jero_token'); 
+    if (savedToken) { 
+        gapi.client.setToken({access_token: savedToken}); 
+        document.getElementById('auth-btn').style.display = 'none'; 
+        initCalendar(); 
+    } else { 
+        notifyAuthError(); 
+    } 
+}
+
+// 2. ★新設：裏側でこっそり鍵を取り直すサイレント・リフレッシュ機構
+async function attemptSilentRefresh() {
+    return new Promise((resolve) => {
+        if (!gisInited || !tokenClient) { resolve(false); return; }
+        tokenClient.callback = (resp) => {
+            if (resp.error) { resolve(false); } 
+            else { 
+                gapi.client.setToken({access_token: resp.access_token}); 
+                localStorage.setItem('jero_token', resp.access_token); 
+                localStorage.setItem('jero_token_time', Date.now()); 
+                isAuthError = false;
+                document.getElementById('auth-btn').style.display = 'none'; 
+                document.getElementById('auth-btn').classList.remove('auth-pulse');
+                resolve(true); 
+            }
+        };
+        // 画面を出さずにバックグラウンドで再交渉
+        tokenClient.requestAccessToken({prompt: ''}); 
+    });
+}
+
+
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
