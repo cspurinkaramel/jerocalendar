@@ -74,6 +74,7 @@ function toggleView() { const calView = document.getElementById('calendar-view')
 function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
 
 // ★究極圧縮：リストの項目をすべて「1行」に押し込み、視覚的ノイズを排除する
+// ★究極圧縮：バッジを全廃し、機能そのものを識別子とする
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
@@ -87,19 +88,20 @@ function getCardHtml(type, item) {
         if (item.start && item.start.dateTime) {
             const d = new Date(item.start.dateTime);
             const timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+            // 時間指定：数字（時間）だけを色付きでシンプルに表示
             timeHtml = `<span class="time-text" style="color: ${color};">${timeStr}</span>`;
         } else {
-            // 終日の場合は色付きの「終」バッジ
-            timeHtml = `<span class="badge-allday" style="background-color: ${color};">終</span>`;
+            // 終日予定：究極の引き算。何も表示しない。
+            timeHtml = ``;
         }
     } else {
+        // タスク：チェックボックス自体が最大の識別子。「タ」バッジは消去。
         const checkIcon = item.status === 'completed' ? '✅' : '⬜️';
-        timeHtml = `<span style="font-size:16px; margin-right:2px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span><span class="badge-allday" style="background-color: #888;">タ</span>`;
+        timeHtml = `<span style="font-size:16px; margin-right:4px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
     }
     
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     
-    // 2行あった古い構造を破壊し、flexboxで横一列に並べる
     return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
 }
 
