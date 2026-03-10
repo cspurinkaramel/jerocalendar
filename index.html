@@ -22,16 +22,22 @@
     </div>
     
     <div id="offline-badge">⚡️ オフライン (キャッシュ表示中・AI使用不可)</div>
-    <div id="calendar-view" style="display: flex; flex-direction: column; height: calc(100vh - 100px); overflow: hidden;">
-        <div id="weekdays"></div>
-        <div id="scroll-container" style="flex: 1; overflow-y: auto; overflow-x: hidden;">
+
+    <div id="calendar-view" style="display: flex; flex-direction: column; height: calc(100vh - 44px - env(safe-area-inset-top)); margin-top: calc(44px + env(safe-area-inset-top)); overflow: hidden;">
+        <div id="weekdays" style="position: static; height: 24px; flex-shrink: 0; z-index: 1;"></div>
+        
+        <div id="scroll-container" style="position: static; flex: 1; height: auto; overflow-y: auto; overflow-x: hidden;">
             <div id="top-trigger" class="loader-container hidden"><div class="spinner"></div></div>
             <div id="calendar-wrapper"></div>
             <div id="bottom-trigger" class="loader-container hidden"><div class="spinner"></div></div>
         </div>
         
-        <div id="bottom-detail-view" style="height: 35%; background: var(--bg); border-top: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 10;">
-            <div style="display: flex; padding: 6px 15px; border-bottom: 1px solid var(--border); align-items: center; background: var(--head-bg);">
+        <div id="resizer" style="height: 12px; background: var(--head-bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); cursor: row-resize; display: flex; justify-content: center; align-items: center; flex-shrink: 0; z-index: 20; touch-action: none;">
+            <div style="width: 36px; height: 4px; background: #c7c7cc; border-radius: 2px;"></div>
+        </div>
+        
+        <div id="bottom-detail-view" style="height: 35vh; min-height: 10vh; max-height: 70vh; background: var(--bg); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);">
+            <div style="display: flex; padding: 6px 15px; border-bottom: 1px solid var(--border); align-items: center; background: var(--head-bg); flex-shrink: 0;">
                 <div id="bottom-detail-date" style="font-size: 16px; font-weight: bold; flex: 1; color: var(--txt);">日付を選択しろ</div>
                 <button class="icon-btn" onclick="openEditor()" style="font-size: 20px; color: var(--accent); margin-right: 5px; padding: 0;">＋</button>
             </div>
@@ -43,27 +49,23 @@
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif; }
-        .day { padding: 2px !important; transition: background-color 0.2s; cursor: pointer; }
-        /* 帯デザインの極限最適化 */
-        .event { 
-            padding: 1px 3px !important; 
-            margin: 1px 0 !important; 
-            border-radius: 3px !important; 
+        .day { padding: 2px 0 !important; overflow: hidden; transition: background-color 0.2s; cursor: pointer; }
+        .day-num { margin-left: 4px; }
+        .event, .task { 
+            padding: 1px 4px !important; 
+            margin: 1px 2px !important; 
+            border-radius: 4px !important; 
             font-size: 10px !important; 
             line-height: 1.15 !important; 
             white-space: nowrap !important; 
             overflow: hidden !important; 
             text-overflow: clip !important; 
-            letter-spacing: -0.3px !important; 
             font-weight: 500 !important;
         }
-        /* 連続予定の隙間を消滅させる */
-        .event.span-start { border-radius: 3px 0 0 3px !important; margin-right: -2px !important; padding-right: 2px !important; }
-        .event.span-mid { border-radius: 0 !important; margin-left: -2px !important; margin-right: -2px !important; }
-        .event.span-end { border-radius: 0 3px 3px 0 !important; margin-left: -2px !important; padding-left: 2px !important; }
-        /* 選択された日付のハイライト */
+        .event.span-start { border-radius: 4px 0 0 4px !important; margin-right: -2px !important; padding-right: 6px !important; position: relative; z-index: 3;}
+        .event.span-mid { border-radius: 0 !important; margin-left: -2px !important; margin-right: -2px !important; padding-left: 6px !important; padding-right: 6px !important; position: relative; z-index: 3;}
+        .event.span-end { border-radius: 0 4px 4px 0 !important; margin-left: -2px !important; padding-left: 6px !important; position: relative; z-index: 3;}
         .day.selected { background-color: rgba(0, 122, 255, 0.1) !important; box-shadow: inset 0 0 0 1.5px var(--accent) !important; }
-        /* 古いポップアップモーダルは完全封印 */
         #daily-modal { display: none !important; } 
     </style>
     

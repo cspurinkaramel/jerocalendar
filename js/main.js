@@ -425,3 +425,39 @@ async function attemptSilentRefresh() {
 
 
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
+
+// ★新設：スプリットビューのリサイズ（境界線ドラッグ）機構
+document.addEventListener('DOMContentLoaded', () => {
+    const resizer = document.getElementById('resizer');
+    const bottomView = document.getElementById('bottom-detail-view');
+    let startY = 0;
+    let startHeight = 0;
+
+    if(resizer && bottomView) {
+        // タッチデバイス（iPhone）用
+        resizer.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+            startHeight = bottomView.getBoundingClientRect().height;
+            document.body.style.userSelect = 'none'; // 誤作動防止
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (startY === 0) return;
+            const deltaY = startY - e.touches[0].clientY;
+            let newHeight = startHeight + deltaY;
+            
+            // 最小10vh、最大70vhの範囲で高さを制限（画面が潰れないためのフェイルセーフ）
+            const minH = window.innerHeight * 0.1;
+            const maxH = window.innerHeight * 0.7;
+            if (newHeight < minH) newHeight = minH;
+            if (newHeight > maxH) newHeight = maxH;
+            
+            bottomView.style.height = `${newHeight}px`;
+        }, { passive: true });
+
+        document.addEventListener('touchend', () => {
+            startY = 0;
+            document.body.style.userSelect = '';
+        });
+    }
+});
