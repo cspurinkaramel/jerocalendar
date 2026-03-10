@@ -15,9 +15,16 @@
     <div id="global-loader"><div class="big-spinner"></div><div class="loader-text" id="loader-msg">処理中...</div></div>
     
     <div id="top-bar">
-        <div class="nav-group"><button class="icon-btn" onclick="scrollToToday()">◎</button><button class="icon-btn" onclick="openSettings()">⚙️</button></div>
+        <div class="nav-group">
+            <button class="icon-btn" onclick="scrollToToday()" style="font-size: 13px; font-weight: bold; background: var(--head-bg); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border);">今日</button>
+        </div>
+        
         <div id="month-display">表示中...</div>
-        <div class="nav-group"><button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button><button class="icon-btn" id="view-toggle-btn" onclick="toggleView()">📝</button></div>
+        
+        <div class="nav-group">
+            <button class="icon-btn" id="auth-btn" onclick="handleAuthClick()" style="font-size: 16px; display: none;">🔑</button>
+            <button class="icon-btn" onclick="openSettings()">⚙️</button>
+        </div>
         <div id="progress-bar"></div>
     </div>
     
