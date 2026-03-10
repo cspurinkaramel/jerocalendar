@@ -140,12 +140,49 @@ function renderMonthDOM(year, month, data, position) {
     const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); for (let i = 0; i < firstDay; i++) { const empty = document.createElement('div'); empty.className = 'day empty'; empty.style.backgroundColor = 'var(--head-bg)'; grid.appendChild(empty); }
     const sortedEvents = [...data.events].sort((a, b) => { const aAllDay = a.start.date ? 1 : 0; const bAllDay = b.start.date ? 1 : 0; if(aAllDay !== bAllDay) return bAllDay - aAllDay; return 0; });
     const today = new Date();
+    
     for (let i = 1; i <= daysInMonth; i++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
         if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
-        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; } const spanType = isEventSpanning(e, dateStr); if(spanType !== 'single') div.classList.add(spanType); const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(e.colorId && GOOGLE_COLORS[e.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[e.colorId]; } if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; dayEl.appendChild(div); });
-        if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } dayEl.appendChild(div); });
+        
+        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => { 
+            const div = document.createElement('div'); div.className = 'event'; 
+            let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; } 
+            const spanType = isEventSpanning(e, dateStr); 
+            if(spanType !== 'single') div.classList.add(spanType); 
+            const recurIcon = e.recurrence ? '🔁 ' : ''; 
+            const pData = processSemanticText(e.summary); 
+            div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
+            
+            let bgColor = 'var(--accent)'; let txtColor = '#fff';
+            if(pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } 
+            else if(e.colorId && GOOGLE_COLORS[e.colorId]) { bgColor = GOOGLE_COLORS[e.colorId]; }
+            
+            // ★究極美学：連続予定の線画スタイル化（インフラ線と文字の分離）
+            if (spanType !== 'single') {
+                div.classList.add('continuous');
+                div.style.borderTop = `3px solid ${bgColor}`;
+                div.style.backgroundColor = 'transparent';
+                div.style.color = bgColor; // テキスト色も線の色に同期
+                // 初日以外は文字を透明にして視覚的ノイズを消す
+                if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; 
+            } else {
+                div.classList.add('single');
+                div.style.backgroundColor = bgColor;
+                div.style.color = txtColor;
+            }
+            dayEl.appendChild(div); 
+        });
+        
+        if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { 
+            const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
+            const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; 
+            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; 
+            if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } 
+            else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } 
+            dayEl.appendChild(div); 
+        });
         grid.appendChild(dayEl);
     }
     const container = document.getElementById('calendar-wrapper');
