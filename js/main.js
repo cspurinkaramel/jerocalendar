@@ -7,6 +7,18 @@ let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", curren
 const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
 let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
+// ★追加：ユニバーサルデザイン用 輝度計算アルゴリズム
+// 背景色が明るい場合は黒文字、暗い場合は白文字を返す
+function getContrastYIQ(hexcolor){
+    if(!hexcolor) return '#ffffff';
+    hexcolor = hexcolor.replace("#", "");
+    if(hexcolor.length === 3) hexcolor = hexcolor.split('').map(c => c+c).join('');
+    var r = parseInt(hexcolor.substr(0,2),16);
+    var g = parseInt(hexcolor.substr(2,2),16);
+    var b = parseInt(hexcolor.substr(4,2),16);
+    var yiq = ((r*299)+(g*587)+(b*114))/1000;
+    return (yiq >= 128) ? '#000000' : '#ffffff';
+}
 
 function initWeekdays() { const days = ['日','月','火','水','木','金','土']; const c = document.getElementById('weekdays'); if(c) c.innerHTML = days.map(d => `<div class="wd">${d}</div>`).join(''); }
 function loadSettings() { const th = localStorage.getItem('jero_theme')||'light'; const fs = localStorage.getItem('jero_fs')||'10'; document.getElementById('st-theme').value=th; document.getElementById('st-fs').value=fs; document.body.setAttribute('data-theme',th); document.documentElement.style.setProperty('--fs', fs+'px'); document.getElementById('fs-val').innerText=fs; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if(stVoice) stVoice.checked = voiceEnabled; if(typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; }
@@ -64,18 +76,19 @@ function selectColor(el, id) { document.querySelectorAll('#color-picker .color-o
 function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
 function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'rgb(52, 199, 89)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedTaskColorId = id; }
 
-function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger', 'agenda-bottom-trigger', 'agenda-top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
+function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
 document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
 function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
 function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return; document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append'); if(currentView === 'agenda') renderAgendaView(); }
-function toggleView() { const calView = document.getElementById('calendar-view'); const agendaView = document.getElementById('agenda-view'); const btn = document.getElementById('view-toggle-btn'); if(currentView === 'calendar') { currentView = 'agenda'; calView.style.display = 'none'; agendaView.style.display = 'block'; btn.innerText = '📅'; renderAgendaView(); } else { currentView = 'calendar'; calView.style.display = 'block'; agendaView.style.display = 'none'; btn.innerText = '📝'; scrollToToday(); } }
+function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return; document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m+1, dataCache[`${y}-${m+1}`], 'append');  }
+
 function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
 
 // ★究極圧縮：リストの項目をすべて「1行」に押し込み、視覚的ノイズを排除する
 // ★究極圧縮：バッジを全廃し、機能そのものを識別子とする
 // ★究極圧縮：時間をタップした際のイベントを仕込む
+// ★修正：getCardHtml関数を丸ごと入れ替え
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
@@ -84,24 +97,22 @@ function getCardHtml(type, item) {
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
     
+    // ★UD適用：背景色から最適な文字色を算出
+    const textColor = getContrastYIQ(color);
+    
     let timeHtml = "";
     if (isEvent) {
         if (item.start && item.start.dateTime) {
             const d = new Date(item.start.dateTime);
             const timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-            
-            // ★終了時間を計算してポップアップ用に文字列を生成
             let endTimeStr = "";
             if (item.end && item.end.dateTime) {
                 const ed = new Date(item.end.dateTime);
                 endTimeStr = `${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`;
             }
             const fullTimeStr = endTimeStr ? `${timeStr} 〜 ${endTimeStr}` : timeStr;
-            
-            // ★onclickにevent.stopPropagation()を入れて、カードを開く動作をキャンセルしつつポップアップを呼ぶ
-            timeHtml = `<span class="time-text" style="color: ${color};" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
-        } else {
-            timeHtml = ``;
+            // ★文字色を textColor に変更
+            timeHtml = `<span class="time-text" style="color: ${textColor};" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
         }
     } else {
         const checkIcon = item.status === 'completed' ? '✅' : '⬜️';
@@ -110,7 +121,8 @@ function getCardHtml(type, item) {
     
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     
-    return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
+    // ★文字色(color)を textColor に変更
+    return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}; color: ${textColor};">${timeHtml}<div class="card-title" style="color: ${textColor};">${title}</div></div></div>`;
 }
 
 // ★新設：ひょこっと出るポップアップ関数
@@ -142,26 +154,6 @@ function showTimePopup(el, text, colorCode) {
     }, 2000);
 }
 
-async function renderAgendaView() { 
-    const container = document.getElementById('agenda-content'); container.innerHTML = ''; const today = new Date(); today.setHours(0,0,0,0); let allItems = []; 
-    for (const monthKey in dataCache) { 
-        const data = dataCache[monthKey]; 
-        if(data.events) data.events.forEach(e => { const stDate = e.start.date ? new Date(e.start.date) : new Date(e.start.dateTime); if(stDate >= today || isEventSpanning(e, today.toISOString().split('T')[0]) !== 'single') { allItems.push({ type: 'event', dateObj: stDate, data: e }); } }); 
-        if(data.tasks) data.tasks.filter(t => t.due).forEach(t => { const dDate = new Date(t.due); if(dDate >= today) allItems.push({ type: 'task', dateObj: dDate, data: t }); }); 
-    } 
-    allItems.sort((a, b) => a.dateObj - b.dateObj); 
-    const grouped = {}; 
-    allItems.forEach(item => { const dStr = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}-${String(item.dateObj.getDate()).padStart(2,'0')}`; if(!grouped[dStr]) grouped[dStr] = []; grouped[dStr].push(item); }); 
-    const days = ['日','月','火','水','木','金','土']; 
-    if(Object.keys(grouped).length === 0) { container.innerHTML = '<div style="padding: 30px; text-align: center; color: #888;">予定はありません。</div>'; return; } 
-    for (const [dStr, items] of Object.entries(grouped)) { 
-        const dObj = new Date(dStr); const isToday = dObj.getTime() === today.getTime(); const dayHeader = document.createElement('div'); dayHeader.className = 'agenda-day-header'; dayHeader.innerText = `${dObj.getMonth()+1}月${dObj.getDate()}日 (${days[dObj.getDay()]}) ${isToday ? ' - 今日' : ''}`; if(isToday) dayHeader.style.color = '#ff3b30'; 
-        const listCont = document.createElement('div'); listCont.className = 'agenda-list-container card-list'; 
-        items.sort((a, b) => { const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0; const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0; return aIsCompleted - bIsCompleted; });
-        for(const item of items) { listCont.innerHTML += getCardHtml(item.type, item.data); } 
-        container.appendChild(dayHeader); container.appendChild(listCont); 
-    } 
-}
 
 // 4. モーダルを廃止し、下部のリスト領域に予定を表示する仕組みに変更
 async function openDailyModal(dateStr, dow) {
@@ -396,7 +388,6 @@ async function toggleTaskCompletion(taskId, newStatus) {
     // 画面の再描画（ローディングは一切出さない）
     await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
     if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
-    else if (currentView === 'agenda') { renderAgendaView(); }
     else if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } // ★下部ビューも即時更新
 
     // 2. 裏側（バックグラウンド）でサイレントにAPIと通信する
