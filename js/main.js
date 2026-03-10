@@ -7,6 +7,7 @@ let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", curren
 const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
 let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
+
 // ★追加：ユニバーサルデザイン用 輝度計算アルゴリズム
 // 背景色が明るい場合は黒文字、暗い場合は白文字を返す
 function getContrastYIQ(hexcolor){
@@ -76,7 +77,7 @@ function selectColor(el, id) { document.querySelectorAll('#color-picker .color-o
 function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
 function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#task-color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'rgb(52, 199, 89)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedTaskColorId = id; }
 
-function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger' || e.target.id === 'agenda-bottom-trigger') { loadNextMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } if(e.target.id === 'top-trigger' || e.target.id === 'agenda-top-trigger') { loadPrevMonth().then(() => { if(currentView === 'agenda') renderAgendaView(); }); } } }); }, options); ['bottom-trigger', 'top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
+function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if(e.isIntersecting && !isFetching && localStorage.getItem('jero_token') && !isAuthError) { if(e.target.id === 'bottom-trigger') { loadNextMonth(); } if(e.target.id === 'top-trigger') { loadPrevMonth(); } } }); }, options); ['bottom-trigger', 'top-trigger'].forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); }); }
 document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
 function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if(rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
 function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
@@ -85,10 +86,6 @@ function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return
 
 function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
 
-// ★究極圧縮：リストの項目をすべて「1行」に押し込み、視覚的ノイズを排除する
-// ★究極圧縮：バッジを全廃し、機能そのものを識別子とする
-// ★究極圧縮：時間をタップした際のイベントを仕込む
-// ★修正：getCardHtml関数を丸ごと入れ替え
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
@@ -127,46 +124,25 @@ function getCardHtml(type, item) {
 
 // ★新設：ひょこっと出るポップアップ関数
 function showTimePopup(el, text, colorCode) {
-    // 古いポップアップが残っていれば消す
     document.querySelectorAll('.time-popup').forEach(p => p.remove());
-    
     const popup = document.createElement('div');
     popup.className = 'time-popup';
     popup.style.backgroundColor = colorCode;
-    
-    // 吹き出しの「しっぽ」も予定と同じ色で作る
     popup.innerHTML = `${text}<span style="position:absolute; bottom:-4px; left:14px; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid ${colorCode};"></span>`;
-    
-    // タップされた時間の「真上」に配置する計算
     const rect = el.getBoundingClientRect();
     popup.style.top = (rect.top - 32) + 'px';
     popup.style.left = (rect.left - 4) + 'px';
-    
     document.body.appendChild(popup);
-    
-    // アニメーション発動（少し遅らせることでCSSのtransitionを効かせる）
     setTimeout(() => popup.classList.add('show'), 10);
-    
-    // 2秒後に自動でフェードアウトして消滅
-    setTimeout(() => { 
-        popup.classList.remove('show'); 
-        setTimeout(() => popup.remove(), 200);
-    }, 2000);
+    setTimeout(() => { popup.classList.remove('show'); setTimeout(() => popup.remove(), 200); }, 2000);
 }
 
-
-// 4. モーダルを廃止し、下部のリスト領域に予定を表示する仕組みに変更
 async function openDailyModal(dateStr, dow) {
     selectedDateStr = dateStr; const days = ['日','月','火','水','木','金','土']; const [y, m, d] = dateStr.split('-'); 
-    
-    // カレンダーの選択ハイライトを更新
     document.querySelectorAll('.day').forEach(el => el.classList.remove('selected'));
     const selectedCell = document.getElementById(`cell-${dateStr}`);
     if (selectedCell) selectedCell.classList.add('selected');
-
-    // 下部ビューのヘッダーをカッコよく更新
     document.getElementById('bottom-detail-date').innerHTML = `<span style="font-size:24px; font-weight:300;">${parseInt(d)}</span> <span style="font-size:12px; color:#888;">${days[dow]}</span>`;
-
     const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; 
     const monthKey = `${y}-${parseInt(m)-1}`; const data = dataCache[monthKey]; let hasItems = false;
     let modalItems = [];
@@ -200,17 +176,19 @@ function renderMonthDOM(year, month, data, position) {
             const pData = processSemanticText(e.summary); 
             div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
             
-            let bgColor = 'var(--accent)'; let txtColor = '#fff';
+            let bgColor = 'var(--accent)'; let txtColor = '#ffffff';
             if(pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } 
-            else if(e.colorId && GOOGLE_COLORS[e.colorId]) { bgColor = GOOGLE_COLORS[e.colorId]; }
+            else if(e.colorId && GOOGLE_COLORS[e.colorId]) { 
+                bgColor = GOOGLE_COLORS[e.colorId]; 
+                // ★修正：カレンダーグリッドの文字色も動的コントラストで決定する
+                txtColor = getContrastYIQ(bgColor); 
+            }
             
-            // ★究極美学：連続予定の線画スタイル化（インフラ線と文字の分離）
             if (spanType !== 'single') {
                 div.classList.add('continuous');
                 div.style.borderTop = `3px solid ${bgColor}`;
                 div.style.backgroundColor = 'transparent';
-                div.style.color = bgColor; // テキスト色も線の色に同期
-                // 初日以外は文字を透明にして視覚的ノイズを消す
+                div.style.color = bgColor; 
                 if(spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent'; 
             } else {
                 div.classList.add('single');
@@ -225,7 +203,7 @@ function renderMonthDOM(year, month, data, position) {
             const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; 
             div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; 
             if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } 
-            else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; } 
+            else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); } 
             dayEl.appendChild(div); 
         });
         grid.appendChild(dayEl);
@@ -237,11 +215,10 @@ function renderMonthDOM(year, month, data, position) {
 }
 
 async function initCalendar() { setProgress(10); try { await loadDataCacheFromIDB(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m+1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { document.getElementById('offline-badge').classList.remove('active'); fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } else { document.getElementById('offline-badge').classList.add('active'); } } finally { setProgress(100); } }
-async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); document.getElementById('agenda-bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); document.getElementById('agenda-bottom-trigger').classList.add('hidden');} }
-async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); document.getElementById('agenda-top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); document.getElementById('agenda-top-trigger').classList.add('hidden');} }
+async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); } }
+async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); } }
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
 
-// 3. データ取得時にエラーが出たら、サイレントリフレッシュを試みる
 async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
     if (isAuthError) return; const monthKey = `${year}-${month}`; const startOfMonth = new Date(year, month, 1).toISOString(); const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
     let needsRender = false;
@@ -251,7 +228,6 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
         try { const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
         try { const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; } catch(e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; } 
         
-        // エラー検知時、裏で鍵を取り直してもう一度だけリトライする
         if (authErrorDetected) { 
             const recovered = await attemptSilentRefresh();
             if (recovered) {
@@ -267,7 +243,6 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     } else { if (!document.getElementById(`month-${year}-${month}`)) needsRender = true; }
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
-
 
 function renderIconPalette(targetId, inputId) {
     const palette = document.getElementById(targetId);
@@ -326,7 +301,7 @@ function openEditor(e = null) {
     renderIconPalette('event-icon-palette', 'edit-title');
 }
 
-function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
+function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if(!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
 
 function toggleTimeInputs() {
     const isAllDay = document.getElementById('edit-allday').checked;
@@ -373,36 +348,28 @@ function openTaskEditor(t = null) {
     renderIconPalette('task-icon-palette', 'task-edit-title');
 }
 
-function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
+function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if(!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
 
-// ★究極進化：オプティミスティックUI（APIを待たずに一瞬で画面を書き換える）
 async function toggleTaskCompletion(taskId, newStatus) {
     let targetTask = null; 
     for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
     if (!targetTask) return;
     
-    // 1. サーバーの返事を待たず、ローカルの記憶を即座に書き換えてUIを更新する
     targetTask.status = newStatus; 
     const td = targetTask.due ? new Date(targetTask.due) : new Date(); 
     
-    // 画面の再描画（ローディングは一切出さない）
     await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
-    if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
-    else if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } // ★下部ビューも即時更新
+    if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
 
-    // 2. 裏側（バックグラウンド）でサイレントにAPIと通信する
     const patchBody = { status: newStatus }; if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } else { patchBody.completed = null; }
     try {
         if (navigator.onLine && typeof gapi !== 'undefined') { 
             await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); 
-            // トーストすら不要なら消してもいいが、一応控えめに通知する
-            // showToast(newStatus === 'completed' ? '✅ タスク完了' : '🔄 タスク未完了'); 
         } else { 
             showToast('圏外ではタスクの完了操作はできない。'); 
         }
     } catch(e) { console.error('裏側での同期エラー:', e.message); }
 }
-
 
 async function saveTask() {
     const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim();
@@ -440,7 +407,6 @@ async function executeConversion(fromType) {
     } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
-// ★修正：手動アクション完了後に、必ず下部リストを自動更新する神経を接続
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...'); let msgAction = '保存'; if(action.method === 'insert') msgAction = '追加'; if(action.method === 'update') msgAction = '更新'; if(action.method === 'delete') msgAction = '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク';
     try {
@@ -450,7 +416,6 @@ async function dispatchManualAction(action) {
         const tdStr = action.start || action.due; let td = new Date(); if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); } }
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
         
-        // ★ここが鍵：保存完了後、選択中の日付があれば下部ビューを強制的に再読み込みする
         if (selectedDateStr) {
             const dow = new Date(selectedDateStr).getDay();
             openDailyModal(selectedDateStr, dow);
@@ -493,7 +458,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 function gapiLoaded() { gapi.load('client', initializeGapiClient); }
 async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"]}); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
 function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
-// 1. 鍵アイコンを出しにくくする：58分制限の撤廃
 function checkAutoLogin() { 
     const savedToken = localStorage.getItem('jero_token'); 
     if (savedToken) { 
@@ -505,7 +469,6 @@ function checkAutoLogin() {
     } 
 }
 
-// 2. ★新設：裏側でこっそり鍵を取り直すサイレント・リフレッシュ機構
 async function attemptSilentRefresh() {
     return new Promise((resolve) => {
         if (!gisInited || !tokenClient) { resolve(false); return; }
@@ -521,15 +484,12 @@ async function attemptSilentRefresh() {
                 resolve(true); 
             }
         };
-        // 画面を出さずにバックグラウンドで再交渉
         tokenClient.requestAccessToken({prompt: ''}); 
     });
 }
 
-
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
 
-// ★新設：スプリットビューのリサイズ（境界線ドラッグ）機構
 document.addEventListener('DOMContentLoaded', () => {
     const resizer = document.getElementById('resizer');
     const bottomView = document.getElementById('bottom-detail-view');
@@ -537,11 +497,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let startHeight = 0;
 
     if(resizer && bottomView) {
-        // タッチデバイス（iPhone）用
         resizer.addEventListener('touchstart', (e) => {
             startY = e.touches[0].clientY;
             startHeight = bottomView.getBoundingClientRect().height;
-            document.body.style.userSelect = 'none'; // 誤作動防止
+            document.body.style.userSelect = 'none';
         }, { passive: true });
 
         document.addEventListener('touchmove', (e) => {
@@ -549,7 +508,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const deltaY = startY - e.touches[0].clientY;
             let newHeight = startHeight + deltaY;
             
-            // 最小10vh、最大70vhの範囲で高さを制限（画面が潰れないためのフェイルセーフ）
             const minH = window.innerHeight * 0.1;
             const maxH = window.innerHeight * 0.7;
             if (newHeight < minH) newHeight = minH;
