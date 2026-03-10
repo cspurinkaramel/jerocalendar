@@ -53,8 +53,8 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif; }
         
-        /* ★重力崩壊の修正：padding-topを復活させ、日付の被りを完全排除 */
-        .day { padding: 20px 0 2px 0 !important; overflow: hidden; position: relative; transition: background-color 0.2s; cursor: pointer; }
+/* ★重力崩壊と境界の完全破壊：overflowをvisibleにし、テキストを隣のセルへ侵食させる */
+        .day { padding: 20px 0 2px 0 !important; overflow: visible !important; position: relative; transition: background-color 0.2s; cursor: pointer; }
         .day-num { position: absolute; top: 2px; left: 4px; font-weight: 600; font-size: 11px; z-index: 10; color: var(--txt); }
         .today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; top: 1px; left: 2px; }
 
@@ -72,13 +72,20 @@
             z-index: 5;
         }
         
-        /* ★連続予定の線画スタイル化（境界突破） */
+        /* ★連続予定の線画スタイル化（限界突破） */
         .event.continuous {
             border-radius: 0 !important;
             margin-top: 2px !important;
             padding-top: 2px !important;
         }
-        .event.continuous.span-start { margin-right: -2px !important; padding-right: 6px !important; border-top-left-radius: 2px !important; }
+        /* 初日のセルだけoverflowを開放し、Zインデックスを極限まで上げる */
+        .event.continuous.span-start { 
+            margin-right: -2px !important; 
+            padding-right: 6px !important; 
+            border-top-left-radius: 2px !important; 
+            overflow: visible !important; 
+            z-index: 20; 
+        }
         .event.continuous.span-mid { margin-left: -2px !important; margin-right: -2px !important; padding-left: 6px !important; padding-right: 6px !important; }
         .event.continuous.span-end { margin-left: -2px !important; padding-left: 6px !important; border-top-right-radius: 2px !important; }
         

@@ -330,18 +330,35 @@ function openTaskEditor(t = null) {
 
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if(currentView === 'calendar' && !document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
 
+// ★究極進化：オプティミスティックUI（APIを待たずに一瞬で画面を書き換える）
 async function toggleTaskCompletion(taskId, newStatus) {
-    let targetTask = null; for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
+    let targetTask = null; 
+    for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
     if (!targetTask) return;
+    
+    // 1. サーバーの返事を待たず、ローカルの記憶を即座に書き換えてUIを更新する
+    targetTask.status = newStatus; 
+    const td = targetTask.due ? new Date(targetTask.due) : new Date(); 
+    
+    // 画面の再描画（ローディングは一切出さない）
+    await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
+    if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
+    else if (currentView === 'agenda') { renderAgendaView(); }
+    else if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } // ★下部ビューも即時更新
+
+    // 2. 裏側（バックグラウンド）でサイレントにAPIと通信する
     const patchBody = { status: newStatus }; if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } else { patchBody.completed = null; }
-    showGlobalLoader('タスク状態を更新中...');
     try {
-        if (navigator.onLine && typeof gapi !== 'undefined') { await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); showToast(newStatus === 'completed' ? '✅ タスクを完了にした' : '🔄 タスクを未完了に戻した'); } 
-        else { showToast('圏外ではタスクの完了操作はできない。電波を探せ。'); }
-        targetTask.status = newStatus; const td = targetTask.due ? new Date(targetTask.due) : new Date(); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
-        if (document.getElementById('daily-modal').classList.contains('active') && selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } else if (currentView === 'agenda') { renderAgendaView(); }
-    } catch(e) { showToast('❌ エラー: ' + e.message); } finally { hideGlobalLoader(); }
+        if (navigator.onLine && typeof gapi !== 'undefined') { 
+            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); 
+            // トーストすら不要なら消してもいいが、一応控えめに通知する
+            // showToast(newStatus === 'completed' ? '✅ タスク完了' : '🔄 タスク未完了'); 
+        } else { 
+            showToast('圏外ではタスクの完了操作はできない。'); 
+        }
+    } catch(e) { console.error('裏側での同期エラー:', e.message); }
 }
+
 
 async function saveTask() {
     const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim();
@@ -379,7 +396,7 @@ async function executeConversion(fromType) {
     } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
-// ★修正：エラー解読の強化（undefinedの撲滅）
+// ★修正：手動アクション完了後に、必ず下部リストを自動更新する神経を接続
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...'); let msgAction = '保存'; if(action.method === 'insert') msgAction = '追加'; if(action.method === 'update') msgAction = '更新'; if(action.method === 'delete') msgAction = '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク';
     try {
@@ -388,8 +405,13 @@ async function dispatchManualAction(action) {
         if(typeof dataCache !== 'undefined') { for(let key in dataCache) { if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); } } }
         const tdStr = action.start || action.due; let td = new Date(); if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); } }
         await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
+        
+        // ★ここが鍵：保存完了後、選択中の日付があれば下部ビューを強制的に再読み込みする
+        if (selectedDateStr) {
+            const dow = new Date(selectedDateStr).getDay();
+            openDailyModal(selectedDateStr, dow);
+        }
     } catch (e) { 
-        // undefinedにならないよう、Googleのエラーオブジェクトから安全にメッセージを抽出
         const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "不正なデータです");
         showToast('❌ エラー: ' + errMsg); 
     } finally { hideGlobalLoader(); }
