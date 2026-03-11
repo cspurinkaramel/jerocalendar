@@ -87,8 +87,7 @@ async function updateSyncBadge() {
             badge.style.background = 'var(--accent)';
             badge.classList.add('active');
             badge.onclick = () => {
-                showToast('手動でバックグラウンド同期を開始した。');
-                processSyncQueue();
+                openSyncManager(); // ★いきなり送信せず、管理モーダルを開く
             };
         } else {
             badge.classList.remove('active');
@@ -877,3 +876,97 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================
+// ★ 野戦倉庫管理UI (未送信データマネージャー)
+// ==========================================
+async function openSyncManager() {
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('sync-manager-modal').classList.add('active');
+    await renderSyncQueueList();
+}
+
+function closeSyncManager() {
+    document.getElementById('sync-manager-modal').classList.remove('active');
+    if (!document.getElementById('daily-modal').classList.contains('active') &&
+        !document.getElementById('editor-modal').classList.contains('active') &&
+        !document.getElementById('task-editor-modal').classList.contains('active')) {
+        document.getElementById('overlay').classList.remove('active');
+    }
+}
+
+async function renderSyncQueueList() {
+    const listEl = document.getElementById('sync-queue-list');
+    if (!listEl) return;
+
+    const queue = await getSyncQueue();
+    if (queue.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888; font-size:13px;">未送信のデータはない。平和だ。</div>';
+        return;
+    }
+
+    let html = '';
+    queue.forEach(item => {
+        const payload = item.payload;
+        const isEvent = payload.type === 'event';
+        const method = payload.method === 'insert' ? '追加' : payload.method === 'update' ? '更新' : '削除';
+        const title = payload.title || '(無名)';
+        let dateStr = "日時不明";
+        if (payload.start) dateStr = payload.start.includes('T') ? new Date(payload.start).toLocaleString('ja-JP') : payload.start;
+        else if (payload.due) dateStr = new Date(payload.due).toLocaleDateString('ja-JP');
+
+        html += `
+            <div style="background:var(--head-bg); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="flex:1; overflow:hidden; margin-right:10px;">
+                    <div style="font-size:10px; color:var(--accent); font-weight:bold; margin-bottom:2px;">[${isEvent ? '予定' : 'タスク'} : ${method}]</div>
+                    <div style="font-size:14px; font-weight:bold; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div>
+                    <div style="font-size:11px; color:#888;">${dateStr}</div>
+                </div>
+                <div style="display:flex; gap:6px; flex-shrink:0;">
+                    <button class="btn-gray" style="padding:6px 10px; font-size:12px; border-radius:6px; border:none; color:white; cursor:pointer;" onclick="retrySingleSyncItem('${item.id}')">再送</button>
+                    <button class="btn-red" style="padding:6px 10px; font-size:12px; border-radius:6px; border:none; color:white; cursor:pointer;" onclick="discardSingleSyncItem('${item.id}')">破棄</button>
+                </div>
+            </div>
+        `;
+    });
+    listEl.innerHTML = html;
+}
+
+async function discardSingleSyncItem(id) {
+    if (!confirm("この未送信データを破棄する。ゴーストデータならこれが正解だ。いいか？")) return;
+    clearSyncQueueItem(id);
+
+    for (const monthKey in dataCache) {
+        if (dataCache[monthKey].events) dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== id);
+        if (dataCache[monthKey].tasks) dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== id);
+    }
+
+    await renderSyncQueueList();
+    await updateSyncBadge();
+    showToast("🚮 データを破棄した。");
+
+    const today = new Date();
+    fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', false);
+}
+
+async function retrySingleSyncItem(id) {
+    const queue = await getSyncQueue();
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+
+    showGlobalLoader("1件だけ再送信中...");
+    try {
+        await executeApiAction(item.payload);
+        clearSyncQueueItem(id);
+        showToast("✅ 送信成功だ！");
+        await renderSyncQueueList();
+        await updateSyncBadge();
+        const today = new Date();
+        fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
+    } catch (e) {
+        console.error(e);
+        showToast("❌ やはり弾かれた。形式が不正なゴーストデータの可能性が高い。破棄を勧めるぞ。");
+    } finally {
+        hideGlobalLoader();
+    }
+}
