@@ -68,39 +68,91 @@ function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = 
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 
 // ==========================================
-// 3. 自動同期エンジン (補給部隊)
+// 3. 自動同期エンジン (補給部隊) - JeroCore v8.9.2 高度化版
 // ==========================================
+
+// 意図的な待機（クールダウン）を生み出す関数
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function processSyncQueue() {
-    if (!navigator.onLine) return; // 圏外なら何もしない
+    if (!navigator.onLine) return; 
     const queue = await getSyncQueue();
-    if (queue.length === 0) return;
+    if (queue.length === 0) {
+        document.getElementById('offline-badge').classList.remove('active');
+        return; 
+    }
 
     console.log(`🔄 自動補給部隊起動：${queue.length}件の未送信データを処理する。`);
+    showGlobalLoader(`同期中... 残り${queue.length}件`);
     
-    // トークンが切れていれば再取得を試みる（サイレントリフレッシュ）
     const validToken = await attemptSilentRefresh();
     if (!validToken) {
         console.warn("トークンの再取得に失敗。同期を延期する。");
+        hideGlobalLoader();
+        updatePendingBadge(queue.length); // バッジを手動ボタン化
         return;
     }
 
     let successCount = 0;
     for (let item of queue) {
-        try {
-            await executeApiAction(item.payload, true); // true = isRetry
-            clearSyncQueueItem(item.id);
-            successCount++;
-        } catch (error) {
-            console.error(`同期失敗 (ID: ${item.id}):`, error);
-            // エラーの種類によってはキューから消す（400エラー等、再送しても無駄な場合）
+        let retries = 3; // 1アイテムにつき最大3回までその場でリトライする
+        let itemSuccess = false;
+
+        while (retries > 0 && !itemSuccess) {
+            try {
+                await executeApiAction(item.payload, true); 
+                clearSyncQueueItem(item.id);
+                successCount++;
+                itemSuccess = true;
+                
+                // Googleのレート制限を回避するため、意図的に500ミリ秒待機する（第一原理）
+                await sleep(500); 
+
+            } catch (error) {
+                retries--;
+                console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
+                if (retries > 0) {
+                    await sleep(1500); // 失敗時は少し長めに待ってから再アタック
+                } else {
+                    console.error("3回のリトライに失敗。野戦倉庫に残置する。");
+                    // 400系(Bad Request)など、再送しても無意味な致命的エラーの場合はキューから消す判断もここで行えるが、今回は安全のため残す。
+                }
+            }
         }
     }
     
+    hideGlobalLoader();
+    const remainingQueue = await getSyncQueue();
+
     if (successCount > 0) {
-        showToast(`✅ ${successCount}件の未送信データを同期完了した。`);
-        // 画面を最新状態に再描画
+        showToast(`✅ ${successCount}件の同期を完了した。`);
         const today = new Date();
         await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
+    }
+
+    // 処理後、まだ残っていれば手動ボタンを出し、ゼロになれば消す
+    updatePendingBadge(remainingQueue.length);
+}
+
+// バッジを手動同期ボタンとして活用する関数
+function updatePendingBadge(count) {
+    const badge = document.getElementById('offline-badge');
+    if (count > 0 && navigator.onLine) {
+        badge.innerText = `🔄 未送信データが ${count} 件あるぞ (タップで同期)`;
+        badge.style.background = 'var(--accent)'; // 青色にしてタップ可能をアピール
+        badge.classList.add('active');
+        badge.onclick = () => {
+            showToast('手動で補給部隊に出撃命令を出した。');
+            processSyncQueue();
+        };
+    } else if (!navigator.onLine) {
+        badge.innerText = '⚡️ オフライン (キャッシュ表示中・AI使用不可)';
+        badge.style.background = '#ff9500'; // オレンジに戻す
+        badge.classList.add('active');
+        badge.onclick = null;
+    } else {
+        badge.classList.remove('active');
+        badge.onclick = null;
     }
 }
 
@@ -636,11 +688,15 @@ async function processPDFFile(file) {
 }
 
 window.addEventListener('online', async () => { 
-    document.getElementById('offline-badge').classList.remove('active'); 
+    // 単純にバッジを消すのではなく、未送信キューがあるか確認してから処理する
     showToast('📶 電波が回復した。野戦倉庫の物資（未同期データ）を転送する。'); 
     processSyncQueue(); 
 });
-window.addEventListener('offline', () => { document.getElementById('offline-badge').classList.add('active'); showToast('⚡️ 圏外になった。変更は野戦倉庫に退避する。'); });
+
+window.addEventListener('offline', async () => { 
+    updatePendingBadge(0); // オフライン表示に切り替え
+    showToast('⚡️ 圏外になった。変更は野戦倉庫に退避する。'); 
+});
 
 // アプリがバックグラウンドからアクティブになった時の処理（iOS PWAで重要）
 document.addEventListener('visibilitychange', () => {
