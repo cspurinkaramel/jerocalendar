@@ -665,29 +665,51 @@ async function dispatchManualAction(action) {
     }
 
     if (isSuccess) {
-        // オンライン成功時はキャッシュから完全に削除・更新する
+        const tdStr = action.start || action.due; let td = new Date();
+        if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+        const year = td.getFullYear(); const month = td.getMonth();
+        const monthKey = `${year}-${month}`;
+
+        // ★進化：オンライン成功時の高速反映ロジック（色やタイトルの変更を手元のメモリに直接書き込む）
         if (typeof dataCache !== 'undefined' && navigator.onLine) {
-            for (let key in dataCache) {
-                if (action.method === 'delete') {
-                    if (action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
-                    if (action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
+            if (action.method === 'delete' && dataCache[monthKey]) {
+                if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
+                if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
+            } else if (action.method === 'update' && dataCache[monthKey]) {
+                if (action.type === 'event') {
+                    let ev = dataCache[monthKey].events.find(e => e.id === action.id);
+                    if (ev) {
+                        ev.summary = action.title;
+                        ev.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start };
+                        if (action.end) ev.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end };
+                        ev.colorId = action.colorId;
+                    }
+                } else if (action.type === 'task') {
+                    let tk = dataCache[monthKey].tasks.find(t => t.id === action.id);
+                    if (tk) {
+                        tk.title = action.title;
+                        tk.notes = action.description;
+                        if (action.due) tk.due = action.due;
+                    }
                 }
             }
         }
 
         await updateSyncBadge();
 
-        const tdStr = action.start || action.due; let td = new Date();
-        if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-
-        // ★UIサボり防止：該当月のDOMを一度破壊し、強制的に再描画させる
-        const year = td.getFullYear(); const month = td.getMonth();
+        // UIのDOMを一度破壊し、強制的に再描画させる
         const existingMonth = document.getElementById(`month-${year}-${month}`);
-        if (existingMonth) {
-            existingMonth.remove();
-            renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
+        if (existingMonth) existingMonth.remove();
+
+        // ★究極の分岐：オンラインの「追加」は新しいIDをもらうため強制フェッチ。それ以外（色変更など）はメモリから瞬時に描画。
+        if (navigator.onLine && action.method === 'insert') {
+            await fetchAndRenderMonth(year, month, 'replace', true);
         } else {
-            await fetchAndRenderMonth(year, month, 'replace', false);
+            if (existingMonth) {
+                renderMonthDOM(year, month, dataCache[monthKey], 'replace');
+            } else {
+                await fetchAndRenderMonth(year, month, 'replace', false);
+            }
         }
 
         if (selectedDateStr) {
