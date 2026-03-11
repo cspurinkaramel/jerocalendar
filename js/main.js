@@ -1,9 +1,10 @@
-// JeroCalendar v8.9.3 Main Logic - Offline First & Auto-Sync
+// JeroCalendar v8.9.4 Main Logic - Autonomous & Self-Cleaning Edition
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
 let dataCache = {}; let renderedMonths = []; let observer, isFetching = false, isAuthError = false;
 let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", currentView = 'calendar';
+let isCalendarInited = false; // ★追加：二重起動防止フラグ
 const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c73", "5":"#f6bf26", "6":"#f4511e", "7":"#039be5", "8":"#616161", "9":"#3f51b5", "10":"#0b8043", "11":"#d50000" };
 let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
@@ -54,7 +55,7 @@ function saveToSyncQueue(actionPayload) {
             const payloadWithLocalId = { ...actionPayload, _localId: id };
             tx.objectStore('sync_queue').put({ id: id, payload: payloadWithLocalId, timestamp: Date.now() }); 
             tx.oncomplete = () => {
-                console.log("⚠️ 通信断絶または認証エラー: データをローカルの控え室に退避した。", payloadWithLocalId);
+                console.log("⚠️ データをローカルの控え室に退避した。", payloadWithLocalId);
                 resolve(id);
             };
         } catch(e) { resolve(null); } 
@@ -76,7 +77,7 @@ async function updateSyncBadge() {
     const count = queue.length;
 
     if (!navigator.onLine) {
-        badge.innerText = count > 0 ? `⚡️ 圏外 (未送信: ${count}件退避中)` : '⚡️ オフライン (キャッシュ表示中)';
+        badge.innerText = count > 0 ? `⚡️ 圏外 (未送信: ${count}件退避中)` : '⚡️ 完全自律モード (キャッシュ起動)';
         badge.style.background = '#ff9500'; 
         badge.classList.add('active');
         badge.onclick = null; 
@@ -97,7 +98,7 @@ async function updateSyncBadge() {
 }
 
 // ==========================================
-// 4. バックグラウンド同期エンジン
+// 4. バックグラウンド同期エンジン (自浄作用搭載)
 // ==========================================
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -133,12 +134,17 @@ async function processSyncQueue() {
                 itemSuccess = true;
                 await sleep(500); 
             } catch (error) {
-                retries--;
-                console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
-                if (retries > 0) {
-                    await sleep(1500); 
+                // ★限界突破：Googleに拒絶された不正データを自己判断で破棄する（自浄作用）
+                const code = error.status || (error.result && error.result.error && error.result.error.code);
+                if (code === 400 || code === 403 || code === 404 || code === 410) {
+                    console.error(`❌ Googleから拒絶された(Code:${code})。不正データとして破棄する。`, error);
+                    clearSyncQueueItem(item.id);
+                    itemSuccess = true; // ループを抜けて次のアイテムへ
                 } else {
-                    console.error("3回のリトライに失敗。ローカルの控え室に残置する。");
+                    retries--;
+                    console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
+                    if (retries > 0) await sleep(1500); 
+                    else console.error("3回のリトライに失敗。ローカルの控え室に残置する。");
                 }
             }
         }
@@ -195,7 +201,7 @@ function getCardHtml(type, item) {
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
     const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
     
-    // ★視覚化ロジック
+    // 視覚化ロジック
     const isPendingInsert = item._localId ? true : false;
     const isPendingDelete = item._pendingDelete ? true : false;
     
@@ -235,7 +241,7 @@ function getCardHtml(type, item) {
     }
     if (isPendingDelete) {
         titleStyle = 'text-decoration: line-through;';
-        cardStyle = 'opacity: 0.4; filter: grayscale(100%); pointer-events: none;'; // 削除予定はクリック不可
+        cardStyle = 'opacity: 0.4; filter: grayscale(100%); pointer-events: none;'; 
     }
 
     return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
@@ -319,7 +325,6 @@ function renderMonthDOM(year, month, data, position) {
                 div.style.color = txtColor;
             }
 
-            // オフライン状態での視覚スタイル適用
             if (isPendingInsert) {
                 div.style.border = `1px dashed ${txtColor}`; 
                 div.style.opacity = '0.8';
@@ -365,7 +370,27 @@ function renderMonthDOM(year, month, data, position) {
     else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
 }
 
-async function initCalendar() { setProgress(10); try { await loadDataCacheFromIDB(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m+1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } await updateSyncBadge(); } finally { setProgress(100); } }
+// ★限界突破：二重起動を防止しつつ、安全にカレンダーを展開する
+async function initCalendar() { 
+    if (isCalendarInited) return; 
+    isCalendarInited = true;
+    setProgress(10); 
+    try { 
+        await loadDataCacheFromIDB(); 
+        const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); 
+        await fetchAndRenderMonth(y, m, 'append', false); 
+        await fetchAndRenderMonth(y, m+1, 'append', false); 
+        scrollToToday(); 
+        if (navigator.onLine && !isAuthError) { 
+            fetchAndRenderMonth(y, m, 'replace', true); 
+            fetchAndRenderMonth(y, m+1, 'replace', true); 
+        } 
+        await updateSyncBadge(); 
+    } finally { 
+        setProgress(100); 
+    } 
+}
+
 async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); } }
 async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); } }
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
@@ -614,7 +639,6 @@ async function dispatchManualAction(action) {
         if(typeof dataCache !== 'undefined') { 
             for(let key in dataCache) { 
                 if(action.method === 'delete') { 
-                    // ★オフラインの「削除」は画面から消さずに「削除予定フラグ」を立てる
                     if (!navigator.onLine) {
                         if(action.type === 'event') {
                             let ev = dataCache[key].events.find(e => e.id === action.id);
@@ -625,7 +649,6 @@ async function dispatchManualAction(action) {
                             if(tk) tk._pendingDelete = true;
                         }
                     } else {
-                        // オンラインで成功したなら完全に消去
                         if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); 
                         if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); 
                     }
@@ -648,7 +671,7 @@ async function dispatchManualAction(action) {
 }
 
 function insertOptimisticData(action, localId) {
-    if (action.method === 'delete') return; // 削除の場合はフラグを立てるので挿入は不要
+    if (action.method === 'delete') return; 
 
     const tdStr = action.start || action.due;
     let td = new Date();
@@ -757,6 +780,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (eventActionBar && !document.getElementById('btn-convert-task')) { const btn = document.createElement('button'); btn.id = 'btn-convert-task'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 タスクへ'; btn.onclick = () => executeConversion('event'); eventActionBar.insertBefore(btn, document.getElementById('btn-duplicate')); }
         const taskActionBar = document.querySelector('#task-editor-modal .action-bar');
         if (taskActionBar && !document.getElementById('btn-convert-event')) { const btn = document.createElement('button'); btn.id = 'btn-convert-event'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 予定へ'; btn.onclick = () => executeConversion('task'); taskActionBar.insertBefore(btn, document.getElementById('task-btn-delete')); }
+        
+        // ★限界突破：Google APIの応答を待たずに、キャッシュから自律起動する
+        if (localStorage.getItem('jero_token')) {
+            setTimeout(() => {
+                if (!isCalendarInited) {
+                    console.log("⚡️ Google APIの応答なし。キャッシュによる自律起動を開始。");
+                    document.getElementById('offline-badge').innerText = '⚡️ 完全自律モード (キャッシュ起動)';
+                    document.getElementById('offline-badge').classList.add('active');
+                    initCalendar();
+                }
+            }, 1500); // 1.5秒待って初期化されていなければ強制起動
+        }
+        
     } catch (err) { showToast("初期化エラー: " + err.message); }
 });
 
