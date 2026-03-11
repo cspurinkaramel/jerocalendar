@@ -62,7 +62,7 @@ function saveToSyncQueue(actionPayload) {
     });
 }
 function getSyncQueue() { return new Promise((resolve) => { if (!idb) return resolve([]); try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch (e) { resolve([]); } }); }
-function clearSyncQueueItem(id) { if (!idb) return; try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); } catch (e) { } }
+function clearSyncQueueItem(id) { return new Promise((resolve) => { if (!idb) return resolve(); try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); } catch (e) { resolve(); } }); }
 function saveDataCacheToIDB(monthKey, data) { if (!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch (e) { } }
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if (!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch (e) { resolve(); } }); }
 
@@ -121,6 +121,7 @@ async function processSyncQueue() {
     }
 
     let successCount = 0;
+    let needsRefresh = false;
     for (let item of queue) {
         let retries = 3;
         let itemSuccess = false;
@@ -128,17 +129,19 @@ async function processSyncQueue() {
         while (retries > 0 && !itemSuccess) {
             try {
                 await executeApiAction(item.payload, true);
-                clearSyncQueueItem(item.id);
+                await clearSyncQueueItem(item.id);
                 successCount++;
                 itemSuccess = true;
+                needsRefresh = true;
                 await sleep(500);
             } catch (error) {
-                // ★限界突破：Googleに拒絶された不正データを自己判断で破棄する（自浄作用）
                 const code = error.status || (error.result && error.result.error && error.result.error.code);
-                if (code === 400 || code === 403 || code === 404 || code === 410) {
+                // 403はレート制限などの一時エラーなので残す。400, 404, 410 は形式不正や対象消失なので破棄。
+                if (code === 400 || code === 404 || code === 410) {
                     console.error(`❌ Googleから拒絶された(Code:${code})。不正データとして破棄する。`, error);
-                    clearSyncQueueItem(item.id);
-                    itemSuccess = true; // ループを抜けて次のアイテムへ
+                    await clearSyncQueueItem(item.id);
+                    itemSuccess = true;
+                    needsRefresh = true; // 破棄した場合はUIのゴーストを消すためリフレッシュ必須
                 } else {
                     retries--;
                     console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
@@ -153,6 +156,10 @@ async function processSyncQueue() {
 
     if (successCount > 0) {
         showToast(`✅ ${successCount}件の同期を完了した。`);
+    }
+
+    // 成功または破棄があった場合は、強制的にGoogleから最新状態を読み込み、UIのおばけを浄化する
+    if (needsRefresh) {
         const today = new Date();
         await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
     }
@@ -990,19 +997,17 @@ async function renderSyncQueueList() {
 
 async function discardSingleSyncItem(id) {
     if (!confirm("この未送信データを破棄する。ゴーストデータならこれが正解だ。いいか？")) return;
-    clearSyncQueueItem(id);
-
-    for (const monthKey in dataCache) {
-        if (dataCache[monthKey].events) dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== id);
-        if (dataCache[monthKey].tasks) dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== id);
-    }
+    await clearSyncQueueItem(id); // 削除完了を確実に待つ
 
     await renderSyncQueueList();
     await updateSyncBadge();
-    showToast("🚮 データを破棄した。");
+    showToast("🚮 データを破棄した。UIのゴーストを浄化する。");
 
+    // ★重要: _pendingUpdateなどのおばけフラグを消すため、強制的にGoogleから最新状態を再取得する
     const today = new Date();
-    fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', false);
+    showGlobalLoader("カレンダーを最新化中...");
+    await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
+    hideGlobalLoader();
 }
 
 async function retrySingleSyncItem(id) {
@@ -1013,12 +1018,12 @@ async function retrySingleSyncItem(id) {
     showGlobalLoader("1件だけ再送信中...");
     try {
         await executeApiAction(item.payload);
-        clearSyncQueueItem(id);
+        await clearSyncQueueItem(id); // 削除完了を確実に待つ
         showToast("✅ 送信成功だ！");
         await renderSyncQueueList();
         await updateSyncBadge();
         const today = new Date();
-        fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
+        await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
     } catch (e) {
         console.error(e);
         showToast("❌ やはり弾かれた。形式が不正なゴーストデータの可能性が高い。破棄を勧めるぞ。");
