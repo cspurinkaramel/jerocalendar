@@ -200,13 +200,15 @@ function getCardHtml(type, item) {
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
     const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
 
-    // 視覚化ロジック
+    // ★視覚化ロジック（編集状態を追加）
     const isPendingInsert = item._localId ? true : false;
+    const isPendingUpdate = item._pendingUpdate ? true : false;
     const isPendingDelete = item._pendingDelete ? true : false;
 
     let stateIcon = '';
-    if (isPendingInsert) stateIcon = ' ➕🔄';
-    if (isPendingDelete) stateIcon = ' 🗑️';
+    if (isPendingInsert) stateIcon = ' ➕🔄(追加予定)';
+    if (isPendingUpdate) stateIcon = ' 📝🔄(編集予定)';
+    if (isPendingDelete) stateIcon = ' 🗑️(削除予定)';
 
     const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + stateIcon;
 
@@ -238,9 +240,12 @@ function getCardHtml(type, item) {
     if (isPendingInsert) {
         cardStyle = 'border: 2px dashed #0a84ff; opacity: 0.9;';
     }
+    if (isPendingUpdate) {
+        cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; // 編集予定はオレンジ
+    }
     if (isPendingDelete) {
         titleStyle = 'text-decoration: line-through;';
-        cardStyle = 'opacity: 0.4; filter: grayscale(100%); pointer-events: none;';
+        cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; // クリック不可
     }
 
     return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
@@ -282,7 +287,21 @@ async function openDailyModal(dateStr, dow) {
 function renderMonthDOM(year, month, data, position) {
     if (!data) return; const wrapper = document.createElement('div'); wrapper.className = 'month-wrapper'; wrapper.id = `month-${year}-${month}`; wrapper.innerHTML = `<div class="month-title">${year}年 ${month + 1}月</div><div class="calendar-grid"></div>`; const grid = wrapper.querySelector('.calendar-grid');
     const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); for (let i = 0; i < firstDay; i++) { const empty = document.createElement('div'); empty.className = 'day empty'; empty.style.backgroundColor = 'var(--head-bg)'; grid.appendChild(empty); }
-    const sortedEvents = [...data.events].sort((a, b) => { const aAllDay = a.start.date ? 1 : 0; const bAllDay = b.start.date ? 1 : 0; if (aAllDay !== bAllDay) return bAllDay - aAllDay; return 0; });
+
+    // ★連続予定（期間が長いもの）を最優先で上に持ってくる高度なソート
+    const getEventDuration = (e) => {
+        if (e.start && e.start.date && e.end && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); }
+        return 0;
+    };
+    const sortedEvents = [...data.events].sort((a, b) => {
+        const durA = getEventDuration(a); const durB = getEventDuration(b);
+        if (durA !== durB) return durB - durA; // 期間が長い順
+        const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0;
+        if (aAllDay !== bAllDay) return bAllDay - aAllDay; // 終日優先
+        const tA = a.start && a.start.dateTime ? new Date(a.start.dateTime).getTime() : 0;
+        const tB = b.start && b.start.dateTime ? new Date(b.start.dateTime).getTime() : 0;
+        return tA - tB; // 開始時間が早い順
+    });
     const today = new Date();
 
     for (let i = 1; i <= daysInMonth; i++) {
@@ -296,14 +315,20 @@ function renderMonthDOM(year, month, data, position) {
             const spanType = isEventSpanning(e, dateStr);
             if (spanType !== 'single') div.classList.add(spanType);
 
+            // ★追加・編集・削除の3つの状態を完全管理
             const isPendingInsert = e._localId ? true : false;
+            const isPendingUpdate = e._pendingUpdate ? true : false;
             const isPendingDelete = e._pendingDelete ? true : false;
-            const insertIcon = isPendingInsert ? '➕🔄 ' : '';
-            const deleteIcon = isPendingDelete ? '🗑️ ' : '';
+
+            let stateIcon = '';
+            if (isPendingInsert) stateIcon = '➕🔄 ';
+            if (isPendingUpdate) stateIcon = '📝🔄 ';
+            if (isPendingDelete) stateIcon = '🗑️ ';
+
             const recurIcon = e.recurrence ? '🔁 ' : '';
             const pData = processSemanticText(e.summary);
 
-            div.innerText = deleteIcon + insertIcon + recurIcon + pData.text + (timeStr ? ` (${timeStr})` : '');
+            div.innerText = stateIcon + recurIcon + pData.text + (timeStr ? ` (${timeStr})` : '');
 
             let bgColor = 'var(--accent)'; let txtColor = '#ffffff';
             if (pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; }
@@ -328,9 +353,13 @@ function renderMonthDOM(year, month, data, position) {
                 div.style.border = `1px dashed ${txtColor}`;
                 div.style.opacity = '0.8';
             }
+            if (isPendingUpdate) {
+                div.style.border = `1px dotted #ff9500`; // 編集予定はオレンジの点線
+                div.style.opacity = '0.8';
+            }
             if (isPendingDelete) {
                 div.style.textDecoration = 'line-through';
-                div.style.opacity = '0.4';
+                div.style.opacity = '0.3'; // より薄く
                 div.style.filter = 'grayscale(100%)';
             }
             dayEl.appendChild(div);
@@ -599,7 +628,7 @@ async function executeConversion(fromType) {
 }
 
 // ==========================================
-// 8. アクション司令塔 (エラー迎撃システム)
+// 8. アクション司令塔 (エラー迎撃と楽観的UI)
 // ==========================================
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...');
@@ -609,7 +638,7 @@ async function dispatchManualAction(action) {
 
     if (!navigator.onLine) {
         const localId = await saveToSyncQueue(action);
-        if (localId) insertOptimisticData(action, localId);
+        if (localId) updateLocalCacheForOptimisticUI(action, localId);
         showToast(`📦 圏外だ。「${msgType}」の${msgAction}をローカルの控え室に保管した。`);
         isSuccess = true;
     } else {
@@ -624,7 +653,7 @@ async function dispatchManualAction(action) {
 
             if (isAuthError || isNetworkError) {
                 const localId = await saveToSyncQueue(action);
-                if (localId) insertOptimisticData(action, localId);
+                if (localId) updateLocalCacheForOptimisticUI(action, localId);
                 showToast(`📦 通信不良または認証エラーだ。ローカルの控え室に退避した。`);
                 if (isAuthError) attemptSilentRefresh();
                 isSuccess = true;
@@ -636,22 +665,12 @@ async function dispatchManualAction(action) {
     }
 
     if (isSuccess) {
-        if (typeof dataCache !== 'undefined') {
+        // オンライン成功時はキャッシュから完全に削除・更新する
+        if (typeof dataCache !== 'undefined' && navigator.onLine) {
             for (let key in dataCache) {
                 if (action.method === 'delete') {
-                    if (!navigator.onLine) {
-                        if (action.type === 'event') {
-                            let ev = dataCache[key].events.find(e => e.id === action.id);
-                            if (ev) ev._pendingDelete = true;
-                        }
-                        if (action.type === 'task') {
-                            let tk = dataCache[key].tasks.find(t => t.id === action.id);
-                            if (tk) tk._pendingDelete = true;
-                        }
-                    } else {
-                        if (action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
-                        if (action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
-                    }
+                    if (action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id);
+                    if (action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id);
                 }
             }
         }
@@ -660,7 +679,16 @@ async function dispatchManualAction(action) {
 
         const tdStr = action.start || action.due; let td = new Date();
         if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
+
+        // ★UIサボり防止：該当月のDOMを一度破壊し、強制的に再描画させる
+        const year = td.getFullYear(); const month = td.getMonth();
+        const existingMonth = document.getElementById(`month-${year}-${month}`);
+        if (existingMonth) {
+            existingMonth.remove();
+            renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
+        } else {
+            await fetchAndRenderMonth(year, month, 'replace', false);
+        }
 
         if (selectedDateStr) {
             const dow = new Date(selectedDateStr).getDay();
@@ -670,9 +698,7 @@ async function dispatchManualAction(action) {
     hideGlobalLoader();
 }
 
-function insertOptimisticData(action, localId) {
-    if (action.method === 'delete') return;
-
+function updateLocalCacheForOptimisticUI(action, localId) {
     const tdStr = action.start || action.due;
     let td = new Date();
     if (tdStr) {
@@ -682,38 +708,44 @@ function insertOptimisticData(action, localId) {
     const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
     if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] };
 
-    if (action.type === 'event' && action.method === 'insert') {
-        if (dataCache[monthKey].events.some(e => e._localId === localId)) return;
-        const dummyEvent = {
-            id: 'dummy_' + localId,
-            summary: action.title,
+    const targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
+
+    if (action.method === 'insert') {
+        if (targetList.some(item => item._localId === localId)) return;
+        const newItem = action.type === 'event' ? {
+            id: 'dummy_' + localId, summary: action.title,
             start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start },
             end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null,
-            colorId: action.colorId,
-            _localId: localId
+            colorId: action.colorId, _localId: localId
+        } : {
+            id: 'dummy_' + localId, title: action.title, notes: action.description, due: action.due, status: 'needsAction', _localId: localId
         };
-        dataCache[monthKey].events.push(dummyEvent);
-    } else if (action.type === 'task' && action.method === 'insert') {
-        if (dataCache[monthKey].tasks.some(t => t._localId === localId)) return;
-        const dummyTask = {
-            id: 'dummy_' + localId,
-            title: action.title,
-            notes: action.description,
-            due: action.due,
-            status: 'needsAction',
-            _localId: localId
-        };
-        dataCache[monthKey].tasks.push(dummyTask);
+        targetList.push(newItem);
+    } else if (action.method === 'update') {
+        const existing = targetList.find(item => item.id === action.id);
+        if (existing) {
+            if (action.type === 'event') {
+                existing.summary = action.title;
+                existing.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start };
+                if (action.end) existing.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end };
+                existing.colorId = action.colorId;
+            } else {
+                existing.title = action.title;
+                existing.notes = action.description;
+                existing.due = action.due;
+            }
+            existing._pendingUpdate = true; // 編集フラグ
+        }
+    } else if (action.method === 'delete') {
+        const existing = targetList.find(item => item.id === action.id);
+        if (existing) existing._pendingDelete = true; // 削除フラグ
     }
 }
 
-// ★新規追加：起動時に控え室のデータを画面に再展開する関数
 async function rehydrateSyncQueue() {
     const queue = await getSyncQueue();
     for (const item of queue) {
-        if (item.payload.method === 'insert') {
-            insertOptimisticData(item.payload, item.id);
-        }
+        updateLocalCacheForOptimisticUI(item.payload, item.id);
     }
 }
 
