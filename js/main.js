@@ -1,4 +1,4 @@
-// JeroCalendar v8.9.1 Main Logic - Offline First & Auto-Sync
+// JeroCalendar v8.9.3 Main Logic - Offline First & Auto-Sync
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -9,7 +9,7 @@ let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
 // ==========================================
-// 1. ユーティリティ & UI操作群 (既存機能を維持)
+// 1. ユーティリティ & UI操作群
 // ==========================================
 function getContrastYIQ(hexcolor){
     if(!hexcolor) return '#ffffff';
@@ -39,24 +39,22 @@ const yieldUI = () => new Promise(r => setTimeout(r, 30));
 function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
 // ==========================================
-// 2. データベース & オフラインキュー (野戦倉庫)
+// 2. データベース & ローカル控え室 (オフラインキュー)
 // ==========================================
 let idb;
 function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v8', 3); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch(e) { clearTimeout(timeout); resolve(); } }); }
 function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-// ★改修：ローカルキュー（待合室）への保存関数
 function saveToSyncQueue(actionPayload) { 
     return new Promise((resolve) => { 
         if(!idb) return resolve(); 
         try { 
             const tx = idb.transaction('sync_queue', 'readwrite'); 
             const id = generateUUID();
-            // 仮のIDを付与して保存（UI上で後から識別するため）
             const payloadWithLocalId = { ...actionPayload, _localId: id };
             tx.objectStore('sync_queue').put({ id: id, payload: payloadWithLocalId, timestamp: Date.now() }); 
             tx.oncomplete = () => {
-                console.log("⚠️ 通信断絶または認証エラー: データを野戦倉庫（キュー）に退避した。", payloadWithLocalId);
+                console.log("⚠️ 通信断絶または認証エラー: データをローカルの控え室に退避した。", payloadWithLocalId);
                 resolve(id);
             };
         } catch(e) { resolve(null); } 
@@ -68,34 +66,63 @@ function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = 
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
 
 // ==========================================
-// 3. 自動同期エンジン (補給部隊) - JeroCore v8.9.2 高度化版
+// 3. 同期状況バッジの完全制御
 // ==========================================
+async function updateSyncBadge() {
+    const badge = document.getElementById('offline-badge');
+    if (!idb) return; 
+    
+    const queue = await getSyncQueue();
+    const count = queue.length;
 
-// 意図的な待機（クールダウン）を生み出す関数
+    if (!navigator.onLine) {
+        badge.innerText = count > 0 ? `⚡️ 圏外 (未送信: ${count}件退避中)` : '⚡️ オフライン (キャッシュ表示中)';
+        badge.style.background = '#ff9500'; 
+        badge.classList.add('active');
+        badge.onclick = null; 
+    } else {
+        if (count > 0) {
+            badge.innerText = `🔄 未送信データが ${count} 件あるぞ (タップで同期)`;
+            badge.style.background = 'var(--accent)'; 
+            badge.classList.add('active');
+            badge.onclick = () => {
+                showToast('手動でバックグラウンド同期を開始した。');
+                processSyncQueue();
+            };
+        } else {
+            badge.classList.remove('active');
+            badge.onclick = null;
+        }
+    }
+}
+
+// ==========================================
+// 4. バックグラウンド同期エンジン
+// ==========================================
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function processSyncQueue() {
     if (!navigator.onLine) return; 
     const queue = await getSyncQueue();
     if (queue.length === 0) {
-        document.getElementById('offline-badge').classList.remove('active');
+        await updateSyncBadge();
         return; 
     }
 
-    console.log(`🔄 自動補給部隊起動：${queue.length}件の未送信データを処理する。`);
+    console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
     showGlobalLoader(`同期中... 残り${queue.length}件`);
     
     const validToken = await attemptSilentRefresh();
     if (!validToken) {
         console.warn("トークンの再取得に失敗。同期を延期する。");
         hideGlobalLoader();
-        updatePendingBadge(queue.length); // バッジを手動ボタン化
+        await updateSyncBadge(); 
         return;
     }
 
     let successCount = 0;
     for (let item of queue) {
-        let retries = 3; // 1アイテムにつき最大3回までその場でリトライする
+        let retries = 3; 
         let itemSuccess = false;
 
         while (retries > 0 && !itemSuccess) {
@@ -104,62 +131,34 @@ async function processSyncQueue() {
                 clearSyncQueueItem(item.id);
                 successCount++;
                 itemSuccess = true;
-                
-                // Googleのレート制限を回避するため、意図的に500ミリ秒待機する（第一原理）
                 await sleep(500); 
-
             } catch (error) {
                 retries--;
                 console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
                 if (retries > 0) {
-                    await sleep(1500); // 失敗時は少し長めに待ってから再アタック
+                    await sleep(1500); 
                 } else {
-                    console.error("3回のリトライに失敗。野戦倉庫に残置する。");
-                    // 400系(Bad Request)など、再送しても無意味な致命的エラーの場合はキューから消す判断もここで行えるが、今回は安全のため残す。
+                    console.error("3回のリトライに失敗。ローカルの控え室に残置する。");
                 }
             }
         }
     }
     
     hideGlobalLoader();
-    const remainingQueue = await getSyncQueue();
 
     if (successCount > 0) {
         showToast(`✅ ${successCount}件の同期を完了した。`);
         const today = new Date();
         await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
     }
-
-    // 処理後、まだ残っていれば手動ボタンを出し、ゼロになれば消す
-    updatePendingBadge(remainingQueue.length);
-}
-
-// バッジを手動同期ボタンとして活用する関数
-function updatePendingBadge(count) {
-    const badge = document.getElementById('offline-badge');
-    if (count > 0 && navigator.onLine) {
-        badge.innerText = `🔄 未送信データが ${count} 件あるぞ (タップで同期)`;
-        badge.style.background = 'var(--accent)'; // 青色にしてタップ可能をアピール
-        badge.classList.add('active');
-        badge.onclick = () => {
-            showToast('手動で補給部隊に出撃命令を出した。');
-            processSyncQueue();
-        };
-    } else if (!navigator.onLine) {
-        badge.innerText = '⚡️ オフライン (キャッシュ表示中・AI使用不可)';
-        badge.style.background = '#ff9500'; // オレンジに戻す
-        badge.classList.add('active');
-        badge.onclick = null;
-    } else {
-        badge.classList.remove('active');
-        badge.onclick = null;
-    }
+    
+    await updateSyncBadge();
 }
 
 // ==========================================
-// 4. 絵文字辞書関連 (The Visionary Mapping への布石)
+// 5. 絵文字辞書関連
 // ==========================================
-const EMOJI_LIST = [ /* 省略：既存コードママ */ { cat: "顔・感情", icons: ["😀","😂","🥰","😎","🤔","😭","😡","😴","🤯","😇","😈","👻","👽","🤖","💩","💡","😆","😅","😊","😉","😍","😘","😋","😜","🤪","🤫","🤭","🤮","🤧","😷"] }, { cat: "仕事・学校", icons: ["💻","📱","📞","🔋","📅","📈","📂","✏️","✂️","🗑️","🚩","⚠️","✅","❌","🏫","🎓","💼","📌","📎","📏","📖","📚","📝","✉️","📧","🔍","🔑","🔒","🔓","🛠️"] }, { cat: "生活・家事", icons: ["🏠","🛒","🧹","👕","🍽️","🍳","🍱","🍙","☕","🍺","🍷","💊","🏥","🛀","🛌","💰","💳","🛍️","🛋️","🧴","🧻","🪥","🧽","🗑️","🧺","🧷","🧵","🧶","🪴","✂️"] }, { cat: "動物・自然", icons: ["🐈","🐕","🐇","🐻","🐤","🐟","🌲","🌸","🌻","🍁","🍄","🌍","☀️","🌙","⭐","🔥","🐭","🐹","🦊","🐼","🦁","🐯","🐮","🐷","🐸","🐵","🐧","🦉","🦋","🐾"] }, { cat: "建物・場所", icons: ["🏢","⛩️","🎡","♨️","📍","🏦","🏤","🏥","🏫","🏪","🏰","🗼","🗽","⛪","🕌","🛕","🏟️","🏕️","🏖️","🗻","🏝️","🏞️","🏘️","🏚️","🏗️","🏭","🏠","🏡","⛺","🚥"] }, { cat: "乗り物・旅行", icons: ["🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🛻","🚚","🚜","🛴","🚲","🛵","🏍️","🛺","🚨","🚃","🚄","🚅","🚆","🚇","🚈","🚉","✈️","🛫","🛬","🛳️"] }, { cat: "食事・飲み物", icons: ["🍏","🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🧄","🧅","🥔","🍠","🥐"] }, { cat: "娯楽・スポーツ", icons: ["🎮","🎬","🎵","🎨","⚽","⚾","🎾","🏊","🚴","🏆","🎉","🎂","🎁","🎈","🎫","🎳","⛳","⛸️","🎣","🎿","🏂","🏋️","🤸","⛹️","🤾","🎟️","🎭","🎪","🎰","🧩"] }, { cat: "記号・マーク", icons: ["❤️","💛","💚","💙","💜","🖤","🤍","💯","💢","💬","💭","💤","🎶","💲","🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤","🟥","🟧","🟨","🟩","🟦","🟪"] } ];
+const EMOJI_LIST = [ { cat: "顔・感情", icons: ["😀","😂","🥰","😎","🤔","😭","😡","😴","🤯","😇","😈","👻","👽","🤖","💩","💡","😆","😅","😊","😉","😍","😘","😋","😜","🤪","🤫","🤭","🤮","🤧","😷"] }, { cat: "仕事・学校", icons: ["💻","📱","📞","🔋","📅","📈","📂","✏️","✂️","🗑️","🚩","⚠️","✅","❌","🏫","🎓","💼","📌","📎","📏","📖","📚","📝","✉️","📧","🔍","🔑","🔒","🔓","🛠️"] }, { cat: "生活・家事", icons: ["🏠","🛒","🧹","👕","🍽️","🍳","🍱","🍙","☕","🍺","🍷","💊","🏥","🛀","🛌","💰","💳","🛍️","🛋️","🧴","🧻","🪥","🧽","🗑️","🧺","🧷","🧵","🧶","🪴","✂️"] }, { cat: "動物・自然", icons: ["🐈","🐕","🐇","🐻","🐤","🐟","🌲","🌸","🌻","🍁","🍄","🌍","☀️","🌙","⭐","🔥","🐭","🐹","🦊","🐼","🦁","🐯","🐮","🐷","🐸","🐵","🐧","🦉","🦋","🐾"] }, { cat: "建物・場所", icons: ["🏢","⛩️","🎡","♨️","📍","🏦","🏤","🏥","🏫","🏪","🏰","🗼","🗽","⛪","🕌","🛕","🏟️","🏕️","🏖️","🗻","🏝️","🏞️","🏘️","🏚️","🏗️","🏭","🏠","🏡","⛺","🚥"] }, { cat: "乗り物・旅行", icons: ["🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🛻","🚚","🚜","🛴","🚲","🛵","🏍️","🛺","🚨","🚃","🚄","🚅","🚆","🚇","🚈","🚉","✈️","🛫","🛬","🛳️"] }, { cat: "食事・飲み物", icons: ["🍏","🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🧄","🧅","🥔","🍠","🥐"] }, { cat: "娯楽・スポーツ", icons: ["🎮","🎬","🎵","🎨","⚽","⚾","🎾","🏊","🚴","🏆","🎉","🎂","🎁","🎈","🎫","🎳","⛳","⛸️","🎣","🎿","🏂","🏋️","🤸","⛹️","🤾","🎟️","🎭","🎪","🎰","🧩"] }, { cat: "記号・マーク", icons: ["❤️","💛","💚","💙","💜","🖤","🤍","💯","💢","💬","💭","💤","🎶","💲","🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤","🟥","🟧","🟨","🟩","🟦","🟪"] } ];
 function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
 function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
 function renderDictUI() { const container = document.getElementById('dict-list'); if(!container) return; container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const primary = item.keys[0] || "(接頭辞なし)"; const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${primary}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
@@ -175,7 +174,7 @@ function processSemanticText(text) { if (!text) return { text: "", style: null }
 function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 
 // ==========================================
-// 5. カレンダーコアロジック
+// 6. カレンダーコアロジック
 // ==========================================
 function initColorPicker() { const picker = document.getElementById('color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
 function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'var(--accent)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedColorId = id; }
@@ -196,9 +195,15 @@ function getCardHtml(type, item) {
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
     const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
     
-    // ★改修：ローカル待機中の予定を判定
-    const isPending = item._localId ? true : false;
-    const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + (isPending ? ' 🔄' : '');
+    // ★視覚化ロジック
+    const isPendingInsert = item._localId ? true : false;
+    const isPendingDelete = item._pendingDelete ? true : false;
+    
+    let stateIcon = '';
+    if (isPendingInsert) stateIcon = ' ➕🔄';
+    if (isPendingDelete) stateIcon = ' 🗑️';
+
+    const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + stateIcon;
     
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
@@ -221,9 +226,17 @@ function getCardHtml(type, item) {
         timeHtml = `<span style="font-size:16px; margin-right:4px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
     }
     
-    const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
-    // 未同期アイテムのスタイル
-    const cardStyle = isPending ? 'opacity: 0.7; border: 1px dashed #ccc;' : '';
+    let titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
+    let cardStyle = '';
+    
+    // オフライン状態での視覚スタイル適用
+    if (isPendingInsert) {
+        cardStyle = 'border: 2px dashed #0a84ff; opacity: 0.9;';
+    }
+    if (isPendingDelete) {
+        titleStyle = 'text-decoration: line-through;';
+        cardStyle = 'opacity: 0.4; filter: grayscale(100%); pointer-events: none;'; // 削除予定はクリック不可
+    }
 
     return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
 }
@@ -277,12 +290,15 @@ function renderMonthDOM(year, month, data, position) {
             let timeStr = ""; if(e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; } 
             const spanType = isEventSpanning(e, dateStr); 
             if(spanType !== 'single') div.classList.add(spanType); 
+            
+            const isPendingInsert = e._localId ? true : false;
+            const isPendingDelete = e._pendingDelete ? true : false;
+            const insertIcon = isPendingInsert ? '➕🔄 ' : ''; 
+            const deleteIcon = isPendingDelete ? '🗑️ ' : ''; 
             const recurIcon = e.recurrence ? '🔁 ' : ''; 
             const pData = processSemanticText(e.summary); 
             
-            // ★改修：未同期アイコン
-            const pendingIcon = e._localId ? '🔄 ' : '';
-            div.innerText = pendingIcon + recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
+            div.innerText = deleteIcon + insertIcon + recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
             
             let bgColor = 'var(--accent)'; let txtColor = '#ffffff';
             if(pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } 
@@ -302,18 +318,43 @@ function renderMonthDOM(year, month, data, position) {
                 div.style.backgroundColor = bgColor;
                 div.style.color = txtColor;
             }
-            if (e._localId) div.style.opacity = '0.7'; // 未同期は半透明
+
+            // オフライン状態での視覚スタイル適用
+            if (isPendingInsert) {
+                div.style.border = `1px dashed ${txtColor}`; 
+                div.style.opacity = '0.8';
+            }
+            if (isPendingDelete) {
+                div.style.textDecoration = 'line-through'; 
+                div.style.opacity = '0.4'; 
+                div.style.filter = 'grayscale(100%)';
+            }
             dayEl.appendChild(div); 
         });
         
         if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { 
             const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
             const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; 
-            const pendingIcon = t._localId ? '🔄 ' : '';
-            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${pendingIcon}${recurIcon}${pData.text}`; 
+            
+            const isPendingInsert = t._localId ? true : false;
+            const isPendingDelete = t._pendingDelete ? true : false;
+            const insertIcon = isPendingInsert ? '➕🔄 ' : '';
+            const deleteIcon = isPendingDelete ? '🗑️ ' : '';
+            
+            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${deleteIcon}${insertIcon}${recurIcon}${pData.text}`; 
+            
             if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } 
             else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); } 
-            if (t._localId) div.style.opacity = '0.7'; // 未同期は半透明
+            
+            if (isPendingInsert) {
+                div.style.border = `1px dashed var(--txt)`;
+                div.style.opacity = '0.8';
+            }
+            if (isPendingDelete) {
+                div.style.textDecoration = 'line-through';
+                div.style.opacity = '0.4';
+                div.style.filter = 'grayscale(100%)';
+            }
             dayEl.appendChild(div); 
         });
         grid.appendChild(dayEl);
@@ -324,7 +365,7 @@ function renderMonthDOM(year, month, data, position) {
     else if(position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if(insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
 }
 
-async function initCalendar() { setProgress(10); try { await loadDataCacheFromIDB(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m+1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { document.getElementById('offline-badge').classList.remove('active'); fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } else { document.getElementById('offline-badge').classList.add('active'); } } finally { setProgress(100); } }
+async function initCalendar() { setProgress(10); try { await loadDataCacheFromIDB(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m+1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m+1, 'replace', true); } await updateSyncBadge(); } finally { setProgress(100); } }
 async function loadNextMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if(nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); } }
 async function loadPrevMonth() { if(renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if(prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); } }
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
@@ -355,7 +396,7 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
 }
 
 // ==========================================
-// 6. エディタ UI
+// 7. エディタ UI
 // ==========================================
 function renderIconPalette(targetId, inputId) {
     const palette = document.getElementById(targetId);
@@ -376,7 +417,6 @@ function renderIconPalette(targetId, inputId) {
 }
 
 function openEditor(e = null) {
-    // もし未同期（ローカルキュー）のアイテムだったら編集させず警告を出す
     if (e && e._localId) {
         showToast('🔄 この予定はまだGoogleに同期されていないため、現在編集できない。電波回復を待て。');
         return;
@@ -431,14 +471,12 @@ function toggleTimeInputs() {
     if (endVal) endInput.value = isAllDay ? endVal.split('T')[0] : (endVal.includes('T') ? endVal : endVal + 'T13:00');
 }
 
-// ★改修：dispatchManualActionへ処理を投げる
 async function saveEvent() {
     const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim();
     if (!title) { showToast('タイトルを入力してくれ'); return; }
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value;
     if(!startVal) { showToast('開始日時が不正だ'); return; } if(!endVal) endVal = startVal;
     
-    // APIへ送るためのペイロード構築
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     try {
         if (isAllDay) { 
@@ -474,7 +512,6 @@ function openTaskEditor(t = null) {
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if(!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
 
 async function toggleTaskCompletion(taskId, newStatus) {
-    // 省略：タスク完了状態のトグル（API直叩きのため、今回はここは簡易にエラーハンドリングのみ）
     let targetTask = null; 
     for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
     if (!targetTask) return;
@@ -493,11 +530,10 @@ async function toggleTaskCompletion(taskId, newStatus) {
             await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); 
         } else { 
             showToast('圏外ではタスクの完了操作はできない。'); 
-            // 状態を元に戻す
             targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed';
             await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
         }
-    } catch(e) { console.error('裏側での同期エラー:', e.message); }
+    } catch(e) { console.error('同期エラー:', e.message); }
 }
 
 async function saveTask() {
@@ -512,7 +548,6 @@ async function saveTask() {
 async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if(!id || !confirm('このタスクを完全に消し去るか？')) return; const action = { type: 'task', method: 'delete', id: id }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
 async function executeConversion(fromType) {
-     // 省略：タスクと予定の変換機能
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
     let deleteAction = null; let insertAction = null; let redrawDate = new Date();
     if (fromType === 'event') {
@@ -531,27 +566,26 @@ async function executeConversion(fromType) {
     showGlobalLoader('変換中...');
     try {
         if (navigator.onLine) { if (deleteAction) await executeApiAction(deleteAction); await executeApiAction(insertAction); showToast('✅ 変換を完了した'); } 
-        else { if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); showToast('📦 圏外のため野戦倉庫に保管した。電波回復時に変換する'); }
+        else { if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); showToast('📦 圏外のためローカルの控え室に保管した。電波回復時に変換する'); }
         if (typeof dataCache !== 'undefined' && deleteAction) { for (let key in dataCache) { if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); } if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); } } }
         closeEditor(); closeTaskEditor(); closeAllModals(); await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', navigator.onLine);
+        await updateSyncBadge();
     } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
 // ==========================================
-// 7. アクション司令塔 (迎撃システムの中核)
+// 8. アクション司令塔 (エラー迎撃システム)
 // ==========================================
-// ★改修：API通信をここで一元管理し、エラーを迎撃する
 async function dispatchManualAction(action) {
     showGlobalLoader('処理中...'); 
-    let msgAction = '保存'; if(action.method === 'insert') msgAction = '追加'; if(action.method === 'update') msgAction = '更新'; if(action.method === 'delete') msgAction = '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク';
-    
+    let msgAction = action.method === 'insert' ? '追加' : action.method === 'update' ? '更新' : '削除'; 
+    const msgType = action.type === 'event' ? '予定' : 'タスク';
     let isSuccess = false;
 
-    // オフラインなら即座にキューへ
     if (!navigator.onLine) {
         const localId = await saveToSyncQueue(action);
-        if (localId) insertOptimisticData(action, localId); // ローカルキャッシュに仮想データとして挿入
-        showToast(`📦 圏外だ。「${msgType}」の${msgAction}を野戦倉庫（キュー）に保管した。`);
+        if (localId) insertOptimisticData(action, localId); 
+        showToast(`📦 圏外だ。「${msgType}」の${msgAction}をローカルの控え室に保管した。`);
         isSuccess = true;
     } else {
         try {
@@ -564,14 +598,10 @@ async function dispatchManualAction(action) {
             const isNetworkError = e.name === 'TypeError' || e.status === 0;
 
             if (isAuthError || isNetworkError) {
-                // 401やネットワークエラーを迎撃してキューに入れる
                 const localId = await saveToSyncQueue(action);
                 if (localId) insertOptimisticData(action, localId);
-                showToast(`📦 通信不良または認証エラーだ。野戦倉庫に退避し、UIは更新した。`);
-                if (isAuthError) {
-                    console.warn("バックグラウンドでサイレントリフレッシュを試みる...");
-                    attemptSilentRefresh();
-                }
+                showToast(`📦 通信不良または認証エラーだ。ローカルの控え室に退避した。`);
+                if (isAuthError) attemptSilentRefresh();
                 isSuccess = true;
             } else {
                 const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "未知のエラー");
@@ -580,19 +610,34 @@ async function dispatchManualAction(action) {
         }
     }
 
-    // 成功またはキューへの退避が完了した場合、画面を描画し直す
     if (isSuccess) {
         if(typeof dataCache !== 'undefined') { 
             for(let key in dataCache) { 
                 if(action.method === 'delete') { 
-                    if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); 
-                    if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); 
+                    // ★オフラインの「削除」は画面から消さずに「削除予定フラグ」を立てる
+                    if (!navigator.onLine) {
+                        if(action.type === 'event') {
+                            let ev = dataCache[key].events.find(e => e.id === action.id);
+                            if(ev) ev._pendingDelete = true;
+                        }
+                        if(action.type === 'task') {
+                            let tk = dataCache[key].tasks.find(t => t.id === action.id);
+                            if(tk) tk._pendingDelete = true;
+                        }
+                    } else {
+                        // オンラインで成功したなら完全に消去
+                        if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); 
+                        if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); 
+                    }
                 } 
             } 
         }
         
-        const tdStr = action.start || action.due; let td = new Date(); if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); } }
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); // APIを叩かずキャッシュから再描画
+        await updateSyncBadge();
+
+        const tdStr = action.start || action.due; let td = new Date(); 
+        if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); } }
+        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
         
         if (selectedDateStr) {
             const dow = new Date(selectedDateStr).getDay();
@@ -602,8 +647,9 @@ async function dispatchManualAction(action) {
     hideGlobalLoader();
 }
 
-// 仮想データをローカルキャッシュに挿入する（楽観的UIのため）
 function insertOptimisticData(action, localId) {
+    if (action.method === 'delete') return; // 削除の場合はフラグを立てるので挿入は不要
+
     const tdStr = action.start || action.due;
     let td = new Date();
     if (tdStr) {
@@ -620,7 +666,7 @@ function insertOptimisticData(action, localId) {
             start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start },
             end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null,
             colorId: action.colorId,
-            _localId: localId // 未同期フラグ
+            _localId: localId 
         };
         dataCache[monthKey].events.push(dummyEvent);
     } else if (action.type === 'task' && action.method === 'insert') {
@@ -630,13 +676,12 @@ function insertOptimisticData(action, localId) {
             notes: action.description,
             due: action.due,
             status: 'needsAction',
-            _localId: localId // 未同期フラグ
+            _localId: localId 
         };
         dataCache[monthKey].tasks.push(dummyTask);
     }
 }
 
-// 実際のAPI叩き部分
 async function executeApiAction(action, isRetry = false) {
     if (!navigator.onLine) throw new Error("Offline");
 
@@ -670,7 +715,7 @@ async function executeApiAction(action, isRetry = false) {
 }
 
 // ==========================================
-// 8. その他初期化プロセス等
+// 9. その他初期化プロセス等
 // ==========================================
 async function processPDFFile(file) {
     showGlobalLoader('PDFを読み込み中...');
@@ -688,17 +733,16 @@ async function processPDFFile(file) {
 }
 
 window.addEventListener('online', async () => { 
-    // 単純にバッジを消すのではなく、未送信キューがあるか確認してから処理する
-    showToast('📶 電波が回復した。野戦倉庫の物資（未同期データ）を転送する。'); 
+    showToast('📶 電波が回復した。'); 
+    await updateSyncBadge(); 
     processSyncQueue(); 
 });
 
 window.addEventListener('offline', async () => { 
-    updatePendingBadge(0); // オフライン表示に切り替え
-    showToast('⚡️ 圏外になった。変更は野戦倉庫に退避する。'); 
+    showToast('⚡️ 圏外になった。以後の操作はローカルの控え室に退避する。'); 
+    await updateSyncBadge(); 
 });
 
-// アプリがバックグラウンドからアクティブになった時の処理（iOS PWAで重要）
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         processSyncQueue();
@@ -725,7 +769,6 @@ function checkAutoLogin() {
         gapi.client.setToken({access_token: savedToken}); 
         document.getElementById('auth-btn').style.display = 'none'; 
         initCalendar(); 
-        // 起動時に未送信キューがあれば処理
         processSyncQueue();
     } else { 
         notifyAuthError(); 
@@ -747,12 +790,11 @@ async function attemptSilentRefresh() {
                 resolve(true); 
             }
         };
-        // プロンプトを出さずにトークンのみ要求
         tokenClient.requestAccessToken({prompt: ''}); 
     });
 }
 
-async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。野戦倉庫のチェックを行う。'); processSyncQueue(); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
+async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。ローカルの控え室のチェックを行う。'); await updateSyncBadge(); processSyncQueue(); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
 
 document.addEventListener('DOMContentLoaded', () => {
     const resizer = document.getElementById('resizer');
