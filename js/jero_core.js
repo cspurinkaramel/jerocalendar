@@ -1,12 +1,12 @@
 // Jero Core Engine v8.8 - Visual Feedback & Dictation (iOS Mic Fix)
 let isVoiceEnabled = false; let jeroVoice = null; let recognition = null; let isRecording = false;
 
-function initSpeech() { let voices = window.speechSynthesis.getVoices(); jeroVoice = voices.find(v => v.lang === 'ja-JP'); if(!voices.length) { window.speechSynthesis.onvoiceschanged = () => { jeroVoice = window.speechSynthesis.getVoices().find(v => v.lang === 'ja-JP'); }; } }
-function toggleVoiceSetting() { isVoiceEnabled = document.getElementById('st-voice').checked; localStorage.setItem('jero_voice_enabled', isVoiceEnabled); if(isVoiceEnabled) unlockAudioContext(); }
+function initSpeech() { let voices = window.speechSynthesis.getVoices(); jeroVoice = voices.find(v => v.lang === 'ja-JP'); if (!voices.length) { window.speechSynthesis.onvoiceschanged = () => { jeroVoice = window.speechSynthesis.getVoices().find(v => v.lang === 'ja-JP'); }; } }
+function toggleVoiceSetting() { isVoiceEnabled = document.getElementById('st-voice').checked; localStorage.setItem('jero_voice_enabled', isVoiceEnabled); if (isVoiceEnabled) unlockAudioContext(); }
 function unlockAudioContext() { if (!isVoiceEnabled || !window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(''); u.volume = 0; window.speechSynthesis.speak(u); }
 function unlockAudioAndSend() { unlockAudioContext(); sendToJero(); }
 function unlockAudioAndStartSpeech() { unlockAudioContext(); toggleSpeechRecognition(); }
-function speakText(text) { if (!isVoiceEnabled || !window.speechSynthesis || !text) return; let cleanText = text.replace(/https?:\/\/[^\s]+/g, 'リンク').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').replace(/[#*`_\[\]()【】]/g, ''); if(!cleanText.trim()) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'ja-JP'; u.rate = 1.15; u.pitch = 1.7; if (jeroVoice) u.voice = jeroVoice; window.speechSynthesis.speak(u); }
+function speakText(text) { if (!isVoiceEnabled || !window.speechSynthesis || !text) return; let cleanText = text.replace(/https?:\/\/[^\s]+/g, 'リンク').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').replace(/[#*`_\[\]()【】]/g, ''); if (!cleanText.trim()) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'ja-JP'; u.rate = 1.15; u.pitch = 1.7; if (jeroVoice) u.voice = jeroVoice; window.speechSynthesis.speak(u); }
 
 // ★究極進化：マイクを完全に強制終了（ハードキル＋エア抜き）するための共通関数
 async function forceStopMicrophone() {
@@ -17,21 +17,21 @@ async function forceStopMicrophone() {
             recognition.onresult = null;
             recognition.onerror = null;
             recognition.onend = null;
-            recognition.abort(); 
-        } catch(e) { console.error("マイク強制終了エラー:", e); }
+            recognition.abort();
+        } catch (e) { console.error("マイク強制終了エラー:", e); }
     }
     isRecording = false;
     recognition = null;
-    
+
     // 2. UIの強制リセット（見た目を平時に戻す）
     const micBtn = document.getElementById('mic-btn');
     if (micBtn) micBtn.classList.remove('mic-active');
-    
+
     const chatInput = document.getElementById('chat-input');
     if (chatInput && chatInput.placeholder === "音声を認識中...") {
         chatInput.placeholder = "予定や検索ワードをどうぞ...";
     }
-    
+
     if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
 
     // 3. 【新設】iOS Safari用 強制マイク解放機構（配管のエア抜き）
@@ -43,7 +43,7 @@ async function forceStopMicrophone() {
             // 掴んだ配管（トラック）を全て強制停止する
             stream.getTracks().forEach(track => track.stop());
         }
-    } catch(err) {
+    } catch (err) {
         // マイク権限がない等のエラーは想定内なので無視する
         console.log("マイク解放プロセス完了（エア抜き済）");
     }
@@ -58,67 +58,67 @@ document.addEventListener('visibilitychange', () => {
 function toggleSpeechRecognition() {
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
-    
+
     // 手動で2回押された場合は強制終了（ここでダイアログが出るのはOSの仕様として許容する）
     if (isRecording && recognition) { forceStopMicrophone(); return; }
-    
+
     try {
-        recognition = new SpeechRecognition(); 
-        recognition.lang = 'ja-JP'; 
-        recognition.interimResults = false; 
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = false;
         recognition.maxAlternatives = 1;
-        
-        recognition.onstart = function() { 
-            isRecording = true; 
-            document.getElementById('mic-btn').classList.add('mic-active'); 
-            document.getElementById('chat-input').placeholder = "音声を認識中..."; 
+
+        recognition.onstart = function () {
+            isRecording = true;
+            document.getElementById('mic-btn').classList.add('mic-active');
+            document.getElementById('chat-input').placeholder = "音声を認識中...";
         };
-        
-        recognition.onresult = function(event) { 
-            document.getElementById('chat-input').value = event.results[0][0].transcript; 
-            document.getElementById('chat-input').dispatchEvent(new Event('input')); 
-            
+
+        recognition.onresult = function (event) {
+            document.getElementById('chat-input').value = event.results[0][0].transcript;
+            document.getElementById('chat-input').dispatchEvent(new Event('input'));
+
             // ★【内部暗殺】テキストを受け取った瞬間に内部からクリーンな終了を宣言する
-            try { recognition.stop(); } catch(e){}
+            try { recognition.stop(); } catch (e) { }
         };
-        
-        recognition.onerror = function(event) { 
+
+        recognition.onerror = function (event) {
             const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
             if (!ignoredErrors.includes(event.error)) { showToast("音声認識エラー: " + event.error); }
             forceStopMicrophone();
         };
-        
-        recognition.onend = function() { 
+
+        recognition.onend = function () {
             forceStopMicrophone();
         };
-        
+
         recognition.start();
-    } catch(e) { console.error(e); forceStopMicrophone(); }
+    } catch (e) { console.error(e); forceStopMicrophone(); }
 }
 
 function startDictation(targetId) {
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) { showToast("このブラウザでは音声入力不可だ。"); return; }
-    
+
     const targetEl = document.getElementById(targetId);
     if (!targetEl) return;
-    
+
     if (isRecording && recognition) { forceStopMicrophone(); return; }
 
     try {
-        recognition = new SpeechRecognition(); 
-        recognition.lang = 'ja-JP'; 
-        recognition.interimResults = false; 
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = false;
         recognition.maxAlternatives = 1;
         const originalPlaceholder = targetEl.placeholder;
-        
-        recognition.onstart = function() { 
-            isRecording = true; 
-            if(typeof showGlobalLoader === 'function') showGlobalLoader("音声を聞き取っているぞ...");
-            targetEl.placeholder = "音声入力中..."; 
+
+        recognition.onstart = function () {
+            isRecording = true;
+            if (typeof showGlobalLoader === 'function') showGlobalLoader("音声を聞き取っているぞ...");
+            targetEl.placeholder = "音声入力中...";
         };
-        
-        recognition.onresult = function(event) { 
+
+        recognition.onresult = function (event) {
             const transcript = event.results[0][0].transcript;
             if (targetEl.tagName.toLowerCase() === 'textarea') {
                 targetEl.value = targetEl.value + (targetEl.value ? '\n' : '') + transcript;
@@ -126,25 +126,25 @@ function startDictation(targetId) {
             } else {
                 targetEl.value = targetEl.value + (targetEl.value ? ' ' : '') + transcript;
             }
-            
+
             // ★【内部暗殺】テキストを受け取った瞬間に内部からクリーンな終了を宣言する
-            try { recognition.stop(); } catch(e){}
+            try { recognition.stop(); } catch (e) { }
         };
-        
-        recognition.onerror = function(event) { 
+
+        recognition.onerror = function (event) {
             const ignoredErrors = ['aborted', 'audio-capture', 'no-speech'];
             if (!ignoredErrors.includes(event.error)) { showToast("音声認識エラー: " + event.error); }
             targetEl.placeholder = originalPlaceholder;
             forceStopMicrophone();
         };
-        
-        recognition.onend = function() { 
+
+        recognition.onend = function () {
             targetEl.placeholder = originalPlaceholder;
             forceStopMicrophone();
         };
-        
+
         recognition.start();
-    } catch(e) { console.error(e); targetEl.placeholder = originalPlaceholder; forceStopMicrophone(); }
+    } catch (e) { console.error(e); targetEl.placeholder = originalPlaceholder; forceStopMicrophone(); }
 }
 
 let notifiedEventIds = new Set();
@@ -152,7 +152,7 @@ function initNotification() { if (!("Notification" in window)) return; setInterv
 function requestNotificationPermission() {
     if (!("Notification" in window)) { showToast('このブラウザは通知機能に非対応だ。Safariからホーム画面に追加してみてくれ。'); return; }
     Notification.requestPermission().then(permission => {
-        if (permission === 'granted') { showToast('通知を許可したな。予定が近づいたら報せよう。'); document.getElementById('notif-status').innerText = '許可済'; document.getElementById('notif-status').style.color = '#34c759'; } 
+        if (permission === 'granted') { showToast('通知を許可したな。予定が近づいたら報せよう。'); document.getElementById('notif-status').innerText = '許可済'; document.getElementById('notif-status').style.color = '#34c759'; }
         else { showToast('通知が拒否された。'); document.getElementById('notif-status').innerText = '拒否・未設定'; document.getElementById('notif-status').style.color = '#ff3b30'; }
     });
 }
@@ -160,11 +160,11 @@ function checkUpcomingEvents() {
     if (Notification.permission !== 'granted') return;
     if (typeof isAuthError !== 'undefined' && isAuthError || !localStorage.getItem('jero_token')) return;
     const now = new Date(); const tenMinutesLater = new Date(now.getTime() + 10 * 60000); const elevenMinutesLater = new Date(now.getTime() + 11 * 60000);
-    if(typeof dataCache === 'undefined') return;
+    if (typeof dataCache === 'undefined') return;
     for (const monthKey in dataCache) {
         const data = dataCache[monthKey]; if (!data || !data.events) continue;
         data.events.forEach(e => {
-            if (!e.start || !e.start.dateTime) return; 
+            if (!e.start || !e.start.dateTime) return;
             const startTime = new Date(e.start.dateTime);
             if (startTime >= tenMinutesLater && startTime < elevenMinutesLater) {
                 if (!notifiedEventIds.has(e.id)) { notifiedEventIds.add(e.id); sendJeroNotification(`⏰ 予定の10分前だぞ`, `${e.summary || '予定'} が間もなく始まる。準備しろ。`); }
@@ -174,7 +174,8 @@ function checkUpcomingEvents() {
 }
 function sendJeroNotification(title, body) {
     if (Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then(function(registration) { registration.showNotification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>', vibrate: [200, 100, 200], tag: 'jero-alert' });
+        navigator.serviceWorker.ready.then(function (registration) {
+            registration.showNotification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>', vibrate: [200, 100, 200], tag: 'jero-alert' });
         }).catch(err => { new Notification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>' }); });
     }
 }
@@ -231,21 +232,21 @@ let conversationHistory = []; let pendingDrafts = [];
 function clearJeroMemory() { conversationHistory = []; document.getElementById('chat-history').innerHTML = ''; showToast('記憶をリセットした。'); appendChatMessage('ai', 'フッ、一旦過去のことは忘れよう。新しい要件はなんだ？'); }
 function saveGeminiSettings() { localStorage.setItem('jero_gemini_key', document.getElementById('st-gemini-key').value); localStorage.setItem('jero_gemini_prompt', document.getElementById('st-gemini-prompt').value); showToast('AI設定を保存した。'); }
 function resetPrompt() { document.getElementById('st-gemini-prompt').value = DEFAULT_SYSTEM_PROMPT; saveGeminiSettings(); }
-function openJeroChat() { document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active'); const history = document.getElementById('chat-history'); if(history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。追加でも変更でも、過去の検索でも言ってくれ。'); }
+function openJeroChat() { document.getElementById('overlay').classList.add('active'); document.getElementById('jero-chat-modal').classList.add('active'); const history = document.getElementById('chat-history'); if (history.innerHTML.trim() === '') appendChatMessage('ai', 'どうした。追加でも変更でも、過去の検索でも言ってくれ。'); }
 function closeJeroChat() { document.getElementById('jero-chat-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
-function appendChatMessage(sender, text, isHtml = false) { 
-    const el = document.createElement('div'); 
-    el.className = `jero-msg ${sender}`; 
-    if(isHtml) { el.innerHTML = text; } else { el.innerText = text; }
-    document.getElementById('chat-history').appendChild(el); 
-    document.getElementById('chat-history').scrollTop = document.getElementById('chat-history').scrollHeight; 
-    return el; 
+function appendChatMessage(sender, text, isHtml = false) {
+    const el = document.createElement('div');
+    el.className = `jero-msg ${sender}`;
+    if (isHtml) { el.innerHTML = text; } else { el.innerText = text; }
+    document.getElementById('chat-history').appendChild(el);
+    document.getElementById('chat-history').scrollTop = document.getElementById('chat-history').scrollHeight;
+    return el;
 }
 
 let chatFileBase64 = null; let chatFileMime = null;
 async function handleChatFileUpload(e) {
     const file = e.target.files[0];
-    if(!file) return;
+    if (!file) return;
     if (file.type === 'application/pdf') {
         if (typeof processPDFFile === 'function') { await processPDFFile(file); } else { showToast('PDF処理機能が見つからない。'); }
     } else if (file.type.startsWith('image/')) {
@@ -266,9 +267,9 @@ async function handleChatFileUpload(e) {
 function clearChatFile() { chatFileBase64 = null; chatFileMime = null; document.getElementById('chat-attach-box').style.display = 'none'; document.getElementById('chat-file-input').value = ''; }
 
 async function sendToJero() {
-    const inputEl = document.getElementById('chat-input'); const text = inputEl.value.trim(); 
-    if(!text && !chatFileBase64) return;
-    
+    const inputEl = document.getElementById('chat-input'); const text = inputEl.value.trim();
+    if (!text && !chatFileBase64) return;
+
     // ★進化：送信した画像をチャットの履歴（吹き出しの中）にサムネイル表示する
     let userMsgHtml = text;
     if (chatFileBase64) {
@@ -281,10 +282,10 @@ async function sendToJero() {
     }
     appendChatMessage('user', userMsgHtml || "(ファイルを送信)", true);
     inputEl.value = ''; inputEl.style.height = 'auto';
-    
+
     if (!navigator.onLine) { appendChatMessage('ai', '電波がない。私の頭脳(クラウド)にアクセスできない。圏外での予定追加はGUI(手動)からやってくれ。'); speakText("電波がない。私の頭脳にアクセスできない。"); return; }
     const apiKey = (localStorage.getItem('jero_gemini_key') || "").trim();
-    if(!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
+    if (!apiKey) { appendChatMessage('ai', '設定からGemini APIキーを入力してくれ。'); return; }
 
     const thinkingEl = appendChatMessage('ai', '推論中...'); thinkingEl.classList.add('pulse-think');
     const rawPrompt = localStorage.getItem('jero_gemini_prompt') || DEFAULT_SYSTEM_PROMPT;
@@ -292,14 +293,14 @@ async function sendToJero() {
     const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
 
     let currentDataSummary = [];
-    if(typeof dataCache !== 'undefined') {
+    if (typeof dataCache !== 'undefined') {
         for (const monthKey in dataCache) {
             const data = dataCache[monthKey];
-            if(data.events) data.events.forEach(e => { currentDataSummary.push({ id: e.id, type: 'event', title: e.summary, start: e.start.dateTime || e.start.date }); });
-            if(data.tasks) data.tasks.forEach(t => { if(t.status !== 'completed') currentDataSummary.push({ id: t.id, type: 'task', title: t.title, due: t.due }); });
+            if (data.events) data.events.forEach(e => { currentDataSummary.push({ id: e.id, type: 'event', title: e.summary, start: e.start.dateTime || e.start.date }); });
+            if (data.tasks) data.tasks.forEach(t => { if (t.status !== 'completed') currentDataSummary.push({ id: t.id, type: 'task', title: t.title, due: t.due }); });
         }
     }
-    
+
     let dictContext = "";
     if (typeof advancedDict !== 'undefined' && advancedDict.length > 0) {
         const aiDictRules = advancedDict.map(d => { return `キーワード: [${d.keys.join(', ')}] -> タイトルの先頭に必ず「${d.icon} ${d.keys[0]} 」を付与しろ。`; });
@@ -321,18 +322,18 @@ async function sendToJero() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
         });
-        
-        if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch(e){} throw new Error(`API拒否: ${errTxt}`); }
-        
+
+        if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
+
         const data = await response.json(); let aiText = data.candidates[0].content.parts[0].text;
         conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });
 
         let cleanJsonStr = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
         const matchObj = cleanJsonStr.match(/\{[\s\S]*\}/); if (matchObj) cleanJsonStr = matchObj[0]; cleanJsonStr = cleanJsonStr.replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
 
-        let result; try { result = JSON.parse(cleanJsonStr); } catch(parseErr) { thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【AIが形式を間違えた】\n${cleanJsonStr}`; return; }
-        thinkingEl.classList.remove('pulse-think'); 
-        
+        let result; try { result = JSON.parse(cleanJsonStr); } catch (parseErr) { thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【AIが形式を間違えた】\n${cleanJsonStr}`; return; }
+        thinkingEl.classList.remove('pulse-think');
+
         thinkingEl.innerText = result.reply || "処理完了。";
         speakText(result.reply || "処理を完了したぞ。");
 
@@ -341,7 +342,7 @@ async function sendToJero() {
             for (const action of result.actions) {
                 if (action.method === "search") { executeSearch(action, thinkingEl); return; }
                 pendingDrafts.push(action); const draftIdx = pendingDrafts.length - 1;
-                const timeStr = action.start ? (action.start.includes('T') ? new Date(action.start).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'numeric', minute:'numeric'}) : action.start) : (action.due || "日時不明");
+                const timeStr = action.start ? (action.start.includes('T') ? new Date(action.start).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }) : action.start) : (action.due || "日時不明");
                 let btnText = "追加"; let btnClass = "btn-blue"; let actionLabel = "新規";
                 if (action.method === "update") { btnText = "更新"; btnClass = "btn-yellow"; actionLabel = "変更"; }
                 if (action.method === "delete") { btnText = "削除"; btnClass = "btn-red"; actionLabel = "削除"; }
@@ -357,72 +358,79 @@ async function executeSearch(action, containerEl) {
         containerEl.innerHTML += `<br><br><span style="font-size:12px;color:#888;">🔍 「${action.query || 'すべて'}」をGoogleから検索中...</span>`;
         let resultsHtml = `<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">`;
         let events = []; let tasks = [];
-        
+
         let calReq = { calendarId: 'primary', singleEvents: true, orderBy: 'startTime', maxResults: 50 };
-        if(action.query) calReq.q = action.query;
-        if(action.timeMin) calReq.timeMin = new Date(action.timeMin).toISOString();
-        if(action.timeMax) calReq.timeMax = new Date(action.timeMax).toISOString();
+        if (action.query) calReq.q = action.query;
+        if (action.timeMin) calReq.timeMin = new Date(action.timeMin).toISOString();
+        if (action.timeMax) calReq.timeMax = new Date(action.timeMax).toISOString();
         const eResp = await gapi.client.calendar.events.list(calReq); events = eResp.result.items || [];
-        
+
         let taskReq = { tasklist: '@default', showHidden: true, maxResults: 100 };
-        if(action.timeMin) taskReq.dueMin = new Date(action.timeMin).toISOString();
-        if(action.timeMax) taskReq.dueMax = new Date(action.timeMax).toISOString();
+        if (action.timeMin) taskReq.dueMin = new Date(action.timeMin).toISOString();
+        if (action.timeMax) taskReq.dueMax = new Date(action.timeMax).toISOString();
         const tResp = await gapi.client.tasks.tasks.list(taskReq); let rawTasks = tResp.result.items || [];
         if (action.query) { const qLower = action.query.toLowerCase(); tasks = rawTasks.filter(t => (t.title && t.title.toLowerCase().includes(qLower)) || (t.notes && t.notes.toLowerCase().includes(qLower))); } else { tasks = rawTasks; }
 
-        if(events.length === 0 && tasks.length === 0) { resultsHtml += `<div style="font-size:13px; color:#888; text-align:center; padding:10px;">見つからなかったぞ。</div>`; } 
+        if (events.length === 0 && tasks.length === 0) { resultsHtml += `<div style="font-size:13px; color:#888; text-align:center; padding:10px;">見つからなかったぞ。</div>`; }
         else {
-            events.forEach(e => { const tStr = e.start.dateTime ? new Date(e.start.dateTime).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'numeric', minute:'numeric'}) : e.start.date; resultsHtml += `<div style="background:var(--bg); border:1px solid var(--border); padding:10px; border-radius:8px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,0.05); cursor:pointer;" onclick='openEditor(${JSON.stringify(e).replace(/'/g, "&apos;")})'><span style="color:var(--accent); font-weight:bold; font-size:11px;">📅 ${tStr}</span><br><strong style="color:var(--txt);">${e.summary || '(タイトルなし)'}</strong></div>`; });
-            tasks.forEach(t => { const dStr = t.due ? new Date(t.due).toLocaleDateString('ja-JP') : '期限なし'; resultsHtml += `<div style="background:var(--bg); border:1px solid var(--border); padding:10px; border-radius:8px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,0.05); cursor:pointer;" onclick='openTaskEditor(${JSON.stringify(t).replace(/'/g, "&apos;")})'><span style="color:#34c759; font-weight:bold; font-size:11px;">☑️ ${dStr}</span><br><strong style="color:var(--txt); ${t.status==='completed'?'text-decoration:line-through;color:#888;':''}">${t.title || '(無名タスク)'}</strong></div>`; });
+            events.forEach(e => { const tStr = e.start.dateTime ? new Date(e.start.dateTime).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }) : e.start.date; resultsHtml += `<div style="background:var(--bg); border:1px solid var(--border); padding:10px; border-radius:8px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,0.05); cursor:pointer;" onclick='openEditor(${JSON.stringify(e).replace(/'/g, "&apos;")})'><span style="color:var(--accent); font-weight:bold; font-size:11px;">📅 ${tStr}</span><br><strong style="color:var(--txt);">${e.summary || '(タイトルなし)'}</strong></div>`; });
+            tasks.forEach(t => { const dStr = t.due ? new Date(t.due).toLocaleDateString('ja-JP') : '期限なし'; resultsHtml += `<div style="background:var(--bg); border:1px solid var(--border); padding:10px; border-radius:8px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,0.05); cursor:pointer;" onclick='openTaskEditor(${JSON.stringify(t).replace(/'/g, "&apos;")})'><span style="color:#34c759; font-weight:bold; font-size:11px;">☑️ ${dStr}</span><br><strong style="color:var(--txt); ${t.status === 'completed' ? 'text-decoration:line-through;color:#888;' : ''}">${t.title || '(無名タスク)'}</strong></div>`; });
         }
         resultsHtml += `</div>`; containerEl.innerHTML = containerEl.innerHTML.replace(/<span.*?検索中...<\/span>/, '') + resultsHtml;
-    } catch(err) { console.error(err); containerEl.innerHTML += `<br><span style="color:red; font-size:12px;">検索エラー: ${err.message}</span>`; }
+    } catch (err) { console.error(err); containerEl.innerHTML += `<br><span style="color:red; font-size:12px;">検索エラー: ${err.message}</span>`; }
 }
 
 
 async function commitDraft(idx) {
-    const action = pendingDrafts[idx]; 
+    const action = pendingDrafts[idx];
     const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
-    
+
     // 二重送信防止のロック
-    btn.innerText = "⏳"; 
+    btn.innerText = "⏳";
     btn.disabled = true;
-    
+
     // ★第一原理：通信、エラー迎撃、野戦倉庫への退避、カレンダーの再描画まで
     // すべて main.js の dispatchManualAction（司令塔）に丸投げする
     await dispatchManualAction(action);
-    
+
     // 司令塔の処理が終われば、UIを完了状態にする
-    btn.innerText = "✅ 完了"; 
+    btn.innerText = "✅ 完了";
     btn.className = "btn-gray";
 }
 
 async function processSyncQueue() {
-    if(typeof getSyncQueue !== 'function' || !navigator.onLine) return;
+    if (typeof getSyncQueue !== 'function' || !navigator.onLine) return;
     const queue = await getSyncQueue(); if (queue.length === 0) return;
     showToast(`📮 ポスト内の未送信データ（${queue.length}件）を送信中...`);
     let successCount = 0;
     for (const item of queue) { try { await executeApiAction(item.payload); clearSyncQueueItem(item.id); successCount++; } catch (e) { console.error("Queue送信エラー:", e); } }
-    if (successCount > 0) { showToast(`✅ ${successCount}件の保留データを送信完了した。`); if(typeof triggerFullReRender !== 'undefined') triggerFullReRender(); }
+    if (successCount > 0) { showToast(`✅ ${successCount}件の保留データを送信完了した。`); if (typeof triggerFullReRender !== 'undefined') triggerFullReRender(); }
 }
 
 function editDraft(idx) {
     const action = pendingDrafts[idx];
     closeJeroChat();
     if (action.type === 'event') {
-        const draftEvent = { id: action.method === 'update' ? action.id : '', summary: action.title || '', description: action.description || '', location: action.location || '' };
-        if (action.start) { 
-            if (action.start.includes('T')) { 
-                draftEvent.start = { dateTime: action.start }; draftEvent.end = { dateTime: action.end || action.start }; 
-            } else { 
-                draftEvent.start = { date: action.start }; 
+        // ★浄化：AIの出力にプロパティが存在しない場合の安全対策
+        const draftEvent = {
+            id: action.method === 'update' ? (action.id || '') : '',
+            summary: action.title || '',
+            description: action.description || '',
+            location: action.location || '',
+            colorId: action.colorId || ''
+        };
+        if (action.start) {
+            if (action.start.includes('T')) {
+                draftEvent.start = { dateTime: action.start }; draftEvent.end = { dateTime: action.end || action.start };
+            } else {
+                draftEvent.start = { date: action.start };
                 let edStr = action.end || action.start;
                 if (edStr === action.start) {
                     let parts = action.start.split('-'); let ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                    ed.setDate(ed.getDate() + 1); edStr = `${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`;
+                    ed.setDate(ed.getDate() + 1); edStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
                 }
-                draftEvent.end = { date: edStr }; 
-            } 
+                draftEvent.end = { date: edStr };
+            }
         }
         openEditor(draftEvent);
     } else {
@@ -430,5 +438,5 @@ function editDraft(idx) {
         openTaskEditor(draftTask);
     }
     const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
-    if(btn) { btn.innerText = "手動済"; btn.className = "btn-gray"; btn.disabled = true; }
+    if (btn) { btn.innerText = "手動済"; btn.className = "btn-gray"; btn.disabled = true; }
 }

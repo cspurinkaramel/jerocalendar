@@ -722,12 +722,14 @@ async function executeApiAction(action, isRetry = false) {
 
     if (action.type === 'event') {
         if (action.method === 'insert') {
-            const body = { summary: action.title, location: action.location, description: action.description, colorId: action.colorId };
+            const body = { summary: action.title, location: action.location, description: action.description };
+            if (action.colorId) body.colorId = action.colorId; // ★浄化：色指定がある時だけ追加する
             if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
             else { body.start = { date: action.start }; body.end = { date: action.end }; }
             await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
         } else if (action.method === 'update') {
-            const body = { summary: action.title, location: action.location, description: action.description, colorId: action.colorId };
+            const body = { summary: action.title, location: action.location, description: action.description };
+            if (action.colorId) body.colorId = action.colorId; // ★浄化：色指定がある時だけ追加する
             if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
             else { body.start = { date: action.start }; body.end = { date: action.end }; }
             await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: body });
