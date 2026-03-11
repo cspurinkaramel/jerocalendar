@@ -133,6 +133,32 @@ async function processSyncQueue() {
                 successCount++;
                 itemSuccess = true;
                 needsRefresh = true;
+
+                // ★進化：Googleの遅延を待たず、送信成功と同時に手元のメモリを直接最新化（浄化）する
+                const action = item.payload;
+                const tdStr = action.start || action.due; let td = new Date();
+                if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+                const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
+
+                if (dataCache[monthKey]) {
+                    if (action.method === 'update') {
+                        let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
+                        let existing = targetList.find(e => e.id === action.id);
+                        if (existing) {
+                            if (action.type === 'event') existing.colorId = action.colorId;
+                            delete existing._pendingUpdate;
+                        }
+                    } else if (action.method === 'delete') {
+                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
+                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
+                    } else if (action.method === 'insert') {
+                        // 追加の場合はダミーIDのおばけを消し、後で裏側から本物のIDを取り直すフラグを立てる
+                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== item.id);
+                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== item.id);
+                        window._needsInsertFetch = true;
+                    }
+                }
+
                 await sleep(500);
             } catch (error) {
                 const code = error.status || (error.result && error.result.error && error.result.error.code);
@@ -158,10 +184,24 @@ async function processSyncQueue() {
         showToast(`✅ ${successCount}件の同期を完了した。`);
     }
 
-    // 成功または破棄があった場合は、強制的にGoogleから最新状態を読み込み、UIのおばけを浄化する
+    // ★進化：不安定なGoogleの遅延を無視し、浄化済みの手元のメモリで即座にカレンダーを再描画する
     if (needsRefresh) {
         const today = new Date();
-        await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
+        const year = today.getFullYear(); const month = today.getMonth();
+
+        const existingMonth = document.getElementById(`month-${year}-${month}`);
+        if (existingMonth) {
+            existingMonth.remove();
+            renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
+        }
+
+        // 「追加(insert)」があった場合のみ、本物のIDを取得するため、Googleの遅延が落ち着く2秒後に裏でそっと取得する
+        if (window._needsInsertFetch) {
+            window._needsInsertFetch = false;
+            setTimeout(() => {
+                fetchAndRenderMonth(year, month, 'replace', true);
+            }, 2000);
+        }
     }
 
     await updateSyncBadge();
