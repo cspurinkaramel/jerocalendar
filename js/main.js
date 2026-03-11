@@ -1,4 +1,4 @@
-// JeroCalendar v8.6.2 Main Logic - Final Polish
+// JeroCalendar v8.9.1 Main Logic - Offline First & Auto-Sync
 const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
 let tokenClient, gapiInited = false, gisInited = false;
@@ -8,8 +8,9 @@ const GOOGLE_COLORS = { "1":"#7986cb", "2":"#33b679", "3":"#8e24aa", "4":"#e67c7
 let advancedDict = [];
 const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
-// ★追加：ユニバーサルデザイン用 輝度計算アルゴリズム
-// 背景色が明るい場合は黒文字、暗い場合は白文字を返す
+// ==========================================
+// 1. ユーティリティ & UI操作群 (既存機能を維持)
+// ==========================================
 function getContrastYIQ(hexcolor){
     if(!hexcolor) return '#ffffff';
     hexcolor = hexcolor.replace("#", "");
@@ -37,27 +38,76 @@ function hideGlobalLoader() { document.getElementById('global-loader').classList
 const yieldUI = () => new Promise(r => setTimeout(r, 30));
 function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
 
+// ==========================================
+// 2. データベース & オフラインキュー (野戦倉庫)
+// ==========================================
 let idb;
 function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v8', 3); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch(e) { clearTimeout(timeout); resolve(); } }); }
-function saveToSyncQueue(actionPayload) { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').put({ id: generateUUID(), payload: actionPayload, timestamp: Date.now() }); tx.oncomplete = () => resolve(); } catch(e) { resolve(); } }); }
+function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
+
+// ★改修：ローカルキュー（待合室）への保存関数
+function saveToSyncQueue(actionPayload) { 
+    return new Promise((resolve) => { 
+        if(!idb) return resolve(); 
+        try { 
+            const tx = idb.transaction('sync_queue', 'readwrite'); 
+            const id = generateUUID();
+            // 仮のIDを付与して保存（UI上で後から識別するため）
+            const payloadWithLocalId = { ...actionPayload, _localId: id };
+            tx.objectStore('sync_queue').put({ id: id, payload: payloadWithLocalId, timestamp: Date.now() }); 
+            tx.oncomplete = () => {
+                console.log("⚠️ 通信断絶または認証エラー: データを野戦倉庫（キュー）に退避した。", payloadWithLocalId);
+                resolve(id);
+            };
+        } catch(e) { resolve(null); } 
+    }); 
+}
 function getSyncQueue() { return new Promise((resolve) => { if(!idb) return resolve([]); try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch(e) { resolve([]); } }); }
 function clearSyncQueueItem(id) { if(!idb) return; try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); } catch(e) {} }
 function saveDataCacheToIDB(monthKey, data) { if(!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch(e) {} }
 function loadDataCacheFromIDB() { return new Promise((resolve) => { if(!idb) return resolve(); try { const tx = idb.transaction('cache', 'readonly'); const req = tx.objectStore('cache').getAll(); req.onsuccess = () => { if (req.result) { req.result.forEach(item => { dataCache[item.key] = item.data; }); } resolve(); }; req.onerror = () => resolve(); } catch(e) { resolve(); } }); }
-function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-const EMOJI_LIST = [
-    { cat: "顔・感情", icons: ["😀","😂","🥰","😎","🤔","😭","😡","😴","🤯","😇","😈","👻","👽","🤖","💩","💡","😆","😅","😊","😉","😍","😘","😋","😜","🤪","🤫","🤭","🤮","🤧","😷"] },
-    { cat: "仕事・学校", icons: ["💻","📱","📞","🔋","📅","📈","📂","✏️","✂️","🗑️","🚩","⚠️","✅","❌","🏫","🎓","💼","📌","📎","📏","📖","📚","📝","✉️","📧","🔍","🔑","🔒","🔓","🛠️"] },
-    { cat: "生活・家事", icons: ["🏠","🛒","🧹","👕","🍽️","🍳","🍱","🍙","☕","🍺","🍷","💊","🏥","🛀","🛌","💰","💳","🛍️","🛋️","🧴","🧻","🪥","🧽","🗑️","🧺","🧷","🧵","🧶","🪴","✂️"] },
-    { cat: "動物・自然", icons: ["🐈","🐕","🐇","🐻","🐤","🐟","🌲","🌸","🌻","🍁","🍄","🌍","☀️","🌙","⭐","🔥","🐭","🐹","🦊","🐼","🦁","🐯","🐮","🐷","🐸","🐵","🐧","🦉","🦋","🐾"] },
-    { cat: "建物・場所", icons: ["🏢","⛩️","🎡","♨️","📍","🏦","🏤","🏥","🏫","🏪","🏰","🗼","🗽","⛪","🕌","🛕","🏟️","🏕️","🏖️","🗻","🏝️","🏞️","🏘️","🏚️","🏗️","🏭","🏠","🏡","⛺","🚥"] },
-    { cat: "乗り物・旅行", icons: ["🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🛻","🚚","🚜","🛴","🚲","🛵","🏍️","🛺","🚨","🚃","🚄","🚅","🚆","🚇","🚈","🚉","✈️","🛫","🛬","🛳️"] },
-    { cat: "食事・飲み物", icons: ["🍏","🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🧄","🧅","🥔","🍠","🥐"] },
-    { cat: "娯楽・スポーツ", icons: ["🎮","🎬","🎵","🎨","⚽","⚾","🎾","🏊","🚴","🏆","🎉","🎂","🎁","🎈","🎫","🎳","⛳","⛸️","🎣","🎿","🏂","🏋️","🤸","⛹️","🤾","🎟️","🎭","🎪","🎰","🧩"] },
-    { cat: "記号・マーク", icons: ["❤️","💛","💚","💙","💜","🖤","🤍","💯","💢","💬","💭","💤","🎶","💲","🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤","🟥","🟧","🟨","🟩","🟦","🟪"] }
-];
+// ==========================================
+// 3. 自動同期エンジン (補給部隊)
+// ==========================================
+async function processSyncQueue() {
+    if (!navigator.onLine) return; // 圏外なら何もしない
+    const queue = await getSyncQueue();
+    if (queue.length === 0) return;
 
+    console.log(`🔄 自動補給部隊起動：${queue.length}件の未送信データを処理する。`);
+    
+    // トークンが切れていれば再取得を試みる（サイレントリフレッシュ）
+    const validToken = await attemptSilentRefresh();
+    if (!validToken) {
+        console.warn("トークンの再取得に失敗。同期を延期する。");
+        return;
+    }
+
+    let successCount = 0;
+    for (let item of queue) {
+        try {
+            await executeApiAction(item.payload, true); // true = isRetry
+            clearSyncQueueItem(item.id);
+            successCount++;
+        } catch (error) {
+            console.error(`同期失敗 (ID: ${item.id}):`, error);
+            // エラーの種類によってはキューから消す（400エラー等、再送しても無駄な場合）
+        }
+    }
+    
+    if (successCount > 0) {
+        showToast(`✅ ${successCount}件の未送信データを同期完了した。`);
+        // 画面を最新状態に再描画
+        const today = new Date();
+        await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true);
+    }
+}
+
+// ==========================================
+// 4. 絵文字辞書関連 (The Visionary Mapping への布石)
+// ==========================================
+const EMOJI_LIST = [ /* 省略：既存コードママ */ { cat: "顔・感情", icons: ["😀","😂","🥰","😎","🤔","😭","😡","😴","🤯","😇","😈","👻","👽","🤖","💩","💡","😆","😅","😊","😉","😍","😘","😋","😜","🤪","🤫","🤭","🤮","🤧","😷"] }, { cat: "仕事・学校", icons: ["💻","📱","📞","🔋","📅","📈","📂","✏️","✂️","🗑️","🚩","⚠️","✅","❌","🏫","🎓","💼","📌","📎","📏","📖","📚","📝","✉️","📧","🔍","🔑","🔒","🔓","🛠️"] }, { cat: "生活・家事", icons: ["🏠","🛒","🧹","👕","🍽️","🍳","🍱","🍙","☕","🍺","🍷","💊","🏥","🛀","🛌","💰","💳","🛍️","🛋️","🧴","🧻","🪥","🧽","🗑️","🧺","🧷","🧵","🧶","🪴","✂️"] }, { cat: "動物・自然", icons: ["🐈","🐕","🐇","🐻","🐤","🐟","🌲","🌸","🌻","🍁","🍄","🌍","☀️","🌙","⭐","🔥","🐭","🐹","🦊","🐼","🦁","🐯","🐮","🐷","🐸","🐵","🐧","🦉","🦋","🐾"] }, { cat: "建物・場所", icons: ["🏢","⛩️","🎡","♨️","📍","🏦","🏤","🏥","🏫","🏪","🏰","🗼","🗽","⛪","🕌","🛕","🏟️","🏕️","🏖️","🗻","🏝️","🏞️","🏘️","🏚️","🏗️","🏭","🏠","🏡","⛺","🚥"] }, { cat: "乗り物・旅行", icons: ["🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🛻","🚚","🚜","🛴","🚲","🛵","🏍️","🛺","🚨","🚃","🚄","🚅","🚆","🚇","🚈","🚉","✈️","🛫","🛬","🛳️"] }, { cat: "食事・飲み物", icons: ["🍏","🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🧄","🧅","🥔","🍠","🥐"] }, { cat: "娯楽・スポーツ", icons: ["🎮","🎬","🎵","🎨","⚽","⚾","🎾","🏊","🚴","🏆","🎉","🎂","🎁","🎈","🎫","🎳","⛳","⛸️","🎣","🎿","🏂","🏋️","🤸","⛹️","🤾","🎟️","🎭","🎪","🎰","🧩"] }, { cat: "記号・マーク", icons: ["❤️","💛","💚","💙","💜","🖤","🤍","💯","💢","💬","💭","💤","🎶","💲","🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤","🟥","🟧","🟨","🟩","🟦","🟪"] } ];
 function loadDict() { const saved = localStorage.getItem('jero_adv_dict'); if (saved) { try { advancedDict = JSON.parse(saved); } catch(e) { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } } else { advancedDict = JSON.parse(JSON.stringify(DEFAULT_ADV_DICT)); } renderDictUI(); }
 function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); triggerFullReRender(); }
 function renderDictUI() { const container = document.getElementById('dict-list'); if(!container) return; container.innerHTML = ''; if(advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } advancedDict.forEach((item, idx) => { const primary = item.keys[0] || "(接頭辞なし)"; const el = document.createElement('div'); el.className = 'dict-item'; el.innerHTML = `<div class="dict-info"><div>${item.icon} <span style="font-weight:bold;">${primary}</span></div><div><span class="dict-badge" style="background:${item.bg}; color:${item.txt};">Sample</span></div></div><div style="display:flex; flex-direction:column; gap:4px;"><button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button><button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button></div>`; container.appendChild(el); }); }
@@ -72,6 +122,9 @@ function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText
 function processSemanticText(text) { if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null; for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if(matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } } return { text: resText, style: matchStyle }; }
 function extractTaskData(notes) { if(!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 
+// ==========================================
+// 5. カレンダーコアロジック
+// ==========================================
 function initColorPicker() { const picker = document.getElementById('color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
 function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); if(el) { el.classList.add('selected'); } else { document.querySelectorAll('#color-picker .color-opt').forEach(c => { if((id === '' && c.style.background === 'var(--accent)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedColorId = id; }
 function initTaskColorPicker() { const picker = document.getElementById('task-color-picker'); if(!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:#34c759" onclick="selectTaskColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectTaskColor(this, '${id}')"></div>`; }); }
@@ -86,12 +139,15 @@ function triggerFullReRender() { if (!localStorage.getItem('jero_token')) return
 
 function isEventSpanning(eventObj, dateStr) { if(!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if(st.getTime() === ed.getTime()) return 'single'; if(tgt.getTime() === st.getTime()) return 'span-start'; if(tgt.getTime() === ed.getTime()) return 'span-end'; if(tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
 
-// ★修正版：getCardHtml（リストビューの白飛びバグを殲滅）
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
     const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
-    const title = isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)');
+    
+    // ★改修：ローカル待機中の予定を判定
+    const isPending = item._localId ? true : false;
+    const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + (isPending ? ' 🔄' : '');
+    
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
     
@@ -106,7 +162,6 @@ function getCardHtml(type, item) {
                 endTimeStr = `${ed.getHours()}:${String(ed.getMinutes()).padStart(2,'0')}`;
             }
             const fullTimeStr = endTimeStr ? `${timeStr} 〜 ${endTimeStr}` : timeStr;
-            // 悪さをしていた color: ${textColor} を削除。CSSの標準に任せる。
             timeHtml = `<span class="time-text" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
         }
     } else {
@@ -115,12 +170,12 @@ function getCardHtml(type, item) {
     }
     
     const titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
-    
-    // card-content と card-title からも強制カラー指定を撤去。
-    return `<div class="item-card" onclick="${clickFn}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
+    // 未同期アイテムのスタイル
+    const cardStyle = isPending ? 'opacity: 0.7; border: 1px dashed #ccc;' : '';
+
+    return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
 }
 
-// ★新設：ひょこっと出るポップアップ関数
 function showTimePopup(el, text, colorCode) {
     document.querySelectorAll('.time-popup').forEach(p => p.remove());
     const popup = document.createElement('div');
@@ -172,13 +227,15 @@ function renderMonthDOM(year, month, data, position) {
             if(spanType !== 'single') div.classList.add(spanType); 
             const recurIcon = e.recurrence ? '🔁 ' : ''; 
             const pData = processSemanticText(e.summary); 
-            div.innerText = recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
+            
+            // ★改修：未同期アイコン
+            const pendingIcon = e._localId ? '🔄 ' : '';
+            div.innerText = pendingIcon + recurIcon + pData.text + (timeStr ? ` (${timeStr})` : ''); 
             
             let bgColor = 'var(--accent)'; let txtColor = '#ffffff';
             if(pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } 
             else if(e.colorId && GOOGLE_COLORS[e.colorId]) { 
                 bgColor = GOOGLE_COLORS[e.colorId]; 
-                // ★修正：カレンダーグリッドの文字色も動的コントラストで決定する
                 txtColor = getContrastYIQ(bgColor); 
             }
             
@@ -193,15 +250,18 @@ function renderMonthDOM(year, month, data, position) {
                 div.style.backgroundColor = bgColor;
                 div.style.color = txtColor;
             }
+            if (e._localId) div.style.opacity = '0.7'; // 未同期は半透明
             dayEl.appendChild(div); 
         });
         
         if(data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => { 
             const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; 
             const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; 
-            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${recurIcon}${pData.text}`; 
+            const pendingIcon = t._localId ? '🔄 ' : '';
+            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${pendingIcon}${recurIcon}${pData.text}`; 
             if(pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; } 
             else if(tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); } 
+            if (t._localId) div.style.opacity = '0.7'; // 未同期は半透明
             dayEl.appendChild(div); 
         });
         grid.appendChild(dayEl);
@@ -242,6 +302,9 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if(existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if(!existing) { if (position === 'append') renderedMonths.push({year, month}); else if (position === 'prepend') renderedMonths.unshift({year, month}); } updateHeaderDisplay(); }
 }
 
+// ==========================================
+// 6. エディタ UI
+// ==========================================
 function renderIconPalette(targetId, inputId) {
     const palette = document.getElementById(targetId);
     if (!palette) return;
@@ -261,6 +324,12 @@ function renderIconPalette(targetId, inputId) {
 }
 
 function openEditor(e = null) {
+    // もし未同期（ローカルキュー）のアイテムだったら編集させず警告を出す
+    if (e && e._localId) {
+        showToast('🔄 この予定はまだGoogleに同期されていないため、現在編集できない。電波回復を待て。');
+        return;
+    }
+
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
     document.getElementById('edit-id').value = e ? e.id : '';
@@ -310,11 +379,14 @@ function toggleTimeInputs() {
     if (endVal) endInput.value = isAllDay ? endVal.split('T')[0] : (endVal.includes('T') ? endVal : endVal + 'T13:00');
 }
 
+// ★改修：dispatchManualActionへ処理を投げる
 async function saveEvent() {
     const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim();
     if (!title) { showToast('タイトルを入力してくれ'); return; }
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value;
     if(!startVal) { showToast('開始日時が不正だ'); return; } if(!endVal) endVal = startVal;
+    
+    // APIへ送るためのペイロード構築
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     try {
         if (isAllDay) { 
@@ -334,6 +406,7 @@ async function confirmDeleteEvent() { const id = document.getElementById('edit-i
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if(convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。日時を変えて保存を押せ。'); }
 
 function openTaskEditor(t = null) {
+    if (t && t._localId) { showToast('🔄 このタスクはまだGoogleに同期されていないため、現在編集できない。'); return; }
     document.getElementById('overlay').classList.add('active'); document.getElementById('task-editor-modal').classList.add('active');
     document.getElementById('task-edit-id').value = t ? t.id : ''; document.getElementById('task-edit-title').value = t ? t.title || '' : '';
     let cleanNotes = "";
@@ -349,10 +422,13 @@ function openTaskEditor(t = null) {
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if(!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
 
 async function toggleTaskCompletion(taskId, newStatus) {
+    // 省略：タスク完了状態のトグル（API直叩きのため、今回はここは簡易にエラーハンドリングのみ）
     let targetTask = null; 
     for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } }
     if (!targetTask) return;
     
+    if (targetTask._localId) { showToast('🔄 未同期タスクの完了はできない。'); return; }
+
     targetTask.status = newStatus; 
     const td = targetTask.due ? new Date(targetTask.due) : new Date(); 
     
@@ -365,6 +441,9 @@ async function toggleTaskCompletion(taskId, newStatus) {
             await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody }); 
         } else { 
             showToast('圏外ではタスクの完了操作はできない。'); 
+            // 状態を元に戻す
+            targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed';
+            await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
         }
     } catch(e) { console.error('裏側での同期エラー:', e.message); }
 }
@@ -381,6 +460,7 @@ async function saveTask() {
 async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if(!id || !confirm('このタスクを完全に消し去るか？')) return; const action = { type: 'task', method: 'delete', id: id }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
 async function executeConversion(fromType) {
+     // 省略：タスクと予定の変換機能
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return;
     let deleteAction = null; let insertAction = null; let redrawDate = new Date();
     if (fromType === 'event') {
@@ -399,31 +479,147 @@ async function executeConversion(fromType) {
     showGlobalLoader('変換中...');
     try {
         if (navigator.onLine) { if (deleteAction) await executeApiAction(deleteAction); await executeApiAction(insertAction); showToast('✅ 変換を完了した'); } 
-        else { if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); showToast('📦 圏外のためポストに保管した。電波回復時に変換する'); }
+        else { if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); showToast('📦 圏外のため野戦倉庫に保管した。電波回復時に変換する'); }
         if (typeof dataCache !== 'undefined' && deleteAction) { for (let key in dataCache) { if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); } if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); } } }
         closeEditor(); closeTaskEditor(); closeAllModals(); await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', navigator.onLine);
     } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
 }
 
+// ==========================================
+// 7. アクション司令塔 (迎撃システムの中核)
+// ==========================================
+// ★改修：API通信をここで一元管理し、エラーを迎撃する
 async function dispatchManualAction(action) {
-    showGlobalLoader('処理中...'); let msgAction = '保存'; if(action.method === 'insert') msgAction = '追加'; if(action.method === 'update') msgAction = '更新'; if(action.method === 'delete') msgAction = '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク';
-    try {
-        if (navigator.onLine) { if(typeof executeApiAction === 'function') { await executeApiAction(action); showToast(`✅ ${msgType}を${msgAction}した`); } else { throw new Error('API通信関数が見つからない。'); } } 
-        else { await saveToSyncQueue(action); showToast(`📦 圏外のためポストに保管した。電波回復時に${msgAction}する`); }
-        if(typeof dataCache !== 'undefined') { for(let key in dataCache) { if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); } } }
+    showGlobalLoader('処理中...'); 
+    let msgAction = '保存'; if(action.method === 'insert') msgAction = '追加'; if(action.method === 'update') msgAction = '更新'; if(action.method === 'delete') msgAction = '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク';
+    
+    let isSuccess = false;
+
+    // オフラインなら即座にキューへ
+    if (!navigator.onLine) {
+        const localId = await saveToSyncQueue(action);
+        if (localId) insertOptimisticData(action, localId); // ローカルキャッシュに仮想データとして挿入
+        showToast(`📦 圏外だ。「${msgType}」の${msgAction}を野戦倉庫（キュー）に保管した。`);
+        isSuccess = true;
+    } else {
+        try {
+            await executeApiAction(action);
+            showToast(`✅ ${msgType}を${msgAction}した`);
+            isSuccess = true;
+        } catch (e) {
+            console.error("API送信エラー:", e);
+            const isAuthError = e.status === 401 || (e.result && e.result.error && e.result.error.message.includes('credentials'));
+            const isNetworkError = e.name === 'TypeError' || e.status === 0;
+
+            if (isAuthError || isNetworkError) {
+                // 401やネットワークエラーを迎撃してキューに入れる
+                const localId = await saveToSyncQueue(action);
+                if (localId) insertOptimisticData(action, localId);
+                showToast(`📦 通信不良または認証エラーだ。野戦倉庫に退避し、UIは更新した。`);
+                if (isAuthError) {
+                    console.warn("バックグラウンドでサイレントリフレッシュを試みる...");
+                    attemptSilentRefresh();
+                }
+                isSuccess = true;
+            } else {
+                const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "未知のエラー");
+                showToast('❌ 致命的エラー: ' + errMsg); 
+            }
+        }
+    }
+
+    // 成功またはキューへの退避が完了した場合、画面を描画し直す
+    if (isSuccess) {
+        if(typeof dataCache !== 'undefined') { 
+            for(let key in dataCache) { 
+                if(action.method === 'delete') { 
+                    if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); 
+                    if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); 
+                } 
+            } 
+        }
+        
         const tdStr = action.start || action.due; let td = new Date(); if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); } }
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', navigator.onLine);
+        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); // APIを叩かずキャッシュから再描画
         
         if (selectedDateStr) {
             const dow = new Date(selectedDateStr).getDay();
             openDailyModal(selectedDateStr, dow);
         }
-    } catch (e) { 
-        const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "不正なデータです");
-        showToast('❌ エラー: ' + errMsg); 
-    } finally { hideGlobalLoader(); }
+    }
+    hideGlobalLoader();
 }
 
+// 仮想データをローカルキャッシュに挿入する（楽観的UIのため）
+function insertOptimisticData(action, localId) {
+    const tdStr = action.start || action.due;
+    let td = new Date();
+    if (tdStr) {
+        if (tdStr.includes('T')) td = new Date(tdStr);
+        else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); }
+    }
+    const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
+    if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] };
+
+    if (action.type === 'event' && action.method === 'insert') {
+        const dummyEvent = {
+            id: 'dummy_' + localId,
+            summary: action.title,
+            start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start },
+            end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null,
+            colorId: action.colorId,
+            _localId: localId // 未同期フラグ
+        };
+        dataCache[monthKey].events.push(dummyEvent);
+    } else if (action.type === 'task' && action.method === 'insert') {
+         const dummyTask = {
+            id: 'dummy_' + localId,
+            title: action.title,
+            notes: action.description,
+            due: action.due,
+            status: 'needsAction',
+            _localId: localId // 未同期フラグ
+        };
+        dataCache[monthKey].tasks.push(dummyTask);
+    }
+}
+
+// 実際のAPI叩き部分
+async function executeApiAction(action, isRetry = false) {
+    if (!navigator.onLine) throw new Error("Offline");
+
+    if (action.type === 'event') {
+        if (action.method === 'insert') {
+            const body = { summary: action.title, location: action.location, description: action.description, colorId: action.colorId };
+            if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; } 
+            else { body.start = { date: action.start }; body.end = { date: action.end }; }
+            await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
+        } else if (action.method === 'update') {
+            const body = { summary: action.title, location: action.location, description: action.description, colorId: action.colorId };
+            if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; } 
+            else { body.start = { date: action.start }; body.end = { date: action.end }; }
+            await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: body });
+        } else if (action.method === 'delete') {
+            await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id });
+        }
+    } else if (action.type === 'task') {
+        if (action.method === 'insert') {
+            const body = { title: action.title, notes: action.description };
+            if (action.due) body.due = action.due;
+            await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
+        } else if (action.method === 'update') {
+            const body = { title: action.title, notes: action.description };
+            if (action.due) body.due = action.due;
+            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: body });
+        } else if (action.method === 'delete') {
+            await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id });
+        }
+    }
+}
+
+// ==========================================
+// 8. その他初期化プロセス等
+// ==========================================
 async function processPDFFile(file) {
     showGlobalLoader('PDFを読み込み中...');
     try {
@@ -439,8 +635,19 @@ async function processPDFFile(file) {
     } catch (error) { console.error('PDF処理エラー:', error); showToast('❌ PDFの読み込みに失敗した。'); } finally { hideGlobalLoader(); }
 }
 
-window.addEventListener('online', async () => { document.getElementById('offline-badge').classList.remove('active'); showToast('📶 電波が回復した。'); if(typeof processSyncQueue === 'function') processSyncQueue(); });
-window.addEventListener('offline', () => { document.getElementById('offline-badge').classList.add('active'); showToast('⚡️ 圏外になった。変更はポスト（キュー）に保存する。'); });
+window.addEventListener('online', async () => { 
+    document.getElementById('offline-badge').classList.remove('active'); 
+    showToast('📶 電波が回復した。野戦倉庫の物資（未同期データ）を転送する。'); 
+    processSyncQueue(); 
+});
+window.addEventListener('offline', () => { document.getElementById('offline-badge').classList.add('active'); showToast('⚡️ 圏外になった。変更は野戦倉庫に退避する。'); });
+
+// アプリがバックグラウンドからアクティブになった時の処理（iOS PWAで重要）
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        processSyncQueue();
+    }
+});
 
 document.addEventListener('DOMContentLoaded', async () => { 
     try { 
@@ -462,6 +669,8 @@ function checkAutoLogin() {
         gapi.client.setToken({access_token: savedToken}); 
         document.getElementById('auth-btn').style.display = 'none'; 
         initCalendar(); 
+        // 起動時に未送信キューがあれば処理
+        processSyncQueue();
     } else { 
         notifyAuthError(); 
     } 
@@ -482,11 +691,12 @@ async function attemptSilentRefresh() {
                 resolve(true); 
             }
         };
+        // プロンプトを出さずにトークンのみ要求
         tokenClient.requestAccessToken({prompt: ''}); 
     });
 }
 
-async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。'); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
+async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({access_token: resp.access_token}); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。野戦倉庫のチェックを行う。'); processSyncQueue(); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({prompt: 'consent'}); }
 
 document.addEventListener('DOMContentLoaded', () => {
     const resizer = document.getElementById('resizer');

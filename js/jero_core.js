@@ -379,42 +379,22 @@ async function executeSearch(action, containerEl) {
     } catch(err) { console.error(err); containerEl.innerHTML += `<br><span style="color:red; font-size:12px;">検索エラー: ${err.message}</span>`; }
 }
 
-async function executeApiAction(action) {
-    if (action.type === 'event') {
-        if (action.method === 'delete') { await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id }); } 
-        else if (action.method === 'update') { 
-            const resource = { summary: action.title, location: action.location, description: action.description }; 
-            if (action.colorId) { resource.colorId = action.colorId; } else { resource.colorId = null; }
-            if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString(), date: null }; resource.end = { dateTime: new Date(action.end).toISOString(), date: null }; } 
-            else { resource.start = { date: action.start, dateTime: null }; resource.end = { date: action.end, dateTime: null }; } 
-            await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: resource }); 
-        } else { 
-            const resource = { summary: action.title, location: action.location, description: action.description }; 
-            if (action.colorId) { resource.colorId = action.colorId; }
-            if (action.start && action.start.includes('T')) { resource.start = { dateTime: new Date(action.start).toISOString() }; resource.end = { dateTime: new Date(action.end).toISOString() }; } 
-            else { resource.start = { date: action.start }; resource.end = { date: action.end }; } 
-            await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: resource }); 
-        }
-    } else {
-        if (action.method === 'delete') { await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id }); } 
-        else if (action.method === 'update') { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: resource }); } 
-        else { const resource = { title: action.title, notes: action.description }; if (action.due) resource.due = new Date(action.due).toISOString(); await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: resource }); }
-    }
-}
 
 async function commitDraft(idx) {
-    const action = pendingDrafts[idx]; const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
-    btn.innerText = "⏳"; btn.disabled = true;
-    try {
-        if (navigator.onLine) { await executeApiAction(action); btn.innerText = "✅ 済"; btn.className = "btn-green"; } 
-        else { if(typeof saveToSyncQueue === 'function') { await saveToSyncQueue(action); btn.innerText = "📦 保留(キュー)"; btn.className = "btn-yellow"; showToast("圏外のためポストに保管した。電波回復時に自動送信するぞ。"); } else { throw new Error("Sync Queueが見つからない"); } }
-        if(typeof dataCache !== 'undefined') { for(let key in dataCache) { if(action.method === 'delete') { if(action.type === 'event') dataCache[key].events = dataCache[key].events.filter(e => e.id !== action.id); if(action.type === 'task') dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== action.id); } } }
-        if(typeof fetchAndRenderMonth !== 'undefined' && navigator.onLine) { const td = action.start ? new Date(action.start) : (action.due ? new Date(action.due) : new Date()); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', true); }
-    } catch(e) { 
-        btn.innerText = "❌ エラー"; btn.className = "btn-red"; btn.disabled = false; 
-        const errMsg = e.result && e.result.error ? e.result.error.message : (e.message || "通信エラー");
-        showToast("APIエラー: " + errMsg); 
-    }
+    const action = pendingDrafts[idx]; 
+    const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
+    
+    // 二重送信防止のロック
+    btn.innerText = "⏳"; 
+    btn.disabled = true;
+    
+    // ★第一原理：通信、エラー迎撃、野戦倉庫への退避、カレンダーの再描画まで
+    // すべて main.js の dispatchManualAction（司令塔）に丸投げする
+    await dispatchManualAction(action);
+    
+    // 司令塔の処理が終われば、UIを完了状態にする
+    btn.innerText = "✅ 完了"; 
+    btn.className = "btn-gray";
 }
 
 async function processSyncQueue() {
