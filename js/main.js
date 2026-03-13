@@ -561,11 +561,6 @@ function renderIconPalette(targetId, inputId) {
 }
 
 function openEditor(e = null) {
-    if (e && e._localId) {
-        showToast('🔄 この予定はまだGoogleに同期されていないため、現在編集できない。電波回復を待て。');
-        return;
-    }
-
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
     document.getElementById('edit-id').value = e ? e.id : '';
@@ -640,7 +635,6 @@ async function confirmDeleteEvent() { const id = document.getElementById('edit-i
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。日時を変えて保存を押せ。'); }
 
 function openTaskEditor(t = null) {
-    if (t && t._localId) { showToast('🔄 このタスクはまだGoogleに同期されていないため、現在編集できない。'); return; }
     document.getElementById('overlay').classList.add('active'); document.getElementById('task-editor-modal').classList.add('active');
     document.getElementById('task-edit-id').value = t ? t.id : ''; document.getElementById('task-edit-title').value = t ? t.title || '' : '';
     let cleanNotes = "";
