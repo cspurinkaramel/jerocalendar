@@ -139,27 +139,97 @@ async function processSyncQueue() {
     }
 
     console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
-// ...(中略)...
+    showGlobalLoader(`同期中... 残り${queue.length}件`);
+
+    const validToken = await attemptSilentRefresh();
+    if (!validToken) {
+        console.warn("トークンの再取得に失敗。同期を停止し、手動認証を促す。");
+        hideGlobalLoader();
+        notifyAuthError(); // ★裏口がダメなら正面玄関へ誘導
+        await updateSyncBadge();
+        return;
+    }
+
+    let successCount = 0;
+    let needsRefresh = false;
+    for (let item of queue) {
+        let retries = 3;
+        let itemSuccess = false;
+
+        while (retries > 0 && !itemSuccess) {
+            try {
+                await executeApiAction(item.payload, true);
+                await clearSyncQueueItem(item.id);
+                successCount++;
+                itemSuccess = true;
+                needsRefresh = true;
+
+                const action = item.payload;
+                const tdStr = action.start || action.due; let td = new Date();
+                if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+                const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
+
+                if (dataCache[monthKey]) {
+                    if (action.method === 'update') {
+                        let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
+                        let existing = targetList.find(e => e.id === action.id);
+                        if (existing) {
+                            if (action.type === 'event') existing.colorId = action.colorId;
+                            delete existing._pendingUpdate;
+                        }
+                    } else if (action.method === 'delete') {
+                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
+                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
+                    } else if (action.method === 'insert') {
+                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== item.id);
+                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== item.id);
+                        window._needsInsertFetch = true;
+                    }
+                }
+                await sleep(500);
+            } catch (error) {
+                const code = error.status || (error.result && error.result.error && error.result.error.code);
+                if (code === 401 || code === 403) {
+                    console.error("❌ 認証エラーまたはレート制限に抵触。同期を中断する。");
+                    hideGlobalLoader();
+                    notifyAuthError(); // ★トークン切れを明示しユーザーの認証を待つ
+                    await updateSyncBadge();
+                    return;
+                } else if (code === 400 || code === 404 || code === 410) {
+                    console.error(`❌ Googleから拒絶された(Code:${code})。不正データとして破棄する。`, error);
+                    await clearSyncQueueItem(item.id);
+                    itemSuccess = true;
+                    needsRefresh = true;
+                } else {
+                    retries--;
+                    console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
+                    if (retries > 0) {
+                        const backoff = (4 - retries) * 2000; // ★2秒, 4秒, 6秒の指数関数的バックオフ
+                        await sleep(backoff);
+                    } else {
+                        console.error("3回のリトライに失敗。ローカルの控え室に残置する。");
+                    }
+                }
             }
         }
     }
 
     hideGlobalLoader();
+    if (successCount > 0) showToast(`✅ ${successCount}件の同期を完了した。`);
 
-    if (successCount > 0) {
-        showToast(`✅ ${successCount}件の同期を完了した。`);
-    }
-
-    // ★進化：不安定なGoogleの遅延を無視し、浄化済みの手元のメモリで即座にカレンダーを再描画する
-// ...(中略)...
+    if (needsRefresh) {
+        const today = new Date();
+        const year = today.getFullYear(); const month = today.getMonth();
+        const existingMonth = document.getElementById(`month-${year}-${month}`);
+        if (existingMonth) {
+            existingMonth.remove();
+            renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
+        }
         if (window._needsInsertFetch) {
             window._needsInsertFetch = false;
-            setTimeout(() => {
-                fetchAndRenderMonth(year, month, 'replace', true);
-            }, 2000);
+            setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 2000);
         }
     }
-
     await updateSyncBadge();
 }
 
