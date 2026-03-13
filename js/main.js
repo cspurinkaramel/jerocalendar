@@ -138,6 +138,16 @@ async function processSyncQueue() {
         return;
     }
 
+    // ★通行証の賞味期限チェック（50分経過で問答無用で鍵マークへ）
+    const tokenTime = localStorage.getItem('jero_token_time');
+    const isTokenExpired = !tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000);
+    if (isTokenExpired) {
+        console.warn("通行証の期限切れを確認。無駄な通信を避け、正面玄関（鍵マーク）へ誘導する。");
+        notifyAuthError();
+        await updateSyncBadge();
+        return;
+    }
+
     console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
     showGlobalLoader(`同期中... 残り${queue.length}件`);
 
@@ -1070,6 +1080,15 @@ async function retrySingleSyncItem(id) {
     const queue = await getSyncQueue();
     const item = queue.find(q => q.id === id);
     if (!item) return;
+
+    // ★手動再送時も通行証の賞味期限をチェック
+    const tokenTime = localStorage.getItem('jero_token_time');
+    if (!tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000)) {
+        showToast("🔑 認証の有効期限が切れている。右上の鍵マークをタップしてくれ。");
+        notifyAuthError();
+        closeSyncManager();
+        return;
+    }
 
     showGlobalLoader("1件だけ再送信中...");
     try {
