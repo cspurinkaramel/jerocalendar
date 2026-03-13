@@ -141,23 +141,19 @@ async function processSyncQueue() {
     console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
     showGlobalLoader(`同期中... 残り${queue.length}件`);
 
-    const validToken = await attemptSilentRefresh();
-    if (!validToken) {
-        console.warn("トークンの再取得に失敗。同期を停止し、手動認証を促す。");
-        hideGlobalLoader();
-        notifyAuthError(); // ★裏口がダメなら正面玄関へ誘導
-        await updateSyncBadge();
-        return;
-    }
-
     let successCount = 0;
     let needsRefresh = false;
+    let authErrorOccurred = false;
+
     for (let item of queue) {
+        if (authErrorOccurred) break; // 認証エラーが確定したら処理を中断
+
         let retries = 3;
         let itemSuccess = false;
 
-        while (retries > 0 && !itemSuccess) {
+        while (retries > 0 && !itemSuccess && !authErrorOccurred) {
             try {
+                // まずはそのまま送信を試みる
                 await executeApiAction(item.payload, true);
                 await clearSyncQueueItem(item.id);
                 successCount++;
@@ -190,11 +186,16 @@ async function processSyncQueue() {
             } catch (error) {
                 const code = error.status || (error.result && error.result.error && error.result.error.code);
                 if (code === 401 || code === 403) {
-                    console.error("❌ 認証エラーまたはレート制限に抵触。同期を中断する。");
-                    hideGlobalLoader();
-                    notifyAuthError(); // ★トークン切れを明示しユーザーの認証を待つ
-                    await updateSyncBadge();
-                    return;
+                    console.warn("⚠️ 認証エラー検出。裏でトークン更新を試みる。");
+                    const validToken = await attemptSilentRefresh();
+                    if (!validToken) {
+                        console.error("❌ トークン再取得失敗。手動認証へ誘導する。");
+                        authErrorOccurred = true;
+                        hideGlobalLoader();
+                        notifyAuthError();
+                        await updateSyncBadge();
+                    }
+                    // 更新に成功した場合は、retriesを減らさずにそのままリトライする
                 } else if (code === 400 || code === 404 || code === 410) {
                     console.error(`❌ Googleから拒絶された(Code:${code})。不正データとして破棄する。`, error);
                     await clearSyncQueueItem(item.id);
@@ -217,7 +218,7 @@ async function processSyncQueue() {
     hideGlobalLoader();
     if (successCount > 0) showToast(`✅ ${successCount}件の同期を完了した。`);
 
-    if (needsRefresh) {
+    if (needsRefresh && !authErrorOccurred) {
         const today = new Date();
         const year = today.getFullYear(); const month = today.getMonth();
         const existingMonth = document.getElementById(`month-${year}-${month}`);
@@ -230,7 +231,7 @@ async function processSyncQueue() {
             setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 2000);
         }
     }
-    await updateSyncBadge();
+    if (!authErrorOccurred) await updateSyncBadge();
 }
 
 // ==========================================
