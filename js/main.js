@@ -234,20 +234,32 @@ async function processSyncQueue() {
     hideGlobalLoader();
     if (successCount > 0) showToast(`✅ ${successCount}件の同期を完了した。`);
 
+    // ★UI強制浄化プロセス：同期が終わったら、古い残像（点線）を焼き払うため、
+    // 即座に画面を再描画しつつ、裏で最新データを取得してさらに上書きする。
     if (needsRefresh && !authErrorOccurred) {
         const today = new Date();
         const year = today.getFullYear(); const month = today.getMonth();
+        
+        // 1. キャッシュの状態で即時再描画（ゴーストの除去）
         const existingMonth = document.getElementById(`month-${year}-${month}`);
         if (existingMonth) {
             existingMonth.remove();
             renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
         }
-        if (window._needsInsertFetch) {
-            window._needsInsertFetch = false;
-            setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 2000);
-        }
+        
+        // 2. Googleのデータベースに反映されるラグを待ってから完全な最新を取得
+        setTimeout(async () => {
+            await fetchAndRenderMonth(year, month, 'replace', true);
+            // 最新データ取得後に改めてバッジ状態と画面下の詳細リストを確定させる
+            await updateSyncBadge();
+            if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { 
+                openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); 
+            }
+        }, 2000);
     }
-    if (!authErrorOccurred) await updateSyncBadge();
+    
+    // エラー時も含む、バッジの最終状態確認
+    await updateSyncBadge();
 }
 
 // ==========================================
@@ -692,7 +704,7 @@ async function executeConversion(fromType) {
         const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim() || '無名タスク'; const startVal = document.getElementById('edit-start').value; const notes = document.getElementById('edit-desc').value; const colorId = selectedColorId;
         if (id) deleteAction = { type: 'event', method: 'delete', id: id };
         let rawNotes = notes; if (colorId) rawNotes += (rawNotes ? '\n' : '') + `[c:${colorId}]`;
-        let dueIso = ''; if (startVal) { let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal; let parts = dStr.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); dueIso = dStr + 'T00:00:00+09:00'; }
+        let dueIso = ''; if (startVal) { let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal; let parts = dStr.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); dueIso = dStr + 'T00:00:00.000Z'; } // ★UTC0時に修正
         insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso };
     } else {
         const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim() || '無名予定'; const dueVal = document.getElementById('task-edit-due').value; const notesVal = document.getElementById('task-edit-notes').value; const colorId = selectedTaskColorId;
@@ -878,6 +890,15 @@ async function executeApiAction(action, isRetry = false) {
         }
         // タスクの期限も文字列化を保証
         if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || "";
+        
+        // ★絶対防衛線：タスクの日付が「+09:00」を含んでいるとGoogle側で前日（UTC）に計算されてズレる。
+        // 強制的に「YYYY-MM-DDT00:00:00.000Z」のUTC形式に上書きして浄化する。
+        if (payload.due && typeof payload.due === 'string') {
+            const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (dateMatch) {
+                payload.due = dateMatch[1] + 'T00:00:00.000Z';
+            }
+        }
     }
 
     // ★第2段階：Googleとの通信と、貴重なデータの「絶対救出」
