@@ -138,14 +138,20 @@ async function processSyncQueue() {
         return;
     }
 
-    // ★通行証の賞味期限チェック（50分経過で問答無用で鍵マークへ）
+    // ★通行証の賞味期限チェックと自動更新ハイブリッド
     const tokenTime = localStorage.getItem('jero_token_time');
     const isTokenExpired = !tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000);
     if (isTokenExpired) {
-        console.warn("通行証の期限切れを確認。無駄な通信を避け、正面玄関（鍵マーク）へ誘導する。");
-        notifyAuthError();
-        await updateSyncBadge();
-        return;
+        console.log("同期前：通行証の期限切れを確認。自動更新を試みるぞ。");
+        showGlobalLoader("Googleの門番と交渉中...");
+        const refreshed = await attemptSilentRefresh();
+        if (!refreshed) {
+            console.warn("自動更新失敗。これ以上の自動化は不可能だ。正面玄関（鍵マーク）へ誘導する。");
+            hideGlobalLoader();
+            notifyAuthError();
+            await updateSyncBadge();
+            return;
+        }
     }
 
     console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
@@ -940,13 +946,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 function gapiLoaded() { gapi.load('client', initializeGapiClient); }
 async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"] }); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
 function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
-function checkAutoLogin() {
+async function checkAutoLogin() {
     const savedToken = localStorage.getItem('jero_token');
+    const tokenTime = localStorage.getItem('jero_token_time');
+    
     if (savedToken) {
         gapi.client.setToken({ access_token: savedToken });
         document.getElementById('auth-btn').style.display = 'none';
-        initCalendar();
-        processSyncQueue();
+        initCalendar(); // 画面はキャッシュで即座に描画
+        
+        // ★起動時に通行証の期限をチェック。古ければ裏で自動更新をかける
+        if (!tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000)) {
+            console.log("起動時：通行証が古い。自動更新（サイレントリフレッシュ）を試みる。");
+            const refreshed = await attemptSilentRefresh();
+            if (refreshed) {
+                processSyncQueue();
+            } else {
+                console.warn("自動更新失敗。手動認証が必要だ。");
+                notifyAuthError();
+                await updateSyncBadge();
+            }
+        } else {
+            processSyncQueue();
+        }
     } else {
         notifyAuthError();
     }
@@ -956,18 +978,22 @@ async function attemptSilentRefresh() {
     return new Promise((resolve) => {
         if (!gisInited || !tokenClient) { resolve(false); return; }
         tokenClient.callback = (resp) => {
-            if (resp.error) { resolve(false); }
-            else {
+            if (resp.error) { 
+                console.warn("サイレントリフレッシュ拒絶:", resp.error);
+                resolve(false); 
+            } else {
                 gapi.client.setToken({ access_token: resp.access_token });
                 localStorage.setItem('jero_token', resp.access_token);
                 localStorage.setItem('jero_token_time', Date.now());
                 isAuthError = false;
                 document.getElementById('auth-btn').style.display = 'none';
                 document.getElementById('auth-btn').classList.remove('auth-pulse');
+                console.log("✅ 通行証の自動更新に成功した。");
                 resolve(true);
             }
         };
-        tokenClient.requestAccessToken({ prompt: '' });
+        // ★明示的にユーザーに画面を出さず裏でトークンを要求する
+        tokenClient.requestAccessToken({ prompt: 'none' });
     });
 }
 
