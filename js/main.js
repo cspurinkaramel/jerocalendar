@@ -46,9 +46,37 @@ let idb;
 function initIDB() { return new Promise((resolve) => { const timeout = setTimeout(() => { resolve(); }, 2000); try { const req = indexedDB.open('JeroDB_v8', 3); req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' }); if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' }); if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id' }); }; req.onsuccess = (e) => { clearTimeout(timeout); idb = e.target.result; resolve(); }; req.onerror = (e) => { clearTimeout(timeout); resolve(); }; } catch (e) { clearTimeout(timeout); resolve(); } }); }
 function generateUUID() { return 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
 
-function saveToSyncQueue(actionPayload) {
+async function saveToSyncQueue(actionPayload) {
+    if (!idb) return null;
+    const queue = await getSyncQueue();
+
+    // ★自己浄化：未送信データに対する編集・削除は、元のキューを直接書き換える
+    if (actionPayload.method === 'update' || actionPayload.method === 'delete') {
+        const targetDummyId = actionPayload.id;
+        if (targetDummyId && targetDummyId.startsWith('dummy_')) {
+            const targetLocalId = targetDummyId.replace('dummy_', '');
+            const existingItem = queue.find(q => q.id === targetLocalId);
+            if (existingItem) {
+                if (actionPayload.method === 'delete') {
+                    await clearSyncQueueItem(targetLocalId);
+                    console.log("⚠️ 未送信データを送信前に削除したため、キューごと消去した。");
+                    return targetLocalId;
+                } else if (actionPayload.method === 'update') {
+                    const mergedPayload = { ...existingItem.payload, ...actionPayload, method: 'insert', id: '' };
+                    return new Promise((resolve) => {
+                        try {
+                            const tx = idb.transaction('sync_queue', 'readwrite');
+                            tx.objectStore('sync_queue').put({ id: targetLocalId, payload: mergedPayload, timestamp: Date.now() });
+                            tx.oncomplete = () => resolve(targetLocalId);
+                        } catch (e) { resolve(null); }
+                    });
+                }
+            }
+        }
+    }
+
+    // 通常の追加、または同期済データの更新・削除
     return new Promise((resolve) => {
-        if (!idb) return resolve();
         try {
             const tx = idb.transaction('sync_queue', 'readwrite');
             const id = generateUUID();
@@ -61,6 +89,7 @@ function saveToSyncQueue(actionPayload) {
         } catch (e) { resolve(null); }
     });
 }
+
 function getSyncQueue() { return new Promise((resolve) => { if (!idb) return resolve([]); try { const tx = idb.transaction('sync_queue', 'readonly'); const req = tx.objectStore('sync_queue').getAll(); req.onsuccess = () => resolve(req.result || []); } catch (e) { resolve([]); } }); }
 function clearSyncQueueItem(id) { return new Promise((resolve) => { if (!idb) return resolve(); try { const tx = idb.transaction('sync_queue', 'readwrite'); tx.objectStore('sync_queue').delete(id); tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); } catch (e) { resolve(); } }); }
 function saveDataCacheToIDB(monthKey, data) { if (!idb) return; try { const tx = idb.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ key: monthKey, data: data, timestamp: Date.now() }); } catch (e) { } }
@@ -110,70 +139,7 @@ async function processSyncQueue() {
     }
 
     console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
-    showGlobalLoader(`同期中... 残り${queue.length}件`);
-
-    const validToken = await attemptSilentRefresh();
-    if (!validToken) {
-        console.warn("トークンの再取得に失敗。同期を延期する。");
-        hideGlobalLoader();
-        await updateSyncBadge();
-        return;
-    }
-
-    let successCount = 0;
-    let needsRefresh = false;
-    for (let item of queue) {
-        let retries = 3;
-        let itemSuccess = false;
-
-        while (retries > 0 && !itemSuccess) {
-            try {
-                await executeApiAction(item.payload, true);
-                await clearSyncQueueItem(item.id);
-                successCount++;
-                itemSuccess = true;
-                needsRefresh = true;
-
-                // ★進化：Googleの遅延を待たず、送信成功と同時に手元のメモリを直接最新化（浄化）する
-                const action = item.payload;
-                const tdStr = action.start || action.due; let td = new Date();
-                if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-                const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
-
-                if (dataCache[monthKey]) {
-                    if (action.method === 'update') {
-                        let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
-                        let existing = targetList.find(e => e.id === action.id);
-                        if (existing) {
-                            if (action.type === 'event') existing.colorId = action.colorId;
-                            delete existing._pendingUpdate;
-                        }
-                    } else if (action.method === 'delete') {
-                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
-                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
-                    } else if (action.method === 'insert') {
-                        // 追加の場合はダミーIDのおばけを消し、後で裏側から本物のIDを取り直すフラグを立てる
-                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== item.id);
-                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== item.id);
-                        window._needsInsertFetch = true;
-                    }
-                }
-
-                await sleep(500);
-            } catch (error) {
-                const code = error.status || (error.result && error.result.error && error.result.error.code);
-                // 403はレート制限などの一時エラーなので残す。400, 404, 410 は形式不正や対象消失なので破棄。
-                if (code === 400 || code === 404 || code === 410) {
-                    console.error(`❌ Googleから拒絶された(Code:${code})。不正データとして破棄する。`, error);
-                    await clearSyncQueueItem(item.id);
-                    itemSuccess = true;
-                    needsRefresh = true; // 破棄した場合はUIのゴーストを消すためリフレッシュ必須
-                } else {
-                    retries--;
-                    console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
-                    if (retries > 0) await sleep(1500);
-                    else console.error("3回のリトライに失敗。ローカルの控え室に残置する。");
-                }
+// ...(中略)...
             }
         }
     }
@@ -185,17 +151,7 @@ async function processSyncQueue() {
     }
 
     // ★進化：不安定なGoogleの遅延を無視し、浄化済みの手元のメモリで即座にカレンダーを再描画する
-    if (needsRefresh) {
-        const today = new Date();
-        const year = today.getFullYear(); const month = today.getMonth();
-
-        const existingMonth = document.getElementById(`month-${year}-${month}`);
-        if (existingMonth) {
-            existingMonth.remove();
-            renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
-        }
-
-        // 「追加(insert)」があった場合のみ、本物のIDを取得するため、Googleの遅延が落ち着く2秒後に裏でそっと取得する
+// ...(中略)...
         if (window._needsInsertFetch) {
             window._needsInsertFetch = false;
             setTimeout(() => {
