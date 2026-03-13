@@ -853,16 +853,45 @@ async function rehydrateSyncQueue() {
 async function executeApiAction(action, isRetry = false) {
     if (!navigator.onLine) throw new Error("Offline");
 
+    // ★送信前サニタイズ（Googleが了承できるようにデータを修復・浄化する）
+    action.title = action.title || "(無名)";
+    
+    if (action.type === 'event') {
+        // 日付が欠落している壊れたデータへのパッチ
+        if (!action.start) {
+            const today = new Date();
+            action.start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        }
+        if (!action.end) action.end = action.start;
+
+        // 手元にしかないダミーID(dummy_)の予定を更新・削除しようとしている場合の救済
+        if (action.id && action.id.startsWith('dummy_')) {
+            if (action.method === 'delete') {
+                return; // Googleには存在しないので送る意味がない。成功扱いにしてスキップする。
+            } else if (action.method === 'update') {
+                action.method = 'insert'; // 更新ではなく「新規追加」としてGoogleに送る
+                delete action.id;
+            }
+        }
+    } else if (action.type === 'task') {
+        // タスク版のダミーID救済
+        if (action.id && action.id.startsWith('dummy_')) {
+            if (action.method === 'delete') return;
+            else if (action.method === 'update') { action.method = 'insert'; delete action.id; }
+        }
+    }
+
+    // 浄化されたクリーンなデータでAPI通信を実行
     if (action.type === 'event') {
         if (action.method === 'insert') {
-            const body = { summary: action.title, location: action.location, description: action.description };
-            if (action.colorId) body.colorId = action.colorId; // ★浄化：色指定がある時だけ追加する
+            const body = { summary: action.title, location: action.location || '', description: action.description || '' };
+            if (action.colorId) body.colorId = action.colorId;
             if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
             else { body.start = { date: action.start }; body.end = { date: action.end }; }
             await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
         } else if (action.method === 'update') {
-            const body = { summary: action.title, location: action.location, description: action.description };
-            if (action.colorId) body.colorId = action.colorId; // ★浄化：色指定がある時だけ追加する
+            const body = { summary: action.title, location: action.location || '', description: action.description || '' };
+            if (action.colorId) body.colorId = action.colorId;
             if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
             else { body.start = { date: action.start }; body.end = { date: action.end }; }
             await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: body });
@@ -871,11 +900,11 @@ async function executeApiAction(action, isRetry = false) {
         }
     } else if (action.type === 'task') {
         if (action.method === 'insert') {
-            const body = { title: action.title, notes: action.description };
+            const body = { title: action.title, notes: action.description || '' };
             if (action.due) body.due = action.due;
             await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
         } else if (action.method === 'update') {
-            const body = { title: action.title, notes: action.description };
+            const body = { title: action.title, notes: action.description || '' };
             if (action.due) body.due = action.due;
             await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: body });
         } else if (action.method === 'delete') {
@@ -883,7 +912,6 @@ async function executeApiAction(action, isRetry = false) {
         }
     }
 }
-
 // ==========================================
 // 9. その他初期化プロセス等
 // ==========================================
