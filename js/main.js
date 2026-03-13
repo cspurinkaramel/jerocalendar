@@ -234,32 +234,31 @@ async function processSyncQueue() {
     hideGlobalLoader();
     if (successCount > 0) showToast(`✅ ${successCount}件の同期を完了した。`);
 
-    // ★UI強制浄化プロセス：同期が終わったら、古い残像（点線）を焼き払うため、
-    // 即座に画面を再描画しつつ、裏で最新データを取得してさらに上書きする。
+    // ★UI強制浄化プロセス（全表示月対応版）：
+    // 今月だけでなく、描画されているすべての月に対して最新データを強制取得し、ゴーストを焼き払う
     if (needsRefresh && !authErrorOccurred) {
-        const today = new Date();
-        const year = today.getFullYear(); const month = today.getMonth();
-        
-        // 1. キャッシュの状態で即時再描画（ゴーストの除去）
-        const existingMonth = document.getElementById(`month-${year}-${month}`);
-        if (existingMonth) {
-            existingMonth.remove();
-            renderMonthDOM(year, month, dataCache[`${year}-${month}`], 'replace');
-        }
-        
-        // 2. Googleのデータベースに反映されるラグを待ってから完全な最新を取得
         setTimeout(async () => {
-            await fetchAndRenderMonth(year, month, 'replace', true);
-            // 最新データ取得後に改めてバッジ状態と画面下の詳細リストを確定させる
+            // 画面に存在している（レンダリング済みの）すべての月を再フェッチ対象にする
+            const wrappers = document.querySelectorAll('.month-wrapper');
+            for (const wrapper of wrappers) {
+                const parts = wrapper.id.split('-'); // "month-2026-2"などのIDを分解
+                if (parts.length === 3) {
+                    const y = parseInt(parts[1]);
+                    const m = parseInt(parts[2]);
+                    await fetchAndRenderMonth(y, m, 'replace', true); // 最新データをGoogleから強制取得して上書き
+                }
+            }
+            
+            // 全ての再取得が終わってから、バッジと詳細ビューを最終確定させて帯を消去
             await updateSyncBadge();
             if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { 
                 openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); 
             }
-        }, 2000);
+        }, 1500); // 1.5秒待ってGoogle側のインデックス更新を待つ
+    } else {
+        // 更新が不要だったりエラーだった場合でもバッジは確実に更新する
+        await updateSyncBadge();
     }
-    
-    // エラー時も含む、バッジの最終状態確認
-    await updateSyncBadge();
 }
 
 // ==========================================
@@ -780,6 +779,9 @@ async function dispatchManualAction(action) {
             if (existingMonthAfter) existingMonthAfter.remove();
             if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
             if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+            
+            // ★オンラインでの一発成功時も必ず帯の状態をチェックして消し去る
+            await updateSyncBadge();
 
         } catch (e) {
             console.error("API送信エラー:", e);
@@ -905,7 +907,10 @@ async function executeApiAction(action, isRetry = false) {
     try {
         if (payload.type === 'event') {
             const body = { summary: payload.title, location: payload.location, description: payload.description };
-            if (payload.colorId) body.colorId = payload.colorId;
+            // ★色の完全消去（デフォルト戻し）に対応。空文字ならnullとして明示的に送る。
+            if (payload.colorId !== undefined) {
+                body.colorId = payload.colorId === "" ? null : payload.colorId;
+            }
             // 完全に文字列化された安全な日付をセット
             if (payload.start.includes('T')) { body.start = { dateTime: payload.start }; body.end = { dateTime: payload.end }; }
             else { body.start = { date: payload.start }; body.end = { date: payload.end }; }
