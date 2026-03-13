@@ -853,66 +853,87 @@ async function rehydrateSyncQueue() {
 async function executeApiAction(action, isRetry = false) {
     if (!navigator.onLine) throw new Error("Offline");
 
-    // ★送信前サニタイズ（Googleが了承できるようにデータを修復・浄化する）
+    // ★第1段階：データの強制正規化（TypeErrorの爆弾を解体し、安全な形に整える）
     action.title = action.title || "(無名)";
-    
-    if (action.type === 'event') {
-        // 日付が欠落している壊れたデータへのパッチ
-        if (!action.start) {
-            const today = new Date();
-            action.start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        }
-        if (!action.end) action.end = action.start;
+    action.description = action.description || "";
+    action.location = action.location || "";
 
-        // 手元にしかないダミーID(dummy_)の予定を更新・削除しようとしている場合の救済
+    if (action.type === 'event') {
+        // 過去のバグで日付がオブジェクトになっていた場合、文字列を抽出する
+        if (action.start && typeof action.start === 'object') action.start = action.start.dateTime || action.start.date || "";
+        if (action.end && typeof action.end === 'object') action.end = action.end.dateTime || action.end.date || "";
+
+        // それでも日付が空なら、安全策として「今日」にする
+        if (!action.start || typeof action.start !== 'string') {
+            const td = new Date();
+            action.start = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
+        }
+        if (!action.end || typeof action.end !== 'string') action.end = action.start;
+
         if (action.id && action.id.startsWith('dummy_')) {
-            if (action.method === 'delete') {
-                return; // Googleには存在しないので送る意味がない。成功扱いにしてスキップする。
-            } else if (action.method === 'update') {
-                action.method = 'insert'; // 更新ではなく「新規追加」としてGoogleに送る
-                delete action.id;
-            }
+            if (action.method === 'delete') return; // 未送信のまま消したものは成功扱い
+            if (action.method === 'update') { action.method = 'insert'; delete action.id; }
         }
     } else if (action.type === 'task') {
-        // タスク版のダミーID救済
         if (action.id && action.id.startsWith('dummy_')) {
             if (action.method === 'delete') return;
-            else if (action.method === 'update') { action.method = 'insert'; delete action.id; }
+            if (action.method === 'update') { action.method = 'insert'; delete action.id; }
         }
+        // タスクの期限も文字列化を保証
+        if (action.due && typeof action.due === 'object') action.due = action.due.dateTime || action.due.date || "";
     }
 
-    // 浄化されたクリーンなデータでAPI通信を実行
-    if (action.type === 'event') {
-        if (action.method === 'insert') {
-            const body = { summary: action.title, location: action.location || '', description: action.description || '' };
+    // ★第2段階：Googleとの通信と、貴重なデータの「絶対救出」
+    try {
+        if (action.type === 'event') {
+            const body = { summary: action.title, location: action.location, description: action.description };
             if (action.colorId) body.colorId = action.colorId;
+            // 完全に文字列化された安全な日付をセット
             if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
             else { body.start = { date: action.start }; body.end = { date: action.end }; }
-            await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
-        } else if (action.method === 'update') {
-            const body = { summary: action.title, location: action.location || '', description: action.description || '' };
-            if (action.colorId) body.colorId = action.colorId;
-            if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
-            else { body.start = { date: action.start }; body.end = { date: action.end }; }
-            await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: body });
-        } else if (action.method === 'delete') {
-            await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id });
-        }
-    } else if (action.type === 'task') {
-        if (action.method === 'insert') {
-            const body = { title: action.title, notes: action.description || '' };
+
+            if (action.method === 'insert') await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
+            else if (action.method === 'update') await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: body });
+            else if (action.method === 'delete') await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id });
+            
+        } else if (action.type === 'task') {
+            const body = { title: action.title, notes: action.description };
             if (action.due) body.due = action.due;
-            await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
-        } else if (action.method === 'update') {
-            const body = { title: action.title, notes: action.description || '' };
-            if (action.due) body.due = action.due;
-            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: body });
-        } else if (action.method === 'delete') {
-            await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id });
+
+            if (action.method === 'insert') await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
+            else if (action.method === 'update') await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: body });
+            else if (action.method === 'delete') await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id });
         }
+    } catch (error) {
+        const code = error.status || (error.result && error.result.error && error.result.error.code);
+        
+        // 救出作戦 A: 既にGoogle上で消えている予定をオフラインで「更新」していた場合 (404/410)
+        if ((code === 404 || code === 410) && action.method === 'update') {
+            console.warn(`⚠️ 対象(ID:${action.id})がGoogle上に存在しない。貴重な更新データを「新規追加(insert)」として復活させる。`);
+            action.method = 'insert';
+            delete action.id;
+            await executeApiAction(action, true); // 新規追加として自らを再帰実行し救出
+            return;
+        }
+        
+        // 救出作戦 B: Googleに日付形式などを拒絶された場合 (400)
+        if (code === 400 && !isRetry) {
+            console.warn(`⚠️ Googleが形式を拒絶(400)。最低限のテキストデータとして今日の終日予定に強制変換して救出する。`);
+            if (action.type === 'event') {
+                const td = new Date();
+                const fallbackDate = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
+                action.start = fallbackDate;
+                action.end = fallbackDate;
+            } else {
+                delete action.due; // タスクの場合は期限を消して無期限化
+            }
+            await executeApiAction(action, true); // 安全な形式で自らを再帰実行し救出
+            return;
+        }
+
+        throw error; // 上記で救出できない純粋な通信エラー等は上に投げる
     }
-}
-// ==========================================
+}// ==========================================
 // 9. その他初期化プロセス等
 // ==========================================
 async function processPDFFile(file) {
