@@ -847,87 +847,92 @@ async function rehydrateSyncQueue() {
 async function executeApiAction(action, isRetry = false) {
     if (!navigator.onLine) throw new Error("Offline");
 
-    // ★第1段階：データの強制正規化（TypeErrorの爆弾を解体し、安全な形に整える）
-    action.title = action.title || "(無名)";
-    action.description = action.description || "";
-    action.location = action.location || "";
+    // ★第一原理：参照渡しによるペイロードの破壊（変質）を防ぐため、完全なクローンを生成して作業する
+    const payload = JSON.parse(JSON.stringify(action));
 
-    if (action.type === 'event') {
+    // ★第1段階：データの強制正規化（TypeErrorの爆弾を解体し、安全な形に整える）
+    payload.title = payload.title || "(無名)";
+    payload.description = payload.description || "";
+    payload.location = payload.location || "";
+
+    if (payload.type === 'event') {
         // 過去のバグで日付がオブジェクトになっていた場合、文字列を抽出する
-        if (action.start && typeof action.start === 'object') action.start = action.start.dateTime || action.start.date || "";
-        if (action.end && typeof action.end === 'object') action.end = action.end.dateTime || action.end.date || "";
+        if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || "";
+        if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || "";
 
         // それでも日付が空なら、安全策として「今日」にする
-        if (!action.start || typeof action.start !== 'string') {
+        if (!payload.start || typeof payload.start !== 'string') {
             const td = new Date();
-            action.start = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
+            payload.start = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
         }
-        if (!action.end || typeof action.end !== 'string') action.end = action.start;
+        if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start;
 
-        if (action.id && action.id.startsWith('dummy_')) {
-            if (action.method === 'delete') return; // 未送信のまま消したものは成功扱い
-            if (action.method === 'update') { action.method = 'insert'; delete action.id; }
+        if (payload.id && payload.id.startsWith('dummy_')) {
+            if (payload.method === 'delete') return; // 未送信のまま消したものは成功扱い
+            if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; }
         }
-    } else if (action.type === 'task') {
-        if (action.id && action.id.startsWith('dummy_')) {
-            if (action.method === 'delete') return;
-            if (action.method === 'update') { action.method = 'insert'; delete action.id; }
+    } else if (payload.type === 'task') {
+        if (payload.id && payload.id.startsWith('dummy_')) {
+            if (payload.method === 'delete') return;
+            if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; }
         }
         // タスクの期限も文字列化を保証
-        if (action.due && typeof action.due === 'object') action.due = action.due.dateTime || action.due.date || "";
+        if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || "";
     }
 
     // ★第2段階：Googleとの通信と、貴重なデータの「絶対救出」
     try {
-        if (action.type === 'event') {
-            const body = { summary: action.title, location: action.location, description: action.description };
-            if (action.colorId) body.colorId = action.colorId;
+        if (payload.type === 'event') {
+            const body = { summary: payload.title, location: payload.location, description: payload.description };
+            if (payload.colorId) body.colorId = payload.colorId;
             // 完全に文字列化された安全な日付をセット
-            if (action.start.includes('T')) { body.start = { dateTime: action.start }; body.end = { dateTime: action.end }; }
-            else { body.start = { date: action.start }; body.end = { date: action.end }; }
+            if (payload.start.includes('T')) { body.start = { dateTime: payload.start }; body.end = { dateTime: payload.end }; }
+            else { body.start = { date: payload.start }; body.end = { date: payload.end }; }
 
-            if (action.method === 'insert') await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
-            else if (action.method === 'update') await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: action.id, resource: body });
-            else if (action.method === 'delete') await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: action.id });
+            if (payload.method === 'insert') await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
+            else if (payload.method === 'update') await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: payload.id, resource: body });
+            else if (payload.method === 'delete') await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: payload.id });
             
-        } else if (action.type === 'task') {
-            const body = { title: action.title, notes: action.description };
-            if (action.due) body.due = action.due;
+        } else if (payload.type === 'task') {
+            const body = { title: payload.title, notes: payload.description };
+            if (payload.due) body.due = payload.due;
 
-            if (action.method === 'insert') await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
-            else if (action.method === 'update') await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: action.id, resource: body });
-            else if (action.method === 'delete') await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: action.id });
+            if (payload.method === 'insert') await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
+            else if (payload.method === 'update') await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: payload.id, resource: body });
+            else if (payload.method === 'delete') await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: payload.id });
         }
     } catch (error) {
         const code = error.status || (error.result && error.result.error && error.result.error.code);
         
         // 救出作戦 A: 既にGoogle上で消えている予定をオフラインで「更新」していた場合 (404/410)
-        if ((code === 404 || code === 410) && action.method === 'update') {
-            console.warn(`⚠️ 対象(ID:${action.id})がGoogle上に存在しない。貴重な更新データを「新規追加(insert)」として復活させる。`);
-            action.method = 'insert';
-            delete action.id;
-            await executeApiAction(action, true); // 新規追加として自らを再帰実行し救出
+        if ((code === 404 || code === 410) && payload.method === 'update') {
+            console.warn(`⚠️ 対象(ID:${payload.id})がGoogle上に存在しない。貴重な更新データを「新規追加(insert)」として復活させる。`);
+            payload.method = 'insert';
+            delete payload.id;
+            await executeApiAction(payload, true); // 新規追加として自らを再帰実行し救出
             return;
         }
         
         // 救出作戦 B: Googleに日付形式などを拒絶された場合 (400)
         if (code === 400 && !isRetry) {
             console.warn(`⚠️ Googleが形式を拒絶(400)。最低限のテキストデータとして今日の終日予定に強制変換して救出する。`);
-            if (action.type === 'event') {
+            if (payload.type === 'event') {
                 const td = new Date();
                 const fallbackDate = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
-                action.start = fallbackDate;
-                action.end = fallbackDate;
+                payload.start = fallbackDate;
+                payload.end = fallbackDate;
             } else {
-                delete action.due; // タスクの場合は期限を消して無期限化
+                delete payload.due; // タスクの場合は期限を消して無期限化
             }
-            await executeApiAction(action, true); // 安全な形式で自らを再帰実行し救出
+            await executeApiAction(payload, true); // 安全な形式で自らを再帰実行し救出
             return;
         }
 
         throw error; // 上記で救出できない純粋な通信エラー等は上に投げる
     }
-}// ==========================================
+}
+
+// ==========================================
 // 9. その他初期化プロセス等
 // ==========================================
 async function processPDFFile(file) {
@@ -1018,26 +1023,10 @@ async function checkAutoLogin() {
 }
 
 async function attemptSilentRefresh() {
-    return new Promise((resolve) => {
-        if (!gisInited || !tokenClient) { resolve(false); return; }
-        tokenClient.callback = (resp) => {
-            if (resp.error) { 
-                console.warn("サイレントリフレッシュ拒絶:", resp.error);
-                resolve(false); 
-            } else {
-                gapi.client.setToken({ access_token: resp.access_token });
-                localStorage.setItem('jero_token', resp.access_token);
-                localStorage.setItem('jero_token_time', Date.now());
-                isAuthError = false;
-                document.getElementById('auth-btn').style.display = 'none';
-                document.getElementById('auth-btn').classList.remove('auth-pulse');
-                console.log("✅ 通行証の自動更新に成功した。");
-                resolve(true);
-            }
-        };
-        // ★明示的にユーザーに画面を出さず裏でトークンを要求する
-        tokenClient.requestAccessToken({ prompt: 'none' });
-    });
+    // ★第一原理：自動更新の幻想を捨て、完全なる手動認証（鍵マーク）へ回帰する
+    // 最新のブラウザセキュリティにおいて、ユーザーのタップなしのトークン更新はブロックされ、
+    // GISがコールバックを返さずに永遠にフリーズする原因となるため、この裏口は完全に閉鎖する。
+    return false;
 }
 
 async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({ access_token: resp.access_token }); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。ローカルの控え室のチェックを行う。'); await updateSyncBadge(); processSyncQueue(); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({ prompt: 'consent' }); }
