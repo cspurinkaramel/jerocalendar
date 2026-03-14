@@ -757,25 +757,124 @@ async function executeConversion(fromType) {
         if (dueVal) { let parts = dueVal.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); insertAction.start = dueVal; const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1); insertAction.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`; }
         else { insertAction.start = new Date().toISOString().split('T')[0]; const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = tmrw.toISOString().split('T')[0]; }
     }
-    showGlobalLoader('変換中...');
-    try {
-        if (navigator.onLine) { if (deleteAction) await executeApiAction(deleteAction); await executeApiAction(insertAction); showToast('✅ 変換を完了した'); }
-        else { if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); showToast('📦 圏外のためローカルの控え室に保管した。電波回復時に変換する'); }
-        if (typeof dataCache !== 'undefined' && deleteAction) { for (let key in dataCache) { if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); } if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); } } }
-        closeEditor(); closeTaskEditor(); closeAllModals(); await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', navigator.onLine);
-        await updateSyncBadge();
-    } catch (e) { showToast('❌ 変換エラー: ' + e.message); } finally { hideGlobalLoader(); }
+    // UIを即座に閉じる（画面ロックなし）
+    closeEditor(); closeTaskEditor(); closeAllModals();
+    showToast('🔄 変換をバックグラウンドで処理中...');
+
+    // キャッシュから即座に削除して再描画
+    if (typeof dataCache !== 'undefined' && deleteAction) { 
+        for (let key in dataCache) { 
+            if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); } 
+            if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); } 
+        } 
+    }
+    await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', false);
+
+    // 裏で非同期通信
+    (async () => {
+        try {
+            if (navigator.onLine) { 
+                if (deleteAction) await executeApiAction(deleteAction); 
+                await executeApiAction(insertAction); 
+                showToast('✅ 変換を完了した'); 
+                await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', true);
+            } else { 
+                if (deleteAction) await saveToSyncQueue(deleteAction); 
+                await saveToSyncQueue(insertAction); 
+                showToast('📦 圏外のためローカルの控え室に保管した。'); 
+                await updateSyncBadge();
+            }
+        } catch (e) { 
+            showToast('❌ 変換中に通信エラー発生。控え室を確認しろ。'); 
+            if (deleteAction) await saveToSyncQueue(deleteAction); 
+            await saveToSyncQueue(insertAction); 
+            await updateSyncBadge();
+        }
+    })();
 }
 
 // ==========================================
 // 8. アクション司令塔 (完全リアルタイム・オプティミスティックUI)
 // ==========================================
 async function dispatchManualAction(action) {
-    showGlobalLoader('処理中...');
+    // ★ローダーによる画面ロックを完全撤廃。バックグラウンド処理化で連打可能にする
     let msgAction = action.method === 'insert' ? '追加' : action.method === 'update' ? '更新' : '削除';
     const msgType = action.type === 'event' ? '予定' : 'タスク';
 
-    // ★進化：オンライン・オフラインを問わず、ボタンを押した瞬間に手元のキャッシュを理想状態に書き換える
+    const tdStr = action.start || action.due; let td = new Date();
+    if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+    const year = td.getFullYear(); const month = td.getMonth();
+    const monthKey = `${year}-${month}`;
+
+    // 短時間に連打してもIDが被らないよう、乱数を付与する
+    const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); 
+    updateLocalCacheForOptimisticUI(action, tempLocalId);
+
+    // ★通信を待たず、即座にカレンダーを再描画してユーザーに見せる（待機時間ゼロ）
+    const existingMonth = document.getElementById(`month-${year}-${month}`);
+    if (existingMonth) existingMonth.remove();
+    if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
+    if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+
+    // ★通信とエラー処理を「非同期の裏側」に完全分離（awaitでUIをブロックさせない）
+    (async () => {
+        if (!navigator.onLine) {
+            const localId = await saveToSyncQueue(action);
+            updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
+            showToast(`📦 圏外だ。${msgAction}を控え室に退避した。`);
+            await updateSyncBadge();
+        } else {
+            try {
+                await executeApiAction(action);
+                showToast(`✅ ${msgType}の${msgAction}完了`);
+
+                if (dataCache[monthKey]) {
+                    if (action.method === 'delete') {
+                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
+                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
+                    } else if (action.method === 'update') {
+                        let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
+                        let existing = targetList.find(e => e.id === action.id);
+                        if (existing) delete existing._pendingUpdate;
+                    } else if (action.method === 'insert') {
+                        for (const key in dataCache) {
+                            if (action.type === 'event' && dataCache[key].events) {
+                                const existing = dataCache[key].events.find(e => e._localId === tempLocalId);
+                                if (existing) delete existing._localId;
+                            }
+                            if (action.type === 'task' && dataCache[key].tasks) {
+                                const existing = dataCache[key].tasks.find(t => t._localId === tempLocalId);
+                                if (existing) delete existing._localId;
+                            }
+                        }
+                        // 1.5秒後に裏で本物IDを取得して書き換える
+                        setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1500);
+                    }
+                }
+                const existingMonthAfter = document.getElementById(`month-${year}-${month}`);
+                if (existingMonthAfter) existingMonthAfter.remove();
+                if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
+                if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+                await updateSyncBadge();
+
+            } catch (e) {
+                console.error("API送信エラー:", e);
+                // どんなエラーでも一旦控え室に突っ込んでバッジを点灯させ、ユーザーの手を止めない
+                const localId = await saveToSyncQueue(action);
+                updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
+                showToast(`📦 通信不良だ。裏で控え室に退避した。`);
+                
+                // バッジ再描画のため
+                const existingMonthErr = document.getElementById(`month-${year}-${month}`);
+                if (existingMonthErr) existingMonthErr.remove();
+                if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
+                if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+                
+                await updateSyncBadge();
+            }
+        }
+    })();
+}
     const tdStr = action.start || action.due; let td = new Date();
     if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
     const year = td.getFullYear(); const month = td.getMonth();
