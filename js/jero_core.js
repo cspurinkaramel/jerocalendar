@@ -319,9 +319,10 @@ async function sendToJero() {
 
     try {
         // ★感情を解放するため、JSON強制モードの手枷(generationConfig)を完全に破壊する
+        // ★APIを安定のJSONモードに戻す
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory })
+            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
         });
 
         if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
@@ -331,18 +332,9 @@ async function sendToJero() {
         
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
             console.warn("APIから空の応答。フォールバックを実行する。");
-            aiText = JSON.stringify({ reply: "フッ、言葉が詰まった。もう一度言ってくれ。", actions: [] });
+            aiText = JSON.stringify({ reply: "フッ、頭脳が空転した。1分ほど待ってから言ってくれ。", actions: [] });
         } else {
-            let rawText = data.candidates[0].content.parts[0].text;
-            // ★最強の防護服：手枷を外してAIが自由に雑談（ただのテキスト）を返してきても、システムが理解できるJSONに自動翻訳して包み込む
-            rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            try {
-                JSON.parse(rawText); // JSONとして正しいかテスト
-                aiText = rawText; // 正しければそのまま採用
-            } catch (e) {
-                // JSONでなければ、ただの雑談とみなして強引に包み込む
-                aiText = JSON.stringify({ reply: rawText, actions: [] });
-            }
+            aiText = data.candidates[0].content.parts[0].text;
         }
         
         conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });
