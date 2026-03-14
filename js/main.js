@@ -229,6 +229,11 @@ async function processSyncQueue() {
                     await clearSyncQueueItem(item.id);
                     itemSuccess = true;
                     needsRefresh = true;
+                } else if (code === 429) {
+                    // ★追加：API利用制限(429)に引っかかった場合は、リトライせずに直ちに撤退する
+                    console.error(`❌ GoogleのAPI制限(429)に到達した。同期を一時中断する。`, error);
+                    authErrorOccurred = true; // 便宜上エラー状態としてループを抜ける
+                    showToast('⚠️ Googleの通信制限に引っかかった。時間を置いてから再試行してくれ。');
                 } else {
                     retries--;
                     console.warn(`同期失敗 (ID: ${item.id}) - 残りリトライ: ${retries}回`, error);
