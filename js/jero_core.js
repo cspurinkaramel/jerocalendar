@@ -158,7 +158,7 @@ function requestNotificationPermission() {
 }
 function checkUpcomingEvents() {
     if (Notification.permission !== 'granted') return;
-    if (typeof isAuthError !== 'undefined' && isAuthError || !localStorage.getItem('jero_token')) return;
+    if (typeof isAuthError !== 'undefined' && isAuthError) return;
     const now = new Date(); const tenMinutesLater = new Date(now.getTime() + 10 * 60000); const elevenMinutesLater = new Date(now.getTime() + 11 * 60000);
     if (typeof dataCache === 'undefined') return;
     for (const monthKey in dataCache) {
@@ -318,7 +318,8 @@ async function sendToJero() {
     if (conversationHistory.length > 6) { conversationHistory = conversationHistory.slice(conversationHistory.length - 6); }
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        // ★正しい現行最新モデル (2.0-flash) に修正
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
         });
@@ -326,10 +327,9 @@ async function sendToJero() {
         if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
 
         const data = await response.json(); 
-        // ★絶対防衛線：Geminiからの返答が空、あるいはブロックされた場合のクラッシュを防ぐ
+        // ★絶対防衛線：空返答の真の原因を特定するために、生データをすべてエラーとして吐き出す
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-            let blockReason = data.promptFeedback ? "安全フィルターでブロックされた可能性がある。" : "APIから空の返答が来た。";
-            throw new Error(blockReason);
+            throw new Error("APIレスポンス異常: " + JSON.stringify(data));
         }
         
         let aiText = data.candidates[0].content.parts[0].text;
@@ -403,15 +403,6 @@ async function commitDraft(idx) {
     // 司令塔の処理が終われば、UIを完了状態にする
     btn.innerText = "✅ 完了";
     btn.className = "btn-gray";
-}
-
-async function processSyncQueue() {
-    if (typeof getSyncQueue !== 'function' || !navigator.onLine) return;
-    const queue = await getSyncQueue(); if (queue.length === 0) return;
-    showToast(`📮 ポスト内の未送信データ（${queue.length}件）を送信中...`);
-    let successCount = 0;
-    for (const item of queue) { try { await executeApiAction(item.payload); clearSyncQueueItem(item.id); successCount++; } catch (e) { console.error("Queue送信エラー:", e); } }
-    if (successCount > 0) { showToast(`✅ ${successCount}件の保留データを送信完了した。`); if (typeof triggerFullReRender !== 'undefined') triggerFullReRender(); }
 }
 
 function editDraft(idx) {
