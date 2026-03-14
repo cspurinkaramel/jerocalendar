@@ -542,30 +542,39 @@ function renderMonthDOM(year, month, data, position) {
                 txtColor = getContrastYIQ(bgColor);
             }
 
-            // ★真の美しさ：すべてをベタ塗り帯にし、隣のマスへ貫通させる
+            // ★ベーススタイル
             div.style.backgroundColor = bgColor;
             div.style.color = txtColor;
-            div.style.margin = '2px 0';
             div.style.padding = '2px 4px';
-            div.style.borderRadius = '4px';
+            div.style.margin = '2px 0';
+            div.style.overflow = 'hidden';
+            div.style.whiteSpace = 'nowrap';
+            div.style.position = 'relative'; // セルの壁を越えるためのZインデックス制御
+            div.style.zIndex = '1';
 
             if (spanType !== 'single') {
+                div.classList.add('continuous');
+                div.classList.add(spanType);
+                
+                // ★究極の接続マジック：マイナスマージンでセルの壁(BorderとPadding)を物理的に破壊し、隣と融合させる
                 if (spanType === 'span-start') {
-                    div.style.borderTopRightRadius = '0';
-                    div.style.borderBottomRightRadius = '0';
-                    div.style.marginRight = '-4px'; // 右のマスへ食い込ませる
-                    div.style.paddingRight = '8px';
+                    div.style.borderRadius = '4px 0 0 4px';
+                    div.style.marginRight = '-6px'; // 右の壁を破壊
+                    div.style.paddingRight = '6px'; // テキスト切れ補正
                 } else if (spanType === 'span-mid') {
                     div.style.borderRadius = '0';
-                    div.style.marginLeft = '-4px';
-                    div.style.marginRight = '-4px';
-                    div.style.color = 'transparent'; // 文字を隠す
+                    div.style.marginLeft = '-6px';  // 左の壁を破壊
+                    div.style.marginRight = '-6px'; // 右の壁を破壊
+                    div.style.color = 'transparent'; // 文字を消す
                 } else if (spanType === 'span-end') {
-                    div.style.borderTopLeftRadius = '0';
-                    div.style.borderBottomLeftRadius = '0';
-                    div.style.marginLeft = '-4px';
-                    div.style.color = 'transparent'; // 文字を隠す
+                    div.style.borderRadius = '0 4px 4px 0';
+                    div.style.marginLeft = '-6px';  // 左の壁を破壊
+                    div.style.paddingLeft = '6px';
+                    div.style.color = 'transparent'; // 文字を消す
                 }
+            } else {
+                div.classList.add('single');
+                div.style.borderRadius = '4px';
             }
 
             if (isPendingInsert || isPendingUpdate) {
