@@ -822,7 +822,7 @@ async function dispatchManualAction(action) {
                 const localId = await saveToSyncQueue(action);
                 updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
                 showToast(`📦 通信不良だ。ローカルの控え室に退避した。`);
-                if (isAuthError) attemptSilentRefresh();
+                // GAS移行によりattemptSilentRefreshは存在しないため削除
                 await updateSyncBadge();
             } else {
                 showToast('❌ 致命的エラー: ' + (e.result && e.result.error ? e.result.error.message : e.message));
@@ -942,8 +942,18 @@ async function executeApiAction(action, isRetry = false) {
         const result = await response.json();
 
         if (!result.success) {
-            // サーバー側でエラーが起きた場合、強制的にエラーオブジェクトを投げて下のcatchに拾わせる
-            throw { status: 400, message: result.error }; 
+            // ★第一原理：GASが返したエラーメッセージから真のステータスを推論し、安易なデータ破壊（強制400扱い）を防ぐ
+            let simulatedStatus = 500; // デフォルトは「リトライ対象」となる一時的なサーバーエラー
+            const errStr = (result.error || "").toLowerCase();
+            
+            if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404;
+            else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse")) simulatedStatus = 400;
+            else if (errStr.includes("410") || errStr.includes("gone")) simulatedStatus = 410;
+            else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429;
+            else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401;
+
+            // サーバー側でエラーが起きた場合、解析したステータスを投げて下のcatchに拾わせる
+            throw { status: simulatedStatus, message: result.error }; 
         }
 
     } catch (error) {

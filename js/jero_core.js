@@ -366,17 +366,38 @@ async function executeSearch(action, containerEl) {
         let resultsHtml = `<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">`;
         let events = []; let tasks = [];
 
-        let calReq = { calendarId: 'primary', singleEvents: true, orderBy: 'startTime', maxResults: 50 };
-        if (action.query) calReq.q = action.query;
-        if (action.timeMin) calReq.timeMin = new Date(action.timeMin).toISOString();
-        if (action.timeMax) calReq.timeMax = new Date(action.timeMax).toISOString();
-        const eResp = await gapi.client.calendar.events.list(calReq); events = eResp.result.items || [];
+        // ★GAS移行に伴い、gapi(Google API)への直接通信を廃止。手元のキャッシュ(dataCache)から超高速にローカル検索する
+        const qLower = action.query ? action.query.toLowerCase() : "";
+        const tMin = action.timeMin ? new Date(action.timeMin).getTime() : 0;
+        const tMax = action.timeMax ? new Date(action.timeMax).getTime() : Infinity;
 
-        let taskReq = { tasklist: '@default', showHidden: true, maxResults: 100 };
-        if (action.timeMin) taskReq.dueMin = new Date(action.timeMin).toISOString();
-        if (action.timeMax) taskReq.dueMax = new Date(action.timeMax).toISOString();
-        const tResp = await gapi.client.tasks.tasks.list(taskReq); let rawTasks = tResp.result.items || [];
-        if (action.query) { const qLower = action.query.toLowerCase(); tasks = rawTasks.filter(t => (t.title && t.title.toLowerCase().includes(qLower)) || (t.notes && t.notes.toLowerCase().includes(qLower))); } else { tasks = rawTasks; }
+        for (const monthKey in dataCache) {
+            const data = dataCache[monthKey];
+            if (data.events) {
+                data.events.forEach(e => {
+                    if (!e.start) return;
+                    const eTime = e.start.dateTime ? new Date(e.start.dateTime).getTime() : new Date(e.start.date).getTime();
+                    if (eTime >= tMin && eTime <= tMax) {
+                        if (!qLower || (e.summary && e.summary.toLowerCase().includes(qLower)) || (e.description && e.description.toLowerCase().includes(qLower))) {
+                            events.push(e);
+                        }
+                    }
+                });
+            }
+            if (data.tasks) {
+                data.tasks.forEach(t => {
+                    const tTime = t.due ? new Date(t.due).getTime() : Date.now();
+                    if (tTime >= tMin && tTime <= tMax) {
+                        if (!qLower || (t.title && t.title.toLowerCase().includes(qLower)) || (t.notes && t.notes.toLowerCase().includes(qLower))) {
+                            tasks.push(t);
+                        }
+                    }
+                });
+            }
+        }
+        // 抽出した結果を日付順に美しく並び替える
+        events.sort((a, b) => (a.start.dateTime ? new Date(a.start.dateTime).getTime() : new Date(a.start.date).getTime()) - (b.start.dateTime ? new Date(b.start.dateTime).getTime() : new Date(b.start.date).getTime()));
+        tasks.sort((a, b) => (a.due ? new Date(a.due).getTime() : Infinity) - (b.due ? new Date(b.due).getTime() : Infinity));
 
         if (events.length === 0 && tasks.length === 0) { resultsHtml += `<div style="font-size:13px; color:#888; text-align:center; padding:10px;">見つからなかったぞ。</div>`; }
         else {
