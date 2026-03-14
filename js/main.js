@@ -449,14 +449,22 @@ function renderMonthDOM(year, month, data, position) {
     });
     const today = new Date();
 
+    // ★第一原理：「スロット（段組み）固定アルゴリズム」の導入
+    // まず、この月の全日付に対して空のスロット（配列）を用意する
+    const slotMap = {};
     for (let i = 1; i <= daysInMonth; i++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
-        if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
-        dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        slotMap[dateStr] = [];
+    }
 
-        sortedEvents.filter(e => { 
-            if (!e.start) return false; 
-            // ★ここでもUTCズレを補正し、その日にその予定が存在するかを完璧にローカルタイムで判定する
+    // 全ての予定を長さ順・開始時間順に舐めながら、スロットを予約していく
+    sortedEvents.forEach(e => {
+        if (!e.start) return;
+        
+        // この予定が「この月のどの日に表示されるか」を全て洗い出す
+        const occupiedDates = [];
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
             let isTargetDay = false;
             if (e.start.date) { isTargetDay = e.start.date === dateStr; } 
             else if (e.start.dateTime) {
@@ -464,8 +472,49 @@ function renderMonthDOM(year, month, data, position) {
                 const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`;
                 isTargetDay = stStr === dateStr;
             }
-            return isTargetDay || isEventSpanning(e, dateStr) !== 'single'; 
-        }).forEach(e => {
+            if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') {
+                occupiedDates.push(dateStr);
+            }
+        }
+
+        if (occupiedDates.length === 0) return;
+
+        // 洗い出した全ての日付で「共通して空いている最も上の段（スロット）」を探す
+        let slotIndex = 0;
+        while (true) {
+            let isFree = true;
+            for (const d of occupiedDates) {
+                if (slotMap[d][slotIndex]) { isFree = false; break; } // 誰かが座っていればダメ
+            }
+            if (isFree) break; // 全員座っていなければ、その段に決定
+            slotIndex++;
+        }
+
+        // 決定したスロット（段）に自分を登録し、空きスペースにはnull（透明スペーサー）を詰める
+        for (const d of occupiedDates) {
+            while (slotMap[d].length <= slotIndex) slotMap[d].push(null);
+            slotMap[d][slotIndex] = e;
+        }
+    });
+
+    for (let i = 1; i <= daysInMonth; i++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay();
+        if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
+        dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
+
+        // ★スロット順に描画（nullの場合は透明なスペーサーを置く）
+        const slots = slotMap[dateStr] || [];
+        slots.forEach(e => {
+            if (!e) {
+                // 予定がない段は、レイアウトを保つための「透明なブロック」を置く
+                const spacer = document.createElement('div');
+                spacer.className = 'event single'; 
+                spacer.style.visibility = 'hidden'; // 高さを保ったまま完全に見えなくする
+                spacer.innerHTML = '&nbsp;';
+                dayEl.appendChild(spacer);
+                return;
+            }
+
             const div = document.createElement('div'); div.className = 'event';
             let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             const spanType = isEventSpanning(e, dateStr);
