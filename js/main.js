@@ -1,7 +1,7 @@
-// JeroCalendar v8.9.4 Main Logic - Autonomous & Self-Cleaning Edition
-const CLIENT_ID = '538529257653-1rac4r8uedqq75pqmlrhrhlfnhkhgkn4.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.readonly';
-let tokenClient, gapiInited = false, gisInited = false;
+// JeroCalendar v9.0 Main Logic - GAS Proxy Edition
+// ★ここに先ほど取得したGASのWebアプリURLを必ず貼り付けろ★
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbz-n8tzwG4wmGMBSliWLvKJ35SALirRuFqIEeffaUsfrlh3mCHCb_fSVfz6u3Bov-c_2g/exec'; 
+let isAuthError = false; // エラー用フラグはUI制御のため残す
 let dataCache = {}; let renderedMonths = []; let observer, isFetching = false, isAuthError = false;
 let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", currentView = 'calendar';
 let isCalendarInited = false; // ★追加：二重起動防止フラグ
@@ -526,26 +526,34 @@ async function loadPrevMonth() { if (renderedMonths.length === 0 || isFetching |
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
 
 async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
-    if (isAuthError) return; const monthKey = `${year}-${month}`; const startOfMonth = new Date(year, month, 1).toISOString(); const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+    const monthKey = `${year}-${month}`; 
     let needsRender = false;
+    
     if (forceFetch || !dataCache[monthKey]) {
         if (!navigator.onLine) { if (!dataCache[monthKey]) showToast('オフラインのためデータが取得できません。'); return; }
-        let events = [], tasks = [], authErrorDetected = false;
-        try { const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || []; } catch (e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; }
-        try { const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || []; } catch (e) { const code = e.status || (e.result && e.result.error && e.result.error.code); if (code === 401 || code === 403) authErrorDetected = true; }
-
-        if (authErrorDetected) {
-            const recovered = await attemptSilentRefresh();
-            if (recovered) {
-                try {
-                    const eResp = await gapi.client.calendar.events.list({ calendarId: 'primary', timeMin: startOfMonth, timeMax: endOfMonth, singleEvents: true, orderBy: 'startTime', maxResults: 1000 }); events = eResp.result.items || [];
-                    const tResp = await gapi.client.tasks.tasks.list({ tasklist: '@default', dueMin: startOfMonth, dueMax: endOfMonth, showHidden: true }); tasks = tResp.result.items || [];
-                    authErrorDetected = false;
-                } catch (e) { authErrorDetected = true; }
+        let events = [], tasks = [];
+        
+        try {
+            // ★GASのdoGetに対してfetchを実行
+            const url = `${GAS_API_URL}?year=${year}&month=${month}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.success) {
+                events = data.events || [];
+                tasks = data.tasks || [];
+            } else {
+                throw new Error(data.error || '不明なサーバーエラー');
             }
-            if (authErrorDetected) { notifyAuthError(); return; }
+        } catch (e) { 
+            console.error("GASデータ取得エラー:", e);
+            showToast('通信エラーが発生した。');
+            return;
         }
-        dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); needsRender = true;
+        
+        dataCache[monthKey] = { events, tasks }; 
+        saveDataCacheToIDB(monthKey, { events, tasks }); 
+        needsRender = true;
     } else { if (!document.getElementById(`month-${year}-${month}`)) needsRender = true; }
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if (existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if (!existing) { if (position === 'append') renderedMonths.push({ year, month }); else if (position === 'prepend') renderedMonths.unshift({ year, month }); } updateHeaderDisplay(); }
 }
@@ -673,10 +681,11 @@ async function toggleTaskCompletion(taskId, newStatus) {
     await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false);
     if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); }
 
-    const patchBody = { status: newStatus }; if (newStatus === 'completed') { patchBody.completed = new Date().toISOString(); } else { patchBody.completed = null; }
+    const payload = { type: 'task', method: 'update', id: taskId, status: newStatus };
     try {
-        if (navigator.onLine && typeof gapi !== 'undefined') {
-            await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: taskId, resource: patchBody });
+        if (navigator.onLine) {
+            // ★GASのdoPostに対してfetchを実行 (Content-Typeは指定せずtext/plain扱いで送るのがCORS回避の秘訣だ)
+            await fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload) });
         } else {
             showToast('圏外ではタスクの完了操作はできない。');
             targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed';
@@ -903,32 +912,21 @@ async function executeApiAction(action, isRetry = false) {
         }
     }
 
-    // ★第2段階：Googleとの通信と、貴重なデータの「絶対救出」
+    // ★第2段階：GASエンドポイントへの通信と、貴重なデータの「絶対救出」
     try {
-        if (payload.type === 'event') {
-            const body = { summary: payload.title, location: payload.location, description: payload.description };
-            // ★色の完全消去（デフォルト戻し）に対応。空文字ならnullとして明示的に送る。
-            if (payload.colorId !== undefined) {
-                body.colorId = payload.colorId === "" ? null : payload.colorId;
-            }
-            // 完全に文字列化された安全な日付をセット
-            if (payload.start.includes('T')) { body.start = { dateTime: payload.start }; body.end = { dateTime: payload.end }; }
-            else { body.start = { date: payload.start }; body.end = { date: payload.end }; }
+        const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload) // プリフライト(OPTIONS)回避のため、あえて text/plain 扱いで送信
+        });
+        const result = await response.json();
 
-            if (payload.method === 'insert') await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: body });
-            else if (payload.method === 'update') await gapi.client.calendar.events.patch({ calendarId: 'primary', eventId: payload.id, resource: body });
-            else if (payload.method === 'delete') await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId: payload.id });
-            
-        } else if (payload.type === 'task') {
-            const body = { title: payload.title, notes: payload.description };
-            if (payload.due) body.due = payload.due;
-
-            if (payload.method === 'insert') await gapi.client.tasks.tasks.insert({ tasklist: '@default', resource: body });
-            else if (payload.method === 'update') await gapi.client.tasks.tasks.patch({ tasklist: '@default', task: payload.id, resource: body });
-            else if (payload.method === 'delete') await gapi.client.tasks.tasks.delete({ tasklist: '@default', task: payload.id });
+        if (!result.success) {
+            // サーバー側でエラーが起きた場合、強制的にエラーオブジェクトを投げて下のcatchに拾わせる
+            throw { status: 400, message: result.error }; 
         }
+
     } catch (error) {
-        const code = error.status || (error.result && error.result.error && error.result.error.code);
+        const code = error.status || 500;
         
         // 救出作戦 A: 既にGoogle上で消えている予定をオフラインで「更新」していた場合 (404/410)
         if ((code === 404 || code === 410) && payload.method === 'update') {
@@ -1017,45 +1015,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) { showToast("初期化エラー: " + err.message); }
 });
 
-function gapiLoaded() { gapi.load('client', initializeGapiClient); }
-async function initializeGapiClient() { await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest", "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest"] }); gapiInited = true; initWeekdays(); setupObserver(); checkAutoLogin(); }
-function gisLoaded() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gisInited = true; }
-async function checkAutoLogin() {
-    const savedToken = localStorage.getItem('jero_token');
-    const tokenTime = localStorage.getItem('jero_token_time');
+// ====== 旧Google認証(OAuth)コードは全て削除済 ======
+
+// ★起動シーケンス：認証不要で直ちに自律起動する
+function startApp() {
+    document.getElementById('auth-btn').style.display = 'none'; // 鍵マークを完全に隠す
+    initWeekdays();
+    setupObserver();
+    initCalendar(); 
     
-    if (savedToken) {
-        gapi.client.setToken({ access_token: savedToken });
-        document.getElementById('auth-btn').style.display = 'none';
-        initCalendar(); // 画面はキャッシュで即座に描画
-        
-        // ★起動時に通行証の期限をチェック。古ければ裏で自動更新をかける
-        if (!tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000)) {
-            console.log("起動時：通行証が古い。自動更新（サイレントリフレッシュ）を試みる。");
-            const refreshed = await attemptSilentRefresh();
-            if (refreshed) {
-                processSyncQueue();
-            } else {
-                console.warn("自動更新失敗。手動認証が必要だ。");
-                notifyAuthError();
-                await updateSyncBadge();
-            }
-        } else {
-            processSyncQueue();
-        }
-    } else {
-        notifyAuthError();
-    }
+    // 自律起動後に未送信データをチェック
+    setTimeout(() => { processSyncQueue(); }, 1000);
 }
 
-async function attemptSilentRefresh() {
-    // ★第一原理：自動更新の幻想を捨て、完全なる手動認証（鍵マーク）へ回帰する
-    // 最新のブラウザセキュリティにおいて、ユーザーのタップなしのトークン更新はブロックされ、
-    // GISがコールバックを返さずに永遠にフリーズする原因となるため、この裏口は完全に閉鎖する。
-    return false;
-}
-
-async function handleAuthClick() { if (!gisInited || !gapiInited) return; tokenClient.callback = async (resp) => { if (resp.error !== undefined) throw (resp); gapi.client.setToken({ access_token: resp.access_token }); localStorage.setItem('jero_token', resp.access_token); localStorage.setItem('jero_token_time', Date.now()); isAuthError = false; document.getElementById('auth-btn').style.display = 'none'; document.getElementById('auth-btn').classList.remove('auth-pulse'); document.getElementById('month-display').style.color = 'var(--txt)'; showToast('✅ 認証成功。ローカルの控え室のチェックを行う。'); await updateSyncBadge(); processSyncQueue(); document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; dataCache = {}; initCalendar(); }; tokenClient.requestAccessToken({ prompt: 'consent' }); }
+// DOM読み込み完了時に強制的に起動
+document.addEventListener('DOMContentLoaded', () => {
+    // 既存のDOMContentLoaded処理（ServiceWorkerや初期化など）が終わった後で呼び出す
+    setTimeout(startApp, 500);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const resizer = document.getElementById('resizer');
