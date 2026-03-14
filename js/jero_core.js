@@ -319,9 +319,10 @@ async function sendToJero() {
 
     try {
         // ★無料枠で確実に動くモデル (2.5-flash) に戻す
+        // ★AIの感情表現を豊かにするため、強制JSONモードの手枷を外す
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
+            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory })
         });
 
         if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }

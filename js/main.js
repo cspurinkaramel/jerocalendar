@@ -422,6 +422,8 @@ function renderMonthDOM(year, month, data, position) {
     // ★連続予定（期間が長いもの）を最優先で上に持ってくる高度なソート
     const getEventDuration = (e) => {
         if (e.start && e.start.date && e.end && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); }
+        // ★時間指定の日またぎ予定も正確に期間を計算し、ソート順を安定させる
+        if (e.start && e.start.dateTime && e.end && e.end.dateTime) { return new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime(); }
         return 0;
     };
     const sortedEvents = [...data.events].sort((a, b) => {
