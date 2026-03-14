@@ -806,12 +806,20 @@ async function executeConversion(fromType) {
 // 8. アクション司令塔 (完全リアルタイム・オプティミスティックUI)
 // ==========================================
 async function dispatchManualAction(action) {
-    // ★ローダーによる画面ロックを完全撤廃。バックグラウンド処理化で連打可能にする
     let msgAction = action.method === 'insert' ? '追加' : action.method === 'update' ? '更新' : '削除';
     const msgType = action.type === 'event' ? '予定' : 'タスク';
 
-    const tdStr = action.start || action.due; let td = new Date();
-    if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+    // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復
+    let safeToday = new Date().toISOString().split('T')[0];
+    if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
+    if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; }
+    if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
+
+    let tdStr = action.start || action.due; let td = new Date();
+    if (tdStr && typeof tdStr === 'string') { 
+        if (tdStr.includes('T')) { td = new Date(tdStr); } 
+        else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } 
+    }
     const year = td.getFullYear(); const month = td.getMonth();
     const monthKey = `${year}-${month}`;
 
@@ -823,9 +831,10 @@ async function dispatchManualAction(action) {
     const existingMonth = document.getElementById(`month-${year}-${month}`);
     if (existingMonth) existingMonth.remove();
     if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
-    if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+    if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
 
-    // ★通信とエラー処理を「非同期の裏側」に完全分離（awaitでUIをブロックさせない）
+    // ★通信とエラー処理を「非同期の裏側」に完全分離
+    // 以下の (async () => { ... })(); というカプセルがエラーを防ぐ命綱だ
     (async () => {
         if (!navigator.onLine) {
             const localId = await saveToSyncQueue(action);
@@ -863,7 +872,7 @@ async function dispatchManualAction(action) {
                 const existingMonthAfter = document.getElementById(`month-${year}-${month}`);
                 if (existingMonthAfter) existingMonthAfter.remove();
                 if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
-                if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+                if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
                 await updateSyncBadge();
 
             } catch (e) {
@@ -873,96 +882,16 @@ async function dispatchManualAction(action) {
                 updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
                 showToast(`📦 通信不良だ。裏で控え室に退避した。`);
                 
-                // バッジ再描画のため
                 const existingMonthErr = document.getElementById(`month-${year}-${month}`);
                 if (existingMonthErr) existingMonthErr.remove();
                 if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
-                if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+                if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
                 
                 await updateSyncBadge();
             }
         }
     })();
 }
-    const tdStr = action.start || action.due; let td = new Date();
-    if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-    const year = td.getFullYear(); const month = td.getMonth();
-    const monthKey = `${year}-${month}`;
-
-    const tempLocalId = 'temp_' + Date.now();
-    updateLocalCacheForOptimisticUI(action, tempLocalId);
-
-    // ★即座にカレンダーを再描画してユーザーに見せる（待機時間ゼロのリアルタイム反映）
-    const existingMonth = document.getElementById(`month-${year}-${month}`);
-    if (existingMonth) existingMonth.remove();
-    if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
-    if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
-
-    if (!navigator.onLine) {
-        // 圏外：キューに保存し、UIの tempId を正式な localId にすり替える
-        const localId = await saveToSyncQueue(action);
-        updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
-        showToast(`📦 圏外だ。「${msgType}」の${msgAction}をローカルの控え室に退避した。`);
-        await updateSyncBadge();
-    } else {
-        // オンライン：裏でAPIへ送信
-        try {
-            await executeApiAction(action);
-            showToast(`✅ ${msgType}を${msgAction}した`);
-
-            // 送信成功時の浄化：おばけフラグやテンポラリIDを消去する
-            if (dataCache[monthKey]) {
-                if (action.method === 'delete') {
-                    if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
-                    if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
-                } else if (action.method === 'update') {
-                    let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
-                    let existing = targetList.find(e => e.id === action.id);
-                    if (existing) delete existing._pendingUpdate;
-                } else if (action.method === 'insert') {
-                    // ★無差別浄化：月またぎのゴーストを全滅させるため、全てのキャッシュから _localId を消し去る
-                    for (const key in dataCache) {
-                        if (action.type === 'event' && dataCache[key].events) {
-                            const existing = dataCache[key].events.find(e => e._localId === tempLocalId);
-                            if (existing) delete existing._localId;
-                        }
-                        if (action.type === 'task' && dataCache[key].tasks) {
-                            const existing = dataCache[key].tasks.find(t => t._localId === tempLocalId);
-                            if (existing) delete existing._localId;
-                        }
-                    }
-                    setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1500);
-                }
-            }
-
-            // 浄化後の最終描画
-            const existingMonthAfter = document.getElementById(`month-${year}-${month}`);
-            if (existingMonthAfter) existingMonthAfter.remove();
-            if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
-            if (selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
-            
-            // ★オンラインでの一発成功時も必ず帯の状態をチェックして消し去る
-            await updateSyncBadge();
-
-        } catch (e) {
-            console.error("API送信エラー:", e);
-            const isAuthError = e.status === 401 || (e.result && e.result.error && e.result.error.message.includes('credentials'));
-            const isNetworkError = e.name === 'TypeError' || e.status === 0;
-
-            if (isAuthError || isNetworkError) {
-                const localId = await saveToSyncQueue(action);
-                updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
-                showToast(`📦 通信不良だ。ローカルの控え室に退避した。`);
-                // GAS移行によりattemptSilentRefreshは存在しないため削除
-                await updateSyncBadge();
-            } else {
-                showToast('❌ 致命的エラー: ' + (e.result && e.result.error ? e.result.error.message : e.message));
-            }
-        }
-    }
-    hideGlobalLoader();
-}
-
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
     // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復する
     let safeToday = new Date().toISOString().split('T')[0];
