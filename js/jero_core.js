@@ -318,23 +318,31 @@ async function sendToJero() {
     if (conversationHistory.length > 6) { conversationHistory = conversationHistory.slice(conversationHistory.length - 6); }
 
     try {
-        // ★無料枠で確実に動くモデル (2.5-flash) に戻す
-        // ★AIの頭脳空転を防ぐため、JSON出力モード（手枷）を再装着し、出力形式の崩壊を完全に防ぐ
+        // ★感情を解放するため、JSON強制モードの手枷(generationConfig)を完全に破壊する
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
+            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory })
         });
 
         if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
 
         const data = await response.json(); 
         let aiText = "";
-        // ★絶対防衛線：AIが空の回答を返してきた場合、クラッシュを避けて自己修復する
+        
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
             console.warn("APIから空の応答。フォールバックを実行する。");
-            aiText = JSON.stringify({ reply: "フッ、私の頭脳が少し空転したようだ。言葉を変えてもう一度言ってくれ。", actions: [] });
+            aiText = JSON.stringify({ reply: "フッ、言葉が詰まった。もう一度言ってくれ。", actions: [] });
         } else {
-            aiText = data.candidates[0].content.parts[0].text;
+            let rawText = data.candidates[0].content.parts[0].text;
+            // ★最強の防護服：手枷を外してAIが自由に雑談（ただのテキスト）を返してきても、システムが理解できるJSONに自動翻訳して包み込む
+            rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            try {
+                JSON.parse(rawText); // JSONとして正しいかテスト
+                aiText = rawText; // 正しければそのまま採用
+            } catch (e) {
+                // JSONでなければ、ただの雑談とみなして強引に包み込む
+                aiText = JSON.stringify({ reply: rawText, actions: [] });
+            }
         }
         
         conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });

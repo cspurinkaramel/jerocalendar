@@ -316,16 +316,19 @@ function scrollToToday() { const today = new Date(); const dateStr = `${today.ge
 function triggerFullReRender() { document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderedMonths.push({ year: y, month: m }); renderMonthDOM(y, m + 1, dataCache[`${y}-${m + 1}`], 'append'); renderedMonths.push({ year: y, month: m + 1 }); }
 
 function isEventSpanning(eventObj, dateStr) {
-    if (!eventObj || !eventObj.start || !eventObj.end) return 'single'; // ★防波堤：終了日が存在しない場合は絶対に日またぎにしない
+    if (!eventObj || !eventObj.start || !eventObj.end) return 'single'; 
     let stDateStr, edDateStr;
     if (eventObj.start.date && eventObj.end.date) {
         stDateStr = eventObj.start.date;
         const edDate = new Date(eventObj.end.date);
-        edDate.setDate(edDate.getDate() - 1); // 終日予定はGoogle仕様で翌日扱いになるため1日戻す
+        edDate.setDate(edDate.getDate() - 1); 
         edDateStr = `${edDate.getFullYear()}-${String(edDate.getMonth() + 1).padStart(2, '0')}-${String(edDate.getDate()).padStart(2, '0')}`;
     } else if (eventObj.start.dateTime && eventObj.end.dateTime) {
-        stDateStr = eventObj.start.dateTime.split('T')[0];
-        edDateStr = eventObj.end.dateTime.split('T')[0];
+        // ★UTCの時差ズレを破壊：一度ローカルのDateに戻し、確実にお前のいる国の「年-月-日」を抽出する
+        const stD = new Date(eventObj.start.dateTime);
+        stDateStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`;
+        const edD = new Date(eventObj.end.dateTime);
+        edDateStr = `${edD.getFullYear()}-${String(edD.getMonth() + 1).padStart(2, '0')}-${String(edD.getDate()).padStart(2, '0')}`;
     } else { return 'single'; }
 
     if (stDateStr === edDateStr) return 'single';
@@ -334,7 +337,6 @@ function isEventSpanning(eventObj, dateStr) {
     if (dateStr > stDateStr && dateStr < edDateStr) return 'span-mid';
     return 'single';
 }
-
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
@@ -440,9 +442,10 @@ function renderMonthDOM(year, month, data, position) {
         if (durA !== durB) return durB - durA; // 期間が長い順
         const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0;
         if (aAllDay !== bAllDay) return bAllDay - aAllDay; // 終日優先
-        const tA = a.start && a.start.dateTime ? new Date(a.start.dateTime).getTime() : 0;
-        const tB = b.start && b.start.dateTime ? new Date(b.start.dateTime).getTime() : 0;
-        return tA - tB; // 開始時間が早い順
+        const tA = a.start && (a.start.dateTime || a.start.date) ? new Date(a.start.dateTime || a.start.date).getTime() : 0;
+        const tB = b.start && (b.start.dateTime || b.start.date) ? new Date(b.start.dateTime || b.start.date).getTime() : 0;
+        if (tA !== tB) return tA - tB; // 開始時間が早い順
+        return (a.id || "").localeCompare(b.id || ""); // ★最後の砦：同じ時間帯ならID順で段組みを絶対固定し、線のガタツキを防ぐ
     });
     const today = new Date();
 
@@ -453,8 +456,15 @@ function renderMonthDOM(year, month, data, position) {
 
         sortedEvents.filter(e => { 
             if (!e.start) return false; 
-            const td = e.start.date || e.start.dateTime; 
-            return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); 
+            // ★ここでもUTCズレを補正し、その日にその予定が存在するかを完璧にローカルタイムで判定する
+            let isTargetDay = false;
+            if (e.start.date) { isTargetDay = e.start.date === dateStr; } 
+            else if (e.start.dateTime) {
+                const stD = new Date(e.start.dateTime);
+                const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`;
+                isTargetDay = stStr === dateStr;
+            }
+            return isTargetDay || isEventSpanning(e, dateStr) !== 'single'; 
         }).forEach(e => {
             const div = document.createElement('div'); div.className = 'event';
             let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
