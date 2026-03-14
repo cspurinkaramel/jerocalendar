@@ -1,7 +1,9 @@
-// JeroCalendar v9.0 Main Logic - GAS Proxy Edition
-// ★ここに先ほど取得したGASのWebアプリURLを必ず貼り付けろ★
-const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbz-n8tzwG4wmGMBSliWLvKJ35SALirRuFqIEeffaUsfrlh3mCHCb_fSVfz6u3Bov-c_2g/exec'; 
-let isAuthError = false; // エラー用フラグはUI制御のため残す
+// JeroCalendar v9.1 Main Logic - GAS Proxy & Secure Edition
+function getGasUrl() {
+    const url = localStorage.getItem('jero_gas_url');
+    if (!url) { showToast('⚠️ 設定画面(⚙️)から「サーバー接続キー」を入力してくれ。'); throw new Error('GAS URL missing'); }
+    return url;
+}
 let dataCache = {}; let renderedMonths = []; let observer, isFetching = false, isAuthError = false;
 let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", currentView = 'calendar';
 let isCalendarInited = false; // ★追加：二重起動防止フラグ
@@ -24,7 +26,9 @@ function getContrastYIQ(hexcolor) {
 }
 
 function initWeekdays() { const days = ['日', '月', '火', '水', '木', '金', '土']; const c = document.getElementById('weekdays'); if (c) c.innerHTML = days.map(d => `<div class="wd">${d}</div>`).join(''); }
-function loadSettings() { const th = localStorage.getItem('jero_theme') || 'light'; const fs = localStorage.getItem('jero_fs') || '10'; document.getElementById('st-theme').value = th; document.getElementById('st-fs').value = fs; document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; if (typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; }
+function loadSettings() { const th = localStorage.getItem('jero_theme') || 'light'; const fs = localStorage.getItem('jero_fs') || '10'; document.getElementById('st-theme').value = th; document.getElementById('st-fs').value = fs; document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; if (typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; 
+const gasUrlInput = document.getElementById('st-gas-url'); if (gasUrlInput) gasUrlInput.value = localStorage.getItem('jero_gas_url') || ''; }
+function saveGasUrl() { localStorage.setItem('jero_gas_url', document.getElementById('st-gas-url').value.trim()); showToast('✅ サーバー接続キーを保存した。'); triggerFullReRender(); }
 function saveAndApplySettings() { const th = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; localStorage.setItem('jero_theme', th); localStorage.setItem('jero_fs', fs); document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; }
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if (pb) { pb.style.width = p + '%'; if (p >= 100) setTimeout(() => pb.style.width = '0%', 500); } }
 function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }
@@ -535,7 +539,7 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
         
         try {
             // ★GASのdoGetに対してfetchを実行
-            const url = `${GAS_API_URL}?year=${year}&month=${month}`;
+            const url = `${getGasUrl()}?year=${year}&month=${month}`;
             const response = await fetch(url);
             const data = await response.json();
             
@@ -685,7 +689,7 @@ async function toggleTaskCompletion(taskId, newStatus) {
     try {
         if (navigator.onLine) {
             // ★GASのdoPostに対してfetchを実行 (Content-Typeは指定せずtext/plain扱いで送るのがCORS回避の秘訣だ)
-            await fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload) });
+            await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) });
         } else {
             showToast('圏外ではタスクの完了操作はできない。');
             targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed';
@@ -914,7 +918,7 @@ async function executeApiAction(action, isRetry = false) {
 
     // ★第2段階：GASエンドポイントへの通信と、貴重なデータの「絶対救出」
     try {
-        const response = await fetch(GAS_API_URL, {
+        const response = await fetch(getGasUrl(), {
             method: 'POST',
             body: JSON.stringify(payload) // プリフライト(OPTIONS)回避のため、あえて text/plain 扱いで送信
         });

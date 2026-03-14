@@ -292,6 +292,11 @@
                     onclick="requestNotificationPermission()">通知を許可する</button>
             </div>
             <div class="setting-row">
+                <label style="color: #ff3b30; font-weight: bold;">🔑 サーバー接続キー (GAS URL)</label>
+                <input type="password" id="st-gas-url" placeholder="https://script.google.com/.../exec" onchange="saveGasUrl()"
+                    style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); margin-bottom: 10px;">
+            </div>
+            <div class="setting-row">
                 <label style="color: var(--accent);">Jero Core 思考エンジン</label>
                 <input type="text" id="st-gemini-key" placeholder="APIキーを入力" onchange="saveGeminiSettings()"
                     style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); margin-bottom: 10px;">
@@ -561,8 +566,8 @@
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
             onclick="event.stopPropagation()"></div>
 
-    <script src="./js/main.js?v=8.8" defer></script>
-    <script src="./js/jero_core.js?v=8.8" defer></script>
+    <script src="./js/main.js?v=9.1" defer></script>
+    <script src="./js/jero_core.js?v=9.1" defer></script>
 </body>
 
 </html>
