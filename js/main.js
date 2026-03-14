@@ -305,9 +305,26 @@ document.getElementById('scroll-container').addEventListener('scroll', updateHea
 function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if (rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
 function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-function triggerFullReRender() { document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderMonthDOM(y, m + 1, dataCache[`${y}-${m + 1}`], 'append'); }
+function triggerFullReRender() { document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderedMonths.push({ year: y, month: m }); renderMonthDOM(y, m + 1, dataCache[`${y}-${m + 1}`], 'append'); renderedMonths.push({ year: y, month: m + 1 }); }
 
-function isEventSpanning(eventObj, dateStr) { if (!eventObj.start.date || !eventObj.end.date) return 'single'; const st = new Date(eventObj.start.date); const ed = new Date(eventObj.end.date); ed.setDate(ed.getDate() - 1); const tgt = new Date(dateStr); if (st.getTime() === ed.getTime()) return 'single'; if (tgt.getTime() === st.getTime()) return 'span-start'; if (tgt.getTime() === ed.getTime()) return 'span-end'; if (tgt > st && tgt < ed) return 'span-mid'; return 'single'; }
+function isEventSpanning(eventObj, dateStr) {
+    let stDateStr, edDateStr;
+    if (eventObj.start.date) {
+        stDateStr = eventObj.start.date;
+        const edDate = new Date(eventObj.end.date);
+        edDate.setDate(edDate.getDate() - 1); // 終日予定はGoogle仕様で翌日扱いになるため1日戻す
+        edDateStr = `${edDate.getFullYear()}-${String(edDate.getMonth() + 1).padStart(2, '0')}-${String(edDate.getDate()).padStart(2, '0')}`;
+    } else if (eventObj.start.dateTime) {
+        stDateStr = eventObj.start.dateTime.split('T')[0];
+        edDateStr = eventObj.end.dateTime.split('T')[0];
+    } else { return 'single'; }
+
+    if (stDateStr === edDateStr) return 'single';
+    if (dateStr === stDateStr) return 'span-start';
+    if (dateStr === edDateStr) return 'span-end';
+    if (dateStr > stDateStr && dateStr < edDateStr) return 'span-mid';
+    return 'single';
+}
 
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
@@ -423,7 +440,11 @@ function renderMonthDOM(year, month, data, position) {
         if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
-        sortedEvents.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }).forEach(e => {
+        sortedEvents.filter(e => { 
+            if (!e.start) return false; 
+            const td = e.start.date || e.start.dateTime; 
+            return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); 
+        }).forEach(e => {
             const div = document.createElement('div'); div.className = 'event';
             let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             const spanType = isEventSpanning(e, dateStr);

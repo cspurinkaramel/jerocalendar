@@ -327,12 +327,15 @@ async function sendToJero() {
         if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
 
         const data = await response.json(); 
-        // ★絶対防衛線：空返答の真の原因を特定するために、生データをすべてエラーとして吐き出す
+        let aiText = "";
+        // ★絶対防衛線：AIが空の回答を返してきた場合、クラッシュを避けて自己修復する
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-            throw new Error("APIレスポンス異常: " + JSON.stringify(data));
+            console.warn("APIから空の応答。フォールバックを実行する。");
+            aiText = JSON.stringify({ reply: "フッ、私の頭脳が少し空転したようだ。言葉を変えてもう一度言ってくれ。", actions: [] });
+        } else {
+            aiText = data.candidates[0].content.parts[0].text;
         }
         
-        let aiText = data.candidates[0].content.parts[0].text;
         conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });
 
         let cleanJsonStr = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
