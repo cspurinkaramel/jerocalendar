@@ -823,18 +823,16 @@ async function dispatchManualAction(action) {
     const year = td.getFullYear(); const month = td.getMonth();
     const monthKey = `${year}-${month}`;
 
-    // 短時間に連打してもIDが被らないよう、乱数を付与する
     const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); 
     updateLocalCacheForOptimisticUI(action, tempLocalId);
 
-    // ★通信を待たず、即座にカレンダーを再描画してユーザーに見せる（待機時間ゼロ）
+    // ★通信を待たず、即座にカレンダーを再描画してユーザーに見せる
     const existingMonth = document.getElementById(`month-${year}-${month}`);
     if (existingMonth) existingMonth.remove();
     if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace');
     if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
 
-    // ★通信とエラー処理を「非同期の裏側」に完全分離
-    // 以下の (async () => { ... })(); というカプセルがエラーを防ぐ命綱だ
+    // ★通信とエラー処理を非同期の裏側に分離
     (async () => {
         if (!navigator.onLine) {
             const localId = await saveToSyncQueue(action);
@@ -865,7 +863,6 @@ async function dispatchManualAction(action) {
                                 if (existing) delete existing._localId;
                             }
                         }
-                        // 1.5秒後に裏で本物IDを取得して書き換える
                         setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1500);
                     }
                 }
@@ -877,7 +874,6 @@ async function dispatchManualAction(action) {
 
             } catch (e) {
                 console.error("API送信エラー:", e);
-                // どんなエラーでも一旦控え室に突っ込んでバッジを点灯させ、ユーザーの手を止めない
                 const localId = await saveToSyncQueue(action);
                 updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
                 showToast(`📦 通信不良だ。裏で控え室に退避した。`);
@@ -892,6 +888,7 @@ async function dispatchManualAction(action) {
         }
     })();
 }
+
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
     // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復する
     let safeToday = new Date().toISOString().split('T')[0];
