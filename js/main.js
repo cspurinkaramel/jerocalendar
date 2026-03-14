@@ -197,10 +197,17 @@ async function processSyncQueue() {
                         if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
                         if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
                     } else if (action.method === 'insert') {
-                        // ★即時浄化：点線フラグ（_localId）だけを消し、予定自体は画面に残す
-                        let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
-                        let existing = targetList.find(e => e._localId === item.id);
-                        if (existing) delete existing._localId;
+                        // ★無差別浄化：月またぎのゴーストを全滅させる
+                        for (const key in dataCache) {
+                            if (action.type === 'event' && dataCache[key].events) {
+                                const existing = dataCache[key].events.find(e => e._localId === item.id);
+                                if (existing) delete existing._localId;
+                            }
+                            if (action.type === 'task' && dataCache[key].tasks) {
+                                const existing = dataCache[key].tasks.find(t => t._localId === item.id);
+                                if (existing) delete existing._localId;
+                            }
+                        }
                     }
                 }
                 await sleep(500);
@@ -797,11 +804,17 @@ async function dispatchManualAction(action) {
                     let existing = targetList.find(e => e.id === action.id);
                     if (existing) delete existing._pendingUpdate;
                 } else if (action.method === 'insert') {
-                    // ★即時浄化：点線フラグ（_localId）だけを消し、予定自体は画面に残して視覚を正常化する。
-                    let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
-                    let existing = targetList.find(e => e._localId === tempLocalId);
-                    if (existing) delete existing._localId;
-                    
+                    // ★無差別浄化：月またぎのゴーストを全滅させるため、全てのキャッシュから _localId を消し去る
+                    for (const key in dataCache) {
+                        if (action.type === 'event' && dataCache[key].events) {
+                            const existing = dataCache[key].events.find(e => e._localId === tempLocalId);
+                            if (existing) delete existing._localId;
+                        }
+                        if (action.type === 'task' && dataCache[key].tasks) {
+                            const existing = dataCache[key].tasks.find(t => t._localId === tempLocalId);
+                            if (existing) delete existing._localId;
+                        }
+                    }
                     setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1500);
                 }
             }

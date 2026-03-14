@@ -325,7 +325,14 @@ async function sendToJero() {
 
         if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
 
-        const data = await response.json(); let aiText = data.candidates[0].content.parts[0].text;
+        const data = await response.json(); 
+        // ★絶対防衛線：Geminiからの返答が空、あるいはブロックされた場合のクラッシュを防ぐ
+        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+            let blockReason = data.promptFeedback ? "安全フィルターでブロックされた可能性がある。" : "APIから空の返答が来た。";
+            throw new Error(blockReason);
+        }
+        
+        let aiText = data.candidates[0].content.parts[0].text;
         conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });
 
         let cleanJsonStr = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
