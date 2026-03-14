@@ -142,22 +142,7 @@ async function processSyncQueue() {
         return;
     }
 
-    // ★通行証の賞味期限チェックと自動更新ハイブリッド
-    const tokenTime = localStorage.getItem('jero_token_time');
-    const isTokenExpired = !tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000);
-    if (isTokenExpired) {
-        console.log("同期前：通行証の期限切れを確認。自動更新を試みるぞ。");
-        showGlobalLoader("Googleの門番と交渉中...");
-        const refreshed = await attemptSilentRefresh();
-        if (!refreshed) {
-            console.warn("自動更新失敗。これ以上の自動化は不可能だ。正面玄関（鍵マーク）へ誘導する。");
-            hideGlobalLoader();
-            notifyAuthError();
-            await updateSyncBadge();
-            return;
-        }
-    }
-
+    // GAS移行により、フロントエンドでの50分ごとのトークン更新は完全に不要になった
     console.log(`🔄 同期エンジン起動：${queue.length}件の未送信データを処理する。`);
     showGlobalLoader(`同期中... 残り${queue.length}件`);
 
@@ -214,16 +199,11 @@ async function processSyncQueue() {
             } catch (error) {
                 const code = error.status || (error.result && error.result.error && error.result.error.code);
                 if (code === 401 || code === 403) {
-                    console.warn("⚠️ 認証エラー検出。裏でトークン更新を試みる。");
-                    const validToken = await attemptSilentRefresh();
-                    if (!validToken) {
-                        console.error("❌ トークン再取得失敗。手動認証へ誘導する。");
-                        authErrorOccurred = true;
-                        hideGlobalLoader();
-                        notifyAuthError();
-                        await updateSyncBadge();
-                    }
-                    // 更新に成功した場合は、retriesを減らさずにそのままリトライする
+                    console.error("❌ GASサーバーでの認証エラー。手動認証はもう存在しない。");
+                    authErrorOccurred = true;
+                    hideGlobalLoader();
+                    showToast('⚠️ サーバー側で認証エラーが起きた。設定(GAS)を見直してくれ。');
+                    await updateSyncBadge();
                 } else if (code === 400 || code === 404 || code === 410) {
                     console.error(`❌ Googleから拒絶された(Code:${code})。不正データとして破棄する。`, error);
                     await clearSyncQueueItem(item.id);
@@ -1183,15 +1163,7 @@ async function retrySingleSyncItem(id) {
     const item = queue.find(q => q.id === id);
     if (!item) return;
 
-    // ★手動再送時も通行証の賞味期限をチェック
-    const tokenTime = localStorage.getItem('jero_token_time');
-    if (!tokenTime || (Date.now() - parseInt(tokenTime) > 50 * 60 * 1000)) {
-        showToast("🔑 認証の有効期限が切れている。右上の鍵マークをタップしてくれ。");
-        notifyAuthError();
-        closeSyncManager();
-        return;
-    }
-
+    // GAS移行により通行証(トークン)の賞味期限チェックは不要になった
     showGlobalLoader("1件だけ再送信中...");
     try {
         await executeApiAction(item.payload);
