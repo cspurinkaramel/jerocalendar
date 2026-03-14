@@ -506,11 +506,13 @@ function renderMonthDOM(year, month, data, position) {
         const slots = slotMap[dateStr] || [];
         slots.forEach(e => {
             if (!e) {
-                // 予定がない段は、レイアウトを保つための「透明なブロック」を置く
                 const spacer = document.createElement('div');
-                spacer.className = 'event single'; 
-                spacer.style.visibility = 'hidden'; // 高さを保ったまま完全に見えなくする
+                spacer.className = 'event'; 
+                spacer.style.visibility = 'hidden'; 
                 spacer.innerHTML = '&nbsp;';
+                spacer.style.margin = '2px 0';
+                spacer.style.padding = '2px 4px';
+                spacer.style.border = '1px solid transparent';
                 dayEl.appendChild(spacer);
                 return;
             }
@@ -518,9 +520,7 @@ function renderMonthDOM(year, month, data, position) {
             const div = document.createElement('div'); div.className = 'event';
             let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             const spanType = isEventSpanning(e, dateStr);
-            if (spanType !== 'single') div.classList.add(spanType);
 
-            // ★追加・編集・削除の3つの状態を完全管理
             const isPendingInsert = e._localId ? true : false;
             const isPendingUpdate = e._pendingUpdate ? true : false;
             const isPendingDelete = e._pendingDelete ? true : false;
@@ -542,31 +542,42 @@ function renderMonthDOM(year, month, data, position) {
                 txtColor = getContrastYIQ(bgColor);
             }
 
+            // ★真の美しさ：すべてをベタ塗り帯にし、隣のマスへ貫通させる
+            div.style.backgroundColor = bgColor;
+            div.style.color = txtColor;
+            div.style.margin = '2px 0';
+            div.style.padding = '2px 4px';
+            div.style.borderRadius = '4px';
+
             if (spanType !== 'single') {
-                div.classList.add('continuous');
-                div.style.borderTop = `3px solid ${bgColor}`;
-                div.style.backgroundColor = 'transparent';
-                div.style.color = bgColor;
-                if (spanType === 'span-mid' || spanType === 'span-end') div.style.color = 'transparent';
-            } else {
-                div.classList.add('single');
-                div.style.backgroundColor = bgColor;
-                div.style.color = txtColor;
+                if (spanType === 'span-start') {
+                    div.style.borderTopRightRadius = '0';
+                    div.style.borderBottomRightRadius = '0';
+                    div.style.marginRight = '-4px'; // 右のマスへ食い込ませる
+                    div.style.paddingRight = '8px';
+                } else if (spanType === 'span-mid') {
+                    div.style.borderRadius = '0';
+                    div.style.marginLeft = '-4px';
+                    div.style.marginRight = '-4px';
+                    div.style.color = 'transparent'; // 文字を隠す
+                } else if (spanType === 'span-end') {
+                    div.style.borderTopLeftRadius = '0';
+                    div.style.borderBottomLeftRadius = '0';
+                    div.style.marginLeft = '-4px';
+                    div.style.color = 'transparent'; // 文字を隠す
+                }
             }
 
-            if (isPendingInsert) {
+            if (isPendingInsert || isPendingUpdate) {
                 div.style.border = `1px dashed ${txtColor}`;
-                div.style.opacity = '0.8';
-            }
-            if (isPendingUpdate) {
-                div.style.border = `1px dotted #ff9500`; // 編集予定はオレンジの点線
                 div.style.opacity = '0.8';
             }
             if (isPendingDelete) {
                 div.style.textDecoration = 'line-through';
-                div.style.opacity = '0.3'; // より薄く
+                div.style.opacity = '0.3';
                 div.style.filter = 'grayscale(100%)';
             }
+            
             dayEl.appendChild(div);
         });
 
