@@ -197,9 +197,10 @@ async function processSyncQueue() {
                         if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id);
                         if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id);
                     } else if (action.method === 'insert') {
-                        if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== item.id);
-                        if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== item.id);
-                        window._needsInsertFetch = true;
+                        // ★即時浄化：点線フラグ（_localId）だけを消し、予定自体は画面に残す
+                        let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
+                        let existing = targetList.find(e => e._localId === item.id);
+                        if (existing) delete existing._localId;
                     }
                 }
                 await sleep(500);
@@ -238,30 +239,46 @@ async function processSyncQueue() {
     hideGlobalLoader();
     if (successCount > 0) showToast(`✅ ${successCount}件の同期を完了した。`);
 
-    // ★UI強制浄化プロセス（全表示月対応版）：
-    // 今月だけでなく、描画されているすべての月に対して最新データを強制取得し、ゴーストを焼き払う
+    // ★第1段階：即時UI浄化（バッジ消去と点線解除をラグなしで実行）
+    await updateSyncBadge(); // 成功直後に即座に青帯を消す
+    
+    if (needsRefresh) {
+        // ローカルキャッシュの浄化状態（点線が消えた状態）で即座に画面を再描画する
+        const wrappers = document.querySelectorAll('.month-wrapper');
+        for (const wrapper of wrappers) {
+            const parts = wrapper.id.split('-');
+            if (parts.length === 3) {
+                const y = parseInt(parts[1]);
+                const m = parseInt(parts[2]);
+                const existingMonth = document.getElementById(`month-${y}-${m}`);
+                if (existingMonth && dataCache[`${y}-${m}`]) {
+                    existingMonth.remove();
+                    renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace');
+                }
+            }
+        }
+        if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { 
+            openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); 
+        }
+    }
+
+    // ★第2段階：バックグラウンド最新化（本物IDの取得）
     if (needsRefresh && !authErrorOccurred) {
         setTimeout(async () => {
-            // 画面に存在している（レンダリング済みの）すべての月を再フェッチ対象にする
             const wrappers = document.querySelectorAll('.month-wrapper');
             for (const wrapper of wrappers) {
-                const parts = wrapper.id.split('-'); // "month-2026-2"などのIDを分解
+                const parts = wrapper.id.split('-');
                 if (parts.length === 3) {
                     const y = parseInt(parts[1]);
                     const m = parseInt(parts[2]);
-                    await fetchAndRenderMonth(y, m, 'replace', true); // 最新データをGoogleから強制取得して上書き
+                    await fetchAndRenderMonth(y, m, 'replace', true);
                 }
             }
-            
-            // 全ての再取得が終わってから、バッジと詳細ビューを最終確定させて帯を消去
-            await updateSyncBadge();
+            // 取得後、詳細ビューが開いていれば再更新する
             if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { 
                 openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); 
             }
-        }, 1500); // 1.5秒待ってGoogle側のインデックス更新を待つ
-    } else {
-        // 更新が不要だったりエラーだった場合でもバッジは確実に更新する
-        await updateSyncBadge();
+        }, 2000);
     }
 }
 
@@ -780,10 +797,12 @@ async function dispatchManualAction(action) {
                     let existing = targetList.find(e => e.id === action.id);
                     if (existing) delete existing._pendingUpdate;
                 } else if (action.method === 'insert') {
-                    // 追加成功後は本当のIDを取得するため、テンポラリの予定を消して裏で再フェッチする
-                    if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e._localId !== tempLocalId);
-                    if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t._localId !== tempLocalId);
-                    setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1000);
+                    // ★即時浄化：点線フラグ（_localId）だけを消し、予定自体は画面に残して視覚を正常化する。
+                    let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
+                    let existing = targetList.find(e => e._localId === tempLocalId);
+                    if (existing) delete existing._localId;
+                    
+                    setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1500);
                 }
             }
 
