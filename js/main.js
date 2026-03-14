@@ -308,13 +308,14 @@ function scrollToToday() { const today = new Date(); const dateStr = `${today.ge
 function triggerFullReRender() { document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderedMonths.push({ year: y, month: m }); renderMonthDOM(y, m + 1, dataCache[`${y}-${m + 1}`], 'append'); renderedMonths.push({ year: y, month: m + 1 }); }
 
 function isEventSpanning(eventObj, dateStr) {
+    if (!eventObj || !eventObj.start || !eventObj.end) return 'single'; // ★防波堤：終了日が存在しない場合は絶対に日またぎにしない
     let stDateStr, edDateStr;
-    if (eventObj.start.date) {
+    if (eventObj.start.date && eventObj.end.date) {
         stDateStr = eventObj.start.date;
         const edDate = new Date(eventObj.end.date);
         edDate.setDate(edDate.getDate() - 1); // 終日予定はGoogle仕様で翌日扱いになるため1日戻す
         edDateStr = `${edDate.getFullYear()}-${String(edDate.getMonth() + 1).padStart(2, '0')}-${String(edDate.getDate()).padStart(2, '0')}`;
-    } else if (eventObj.start.dateTime) {
+    } else if (eventObj.start.dateTime && eventObj.end.dateTime) {
         stDateStr = eventObj.start.dateTime.split('T')[0];
         edDateStr = eventObj.end.dateTime.split('T')[0];
     } else { return 'single'; }
@@ -421,9 +422,9 @@ function renderMonthDOM(year, month, data, position) {
 
     // ★連続予定（期間が長いもの）を最優先で上に持ってくる高度なソート
     const getEventDuration = (e) => {
-        if (e.start && e.start.date && e.end && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); }
-        // ★時間指定の日またぎ予定も正確に期間を計算し、ソート順を安定させる
-        if (e.start && e.start.dateTime && e.end && e.end.dateTime) { return new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime(); }
+        if (!e || !e.start || !e.end) return 0; // ★防波堤：データが欠損している場合は長さゼロ(単日)として安全に処理
+        if (e.start.date && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); }
+        if (e.start.dateTime && e.end.dateTime) { return new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime(); }
         return 0;
     };
     const sortedEvents = [...data.events].sort((a, b) => {
@@ -955,8 +956,13 @@ async function dispatchManualAction(action) {
 }
 
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
-    const tdStr = action.start || action.due; let td = new Date();
-    if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+    let tdStr = action.start || action.due; let td = new Date();
+    // ★防波堤：過去のバグで日付がオブジェクト形式のままキューに残っている幽霊データを強制文字列化
+    if (tdStr && typeof tdStr === 'object') { tdStr = tdStr.dateTime || tdStr.date || ""; }
+    if (tdStr && typeof tdStr === 'string') { 
+        if (tdStr.includes('T')) { td = new Date(tdStr); } 
+        else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } 
+    }
     const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
     if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] };
 
