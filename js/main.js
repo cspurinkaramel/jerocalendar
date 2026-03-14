@@ -166,8 +166,16 @@ async function processSyncQueue() {
                 needsRefresh = true;
 
                 const action = item.payload;
+                // ★フリーズの真犯人を解体：同期エンジン内でも幽霊データを強制修復し、画面ロックのまま死ぬのを防ぐ
+                let safeToday = new Date().toISOString().split('T')[0];
+                if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
+                if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
+
                 const tdStr = action.start || action.due; let td = new Date();
-                if (tdStr) { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+                if (tdStr && typeof tdStr === 'string') { 
+                    if (tdStr.includes('T')) { td = new Date(tdStr); } 
+                    else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } 
+                }
                 const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
 
                 if (dataCache[monthKey]) {
@@ -956,9 +964,13 @@ async function dispatchManualAction(action) {
 }
 
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
+    // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復する
+    let safeToday = new Date().toISOString().split('T')[0];
+    if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
+    if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; }
+    if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
+
     let tdStr = action.start || action.due; let td = new Date();
-    // ★防波堤：過去のバグで日付がオブジェクト形式のままキューに残っている幽霊データを強制文字列化
-    if (tdStr && typeof tdStr === 'object') { tdStr = tdStr.dateTime || tdStr.date || ""; }
     if (tdStr && typeof tdStr === 'string') { 
         if (tdStr.includes('T')) { td = new Date(tdStr); } 
         else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } 
