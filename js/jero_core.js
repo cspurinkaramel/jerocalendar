@@ -149,13 +149,43 @@ function startDictation(targetId) {
 
 let notifiedEventIds = new Set();
 function initNotification() { if (!("Notification" in window)) return; setInterval(checkUpcomingEvents, 60000); }
+
+// ★通知の現在の状態をGUIに反映させる関数を新設
+function checkNotificationStatus() {
+    const statusEl = document.getElementById('notif-status');
+    if (!statusEl) return;
+    if (!("Notification" in window)) {
+        statusEl.innerText = '非対応・PWA化必須';
+        statusEl.style.color = '#ff3b30';
+        return;
+    }
+    if (Notification.permission === 'granted') {
+        statusEl.innerText = '許可済';
+        statusEl.style.color = '#34c759';
+    } else if (Notification.permission === 'denied') {
+        statusEl.innerText = '拒否状態';
+        statusEl.style.color = '#ff3b30';
+    } else {
+        statusEl.innerText = '未設定';
+        statusEl.style.color = '#ff9500';
+    }
+}
+
 function requestNotificationPermission() {
-    if (!("Notification" in window)) { showToast('このブラウザは通知機能に非対応だ。Safariからホーム画面に追加してみてくれ。'); return; }
+    if (!("Notification" in window)) { 
+        showToast('非対応だ。Safariの共有ボタンから「ホーム画面に追加」をしてアプリ化してくれ。'); 
+        return; 
+    }
     Notification.requestPermission().then(permission => {
-        if (permission === 'granted') { showToast('通知を許可したな。予定が近づいたら報せよう。'); document.getElementById('notif-status').innerText = '許可済'; document.getElementById('notif-status').style.color = '#34c759'; }
-        else { showToast('通知が拒否された。'); document.getElementById('notif-status').innerText = '拒否・未設定'; document.getElementById('notif-status').style.color = '#ff3b30'; }
+        checkNotificationStatus();
+        if (permission === 'granted') { 
+            showToast('通知を許可したな。アプリを開いている間、予定の10分前に報せよう。'); 
+        } else { 
+            showToast('通知は拒否された。端末の設定アプリからも確認してくれ。'); 
+        }
     });
 }
+
 function checkUpcomingEvents() {
     if (Notification.permission !== 'granted') return;
     if (typeof isAuthError !== 'undefined' && isAuthError) return;

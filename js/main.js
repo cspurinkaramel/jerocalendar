@@ -26,15 +26,36 @@ function getContrastYIQ(hexcolor) {
 }
 
 function initWeekdays() { const days = ['日', '月', '火', '水', '木', '金', '土']; const c = document.getElementById('weekdays'); if (c) c.innerHTML = days.map(d => `<div class="wd">${d}</div>`).join(''); }
-function loadSettings() { const th = localStorage.getItem('jero_theme') || 'light'; const fs = localStorage.getItem('jero_fs') || '10'; document.getElementById('st-theme').value = th; document.getElementById('st-fs').value = fs; document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; if (typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; 
-const gasUrlInput = document.getElementById('st-gas-url'); if (gasUrlInput) gasUrlInput.value = localStorage.getItem('jero_gas_url') || ''; }
+function loadSettings() { 
+    const th = localStorage.getItem('jero_theme') || 'light'; const fs = localStorage.getItem('jero_fs') || '10'; document.getElementById('st-theme').value = th; document.getElementById('st-fs').value = fs; document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; if (typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; 
+    const gasUrl = localStorage.getItem('jero_gas_url') || '';
+    const gasUrlInput = document.getElementById('st-gas-url'); if (gasUrlInput) gasUrlInput.value = gasUrl; 
+    
+    // ★旧「アカウント確認中」のUIを、GASサーバー接続ステータス表示に書き換える
+    const accInfo = document.getElementById('account-info');
+    if (accInfo) {
+        if (gasUrl) { accInfo.innerText = "連携サーバー(GAS) 接続済"; accInfo.style.color = '#34c759'; }
+        else { accInfo.innerText = "連携サーバー 未設定"; accInfo.style.color = '#ff3b30'; }
+    }
+}
 function saveGasUrl() { localStorage.setItem('jero_gas_url', document.getElementById('st-gas-url').value.trim()); showToast('✅ サーバー接続キーを保存した。'); triggerFullReRender(); }
 function saveAndApplySettings() { const th = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; localStorage.setItem('jero_theme', th); localStorage.setItem('jero_fs', fs); document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; }
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if (pb) { pb.style.width = p + '%'; if (p >= 100) setTimeout(() => pb.style.width = '0%', 500); } }
 function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }
-function openSettings() { document.getElementById('overlay').classList.add('active'); document.getElementById('settings-modal').classList.add('active'); }
+function openSettings() { 
+    document.getElementById('overlay').classList.add('active'); 
+    document.getElementById('settings-modal').classList.add('active'); 
+    if (typeof checkNotificationStatus === 'function') checkNotificationStatus(); // ★開いた瞬間に通知ステータスを最新化
+}
 function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('overlay').classList.remove('active'); }
-function switchAccount() { localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); location.reload(); }
+
+// ★旧Google認証の残骸を破壊し、GASサーバーの接続リセット機能に生まれ変わらせる
+function switchAccount() { 
+    if (confirm("サーバー接続設定(GAS URL)をリセットして初期状態に戻すか？")) {
+        localStorage.removeItem('jero_gas_url'); 
+        location.reload(); 
+    }
+}
 function exportSettings() { const data = { theme: localStorage.getItem('jero_theme'), fs: localStorage.getItem('jero_fs'), voice: localStorage.getItem('jero_voice_enabled'), gemini_key: localStorage.getItem('jero_gemini_key'), gemini_prompt: localStorage.getItem('jero_gemini_prompt'), dict: localStorage.getItem('jero_adv_dict'), gas_url: localStorage.getItem('jero_gas_url') }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); showToast('✅ 辞書と設定データを書き出した。「ファイル」アプリ等に保存しろ。'); }
 function importSettings() { const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/json'; input.onchange = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (evt) => { try { const data = JSON.parse(evt.target.result); if (data.theme) localStorage.setItem('jero_theme', data.theme); if (data.fs) localStorage.setItem('jero_fs', data.fs); if (data.voice) localStorage.setItem('jero_voice_enabled', data.voice); if (data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key); if (data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt); if (data.gas_url) localStorage.setItem('jero_gas_url', data.gas_url); if (data.dict) { localStorage.setItem('jero_adv_dict', data.dict); advancedDict = JSON.parse(data.dict); } showToast('✅ 過去の記憶（データ）を完全に復元した。再起動するぞ。'); setTimeout(() => location.reload(), 1500); } catch (err) { showToast('❌ ファイルが壊れているか、形式が違うぞ。'); } }; reader.readAsText(file); }; input.click(); }
 function executeEmergencyReset() { 
