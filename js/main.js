@@ -510,7 +510,14 @@ function renderMonthDOM(year, month, data, position) {
                 spacer.className = 'event'; 
                 spacer.style.visibility = 'hidden'; 
                 spacer.innerHTML = '&nbsp;';
-                spacer.style.height = '18px';
+                // ★極限圧縮：高さを14pxまで削る
+                spacer.style.height = '14px';
+                spacer.style.minHeight = '14px';
+                spacer.style.flexShrink = '0';
+                spacer.style.margin = '1px 0';
+                spacer.style.padding = '0 2px';
+                spacer.style.border = '1px solid transparent';
+                spacer.style.boxSizing = 'border-box';
                 spacer.style.minHeight = '18px';
                 spacer.style.flexShrink = '0';
                 spacer.style.margin = '2px 0';
@@ -546,17 +553,64 @@ function renderMonthDOM(year, month, data, position) {
                 txtColor = getContrastYIQ(bgColor);
             }
 
-            // ★ベーススタイル
-            div.style.backgroundColor = bgColor;
-            div.style.color = txtColor;
-            div.style.padding = '2px 4px';
-            div.style.margin = '2px 0';
+            // ★ベーススタイル（スロット高さの極限圧縮と初期化）
             div.style.overflow = 'hidden';
             div.style.whiteSpace = 'nowrap';
-            div.style.position = 'relative'; // セルの壁を越えるためのZインデックス制御
+            div.style.position = 'relative'; 
             div.style.zIndex = '1';
+            div.style.boxSizing = 'border-box';
+            div.style.fontSize = '10px';
+            div.style.fontWeight = '700';
 
             if (spanType !== 'single') {
+                // ★最新技術：ワイヤーフレーム・レンダリング（背景透過・上下線）
+                div.classList.add('continuous');
+                div.classList.add(spanType);
+                div.style.backgroundColor = 'transparent';
+                div.style.color = bgColor; // 文字色を予定の色にする
+                
+                // 上下に1.5pxのシャープな線を引く
+                div.style.borderTop = `1.5px solid ${bgColor}`;
+                div.style.borderBottom = `1.5px solid ${bgColor}`;
+                
+                // 余白の極限圧縮
+                div.style.height = '14px';
+                div.style.lineHeight = '11px';
+                div.style.margin = '1px 0';
+                div.style.padding = '0 2px';
+                div.style.boxShadow = 'none'; // 影を消してフラットに
+
+                // ★壁の破壊と線の完全融合マジック
+                if (spanType === 'span-start') {
+                    div.style.borderLeft = `1.5px solid ${bgColor}`;
+                    div.style.borderRadius = '3px 0 0 3px';
+                    div.style.marginRight = '-6px'; 
+                    div.style.paddingRight = '6px'; 
+                } else if (spanType === 'span-mid') {
+                    div.style.borderRadius = '0';
+                    div.style.borderLeft = 'none';
+                    div.style.borderRight = 'none';
+                    div.style.marginLeft = '-6px';  
+                    div.style.marginRight = '-6px'; 
+                    div.style.color = 'transparent'; // 中間は文字を消して線だけにする
+                } else if (spanType === 'span-end') {
+                    div.style.borderRight = `1.5px solid ${bgColor}`;
+                    div.style.borderRadius = '0 3px 3px 0';
+                    div.style.marginLeft = '-6px';  
+                    div.style.paddingLeft = '6px';
+                    div.style.color = 'transparent'; // 終端も文字を消す
+                }
+            } else {
+                // ★単発予定の極限圧縮（従来のベタ塗り、ただし極薄・極小）
+                div.classList.add('single');
+                div.style.backgroundColor = bgColor;
+                div.style.color = txtColor;
+                div.style.borderRadius = '3px';
+                div.style.height = '14px';
+                div.style.lineHeight = '14px';
+                div.style.margin = '1px 2px';
+                div.style.padding = '0 3px';
+            }
                 div.classList.add('continuous');
                 div.classList.add(spanType);
                 
@@ -607,6 +661,14 @@ function renderMonthDOM(year, month, data, position) {
 
             if (pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; }
             else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
+
+            // ★タスクの極限圧縮
+            div.style.height = '14px';
+            div.style.lineHeight = '14px';
+            div.style.margin = '1px 2px';
+            div.style.padding = '0 3px';
+            div.style.borderRadius = '3px';
+            div.style.fontSize = '10px';
 
             if (isPendingInsert) {
                 div.style.border = `1px dashed var(--txt)`;
