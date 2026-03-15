@@ -518,12 +518,6 @@ function renderMonthDOM(year, month, data, position) {
                 spacer.style.padding = '0 2px';
                 spacer.style.border = '1px solid transparent';
                 spacer.style.boxSizing = 'border-box';
-                spacer.style.minHeight = '18px';
-                spacer.style.flexShrink = '0';
-                spacer.style.margin = '2px 0';
-                spacer.style.padding = '2px 4px';
-                spacer.style.border = '1px solid transparent';
-                spacer.style.boxSizing = 'border-box';
                 dayEl.appendChild(spacer);
                 return;
             }
@@ -611,29 +605,6 @@ function renderMonthDOM(year, month, data, position) {
                 div.style.margin = '1px 2px';
                 div.style.padding = '0 3px';
             }
-                div.classList.add('continuous');
-                div.classList.add(spanType);
-                
-                // ★究極の接続マジック：マイナスマージンでセルの壁(BorderとPadding)を物理的に破壊し、隣と融合させる
-                if (spanType === 'span-start') {
-                    div.style.borderRadius = '4px 0 0 4px';
-                    div.style.marginRight = '-6px'; // 右の壁を破壊
-                    div.style.paddingRight = '6px'; // テキスト切れ補正
-                } else if (spanType === 'span-mid') {
-                    div.style.borderRadius = '0';
-                    div.style.marginLeft = '-6px';  // 左の壁を破壊
-                    div.style.marginRight = '-6px'; // 右の壁を破壊
-                    div.style.color = 'transparent'; // 文字を消す
-                } else if (spanType === 'span-end') {
-                    div.style.borderRadius = '0 4px 4px 0';
-                    div.style.marginLeft = '-6px';  // 左の壁を破壊
-                    div.style.paddingLeft = '6px';
-                    div.style.color = 'transparent'; // 文字を消す
-                }
-            } else {
-                div.classList.add('single');
-                div.style.borderRadius = '4px';
-            }
 
             if (isPendingInsert || isPendingUpdate) {
                 div.style.border = `1px dashed ${txtColor}`;
@@ -648,39 +619,7 @@ function renderMonthDOM(year, month, data, position) {
             dayEl.appendChild(div);
         });
 
-        if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
-            const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`;
-            const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : '';
-
-            const isPendingInsert = t._localId ? true : false;
-            const isPendingDelete = t._pendingDelete ? true : false;
-            const insertIcon = isPendingInsert ? '➕🔄 ' : '';
-            const deleteIcon = isPendingDelete ? '🗑️ ' : '';
-
-            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${deleteIcon}${insertIcon}${recurIcon}${pData.text}`;
-
-            if (pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; }
-            else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
-
-            // ★タスクの極限圧縮
-            div.style.height = '14px';
-            div.style.lineHeight = '14px';
-            div.style.margin = '1px 2px';
-            div.style.padding = '0 3px';
-            div.style.borderRadius = '3px';
-            div.style.fontSize = '10px';
-
-            if (isPendingInsert) {
-                div.style.border = `1px dashed var(--txt)`;
-                div.style.opacity = '0.8';
-            }
-            if (isPendingDelete) {
-                div.style.textDecoration = 'line-through';
-                div.style.opacity = '0.4';
-                div.style.filter = 'grayscale(100%)';
-            }
-            dayEl.appendChild(div);
-        });
+       V
         grid.appendChild(dayEl);
     }
     const container = document.getElementById('calendar-wrapper');
