@@ -511,9 +511,12 @@ function renderMonthDOM(year, month, data, position) {
                 spacer.style.visibility = 'hidden'; 
                 spacer.innerHTML = '&nbsp;';
                 spacer.style.height = '18px';
+                spacer.style.minHeight = '18px';
+                spacer.style.flexShrink = '0';
                 spacer.style.margin = '2px 0';
                 spacer.style.padding = '2px 4px';
                 spacer.style.border = '1px solid transparent';
+                spacer.style.boxSizing = 'border-box';
                 dayEl.appendChild(spacer);
                 return;
             }

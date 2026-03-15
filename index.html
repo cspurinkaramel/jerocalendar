@@ -118,24 +118,26 @@
 
         .event,
         .task {
-            padding: 1px 4px !important;
-            margin: 1px 2px !important;
+            height: 18px !important;
+            min-height: 18px !important;
+            flex-shrink: 0 !important;
+            padding: 2px 4px !important;
+            margin: 2px 0 !important;
             border-radius: 4px !important;
             font-size: 10px !important;
-            line-height: 1.15 !important;
+            line-height: 14px !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: clip !important;
             font-weight: 500 !important;
             position: relative;
             z-index: 5;
+            box-sizing: border-box !important;
         }
 
         /* ★連続予定の線画スタイル化（限界突破） */
         .event.continuous {
             border-radius: 0 !important;
-            margin-top: 2px !important;
-            padding-top: 2px !important;
         }
 
         /* 初日のセルだけoverflowを開放し、Zインデックスを極限まで上げる */

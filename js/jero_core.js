@@ -331,7 +331,7 @@ async function sendToJero() {
                 throw new Error("思考の限界を超えた。少し休ませてくれ。(API制限: 429)");
             }
             try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } 
-            throw new Error(`API拒否: ${errTxt}`); 
+            throw new Error(`API通信エラーだ: ${errTxt}`); 
         }
 
         const data = await response.json(); 
