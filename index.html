@@ -117,50 +117,17 @@
             left: 2px;
         }
 
-        .event,
+.event,
         .task {
-            height: 18px !important;
-            min-height: 18px !important;
-            flex-shrink: 0 !important;
-            padding: 2px 4px !important;
-            margin: 2px 0 !important;
-            border-radius: 4px !important;
-            font-size: 10px !important;
-            line-height: 14px !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: clip !important;
-            font-weight: 500 !important;
             position: relative;
             z-index: 5;
+            font-weight: 700;
             box-sizing: border-box !important;
         }
-
-        /* ★連続予定の線画スタイル化（限界突破） */
-        .event.continuous {
-            border-radius: 0 !important;
-        }
-
-        /* 初日のセルだけoverflowを開放し、Zインデックスを極限まで上げる */
+        
         .event.continuous.span-start {
-            margin-right: -2px !important;
-            padding-right: 6px !important;
-            border-top-left-radius: 2px !important;
             overflow: visible !important;
             z-index: 20;
-        }
-
-        .event.continuous.span-mid {
-            margin-left: -2px !important;
-            margin-right: -2px !important;
-            padding-left: 6px !important;
-            padding-right: 6px !important;
-        }
-
-        .event.continuous.span-end {
-            margin-left: -2px !important;
-            padding-left: 6px !important;
-            border-top-right-radius: 2px !important;
         }
 
         .day.selected {
