@@ -432,7 +432,7 @@ function renderMonthDOM(year, month, data, position) {
 
     // ★連続予定（期間が長いもの）を最優先で上に持ってくる高度なソート
     const getEventDuration = (e) => {
-        if (!e || !e.start || !e.end) return 0; // ★防波堤：データが欠損している場合は長さゼロ(単日)として安全に処理
+        if (!e || !e.start || !e.end) return 0;
         if (e.start.date && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); }
         if (e.start.dateTime && e.end.dateTime) { return new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime(); }
         return 0;
@@ -450,7 +450,6 @@ function renderMonthDOM(year, month, data, position) {
     const today = new Date();
 
     // ★第一原理：「スロット（段組み）固定アルゴリズム」の導入
-    // まず、この月の全日付に対して空のスロット（配列）を用意する
     const slotMap = {};
     for (let i = 1; i <= daysInMonth; i++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
@@ -460,8 +459,6 @@ function renderMonthDOM(year, month, data, position) {
     // 全ての予定を長さ順・開始時間順に舐めながら、スロットを予約していく
     sortedEvents.forEach(e => {
         if (!e.start) return;
-        
-        // この予定が「この月のどの日に表示されるか」を全て洗い出す
         const occupiedDates = [];
         for (let i = 1; i <= daysInMonth; i++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
@@ -476,21 +473,17 @@ function renderMonthDOM(year, month, data, position) {
                 occupiedDates.push(dateStr);
             }
         }
-
         if (occupiedDates.length === 0) return;
 
-        // 洗い出した全ての日付で「共通して空いている最も上の段（スロット）」を探す
         let slotIndex = 0;
         while (true) {
             let isFree = true;
             for (const d of occupiedDates) {
-                if (slotMap[d][slotIndex]) { isFree = false; break; } // 誰かが座っていればダメ
+                if (slotMap[d][slotIndex]) { isFree = false; break; } 
             }
-            if (isFree) break; // 全員座っていなければ、その段に決定
+            if (isFree) break; 
             slotIndex++;
         }
-
-        // 決定したスロット（段）に自分を登録し、空きスペースにはnull（透明スペーサー）を詰める
         for (const d of occupiedDates) {
             while (slotMap[d].length <= slotIndex) slotMap[d].push(null);
             slotMap[d][slotIndex] = e;
@@ -619,7 +612,40 @@ function renderMonthDOM(year, month, data, position) {
             dayEl.appendChild(div);
         });
 
-       V
+        if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
+            const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`;
+            const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : '';
+
+            const isPendingInsert = t._localId ? true : false;
+            const isPendingDelete = t._pendingDelete ? true : false;
+            const insertIcon = isPendingInsert ? '➕🔄 ' : '';
+            const deleteIcon = isPendingDelete ? '🗑️ ' : '';
+
+            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${deleteIcon}${insertIcon}${recurIcon}${pData.text}`;
+
+            if (pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; }
+            else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
+
+            // ★タスクの極限圧縮
+            div.style.height = '14px';
+            div.style.lineHeight = '14px';
+            div.style.margin = '1px 2px';
+            div.style.padding = '0 3px';
+            div.style.borderRadius = '3px';
+            div.style.fontSize = '10px';
+            div.style.boxSizing = 'border-box';
+
+            if (isPendingInsert) {
+                div.style.border = `1px dashed var(--txt)`;
+                div.style.opacity = '0.8';
+            }
+            if (isPendingDelete) {
+                div.style.textDecoration = 'line-through';
+                div.style.opacity = '0.4';
+                div.style.filter = 'grayscale(100%)';
+            }
+            dayEl.appendChild(div);
+        });
         grid.appendChild(dayEl);
     }
     const container = document.getElementById('calendar-wrapper');
