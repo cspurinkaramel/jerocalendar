@@ -325,7 +325,14 @@ async function sendToJero() {
             body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
         });
 
-        if (!response.ok) { let errTxt = response.status; try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } throw new Error(`API拒否: ${errTxt}`); }
+        if (!response.ok) { 
+            let errTxt = response.status; 
+            if (response.status === 429) {
+                throw new Error("思考の限界を超えた。少し休ませてくれ。(API制限: 429)");
+            }
+            try { const errObj = await response.json(); errTxt += " " + (errObj.error && errObj.error.message ? errObj.error.message : JSON.stringify(errObj)); } catch (e) { } 
+            throw new Error(`API拒否: ${errTxt}`); 
+        }
 
         const data = await response.json(); 
         let aiText = "";
@@ -342,7 +349,15 @@ async function sendToJero() {
         let cleanJsonStr = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
         const matchObj = cleanJsonStr.match(/\{[\s\S]*\}/); if (matchObj) cleanJsonStr = matchObj[0]; cleanJsonStr = cleanJsonStr.replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
 
-        let result; try { result = JSON.parse(cleanJsonStr); } catch (parseErr) { thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【AIが形式を間違えた】\n${cleanJsonStr}`; return; }
+        let result; 
+        try { 
+            result = JSON.parse(cleanJsonStr); 
+        } catch (parseErr) { 
+            thinkingEl.classList.remove('pulse-think'); 
+            let chatText = cleanJsonStr.replace(/["{}[\]]/g, '').trim();
+            thinkingEl.innerText = chatText.substring(0, 150) || "フッ、言葉がうまくまとまらないな。もう一度言ってくれ。"; 
+            return; 
+        }
         thinkingEl.classList.remove('pulse-think');
 
         thinkingEl.innerText = result.reply || "処理完了。";

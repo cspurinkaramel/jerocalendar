@@ -417,7 +417,7 @@ async function openDailyModal(dateStr, dow) {
     const monthKey = `${y}-${parseInt(m) - 1}`; const data = dataCache[monthKey]; let hasItems = false;
     let modalItems = [];
     if (data) {
-        if (data.events) { const events = data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return td && td.includes(dateStr) || (e.start.date && isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({ type: 'event', data: e })); }
+        if (data.events) { const events = data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({ type: 'event', data: e })); }
         if (data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({ type: 'task', data: t })); }
     }
     modalItems.sort((a, b) => { const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0; const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0; return aIsCompleted - bIsCompleted; });
@@ -510,6 +510,7 @@ function renderMonthDOM(year, month, data, position) {
                 spacer.className = 'event'; 
                 spacer.style.visibility = 'hidden'; 
                 spacer.innerHTML = '&nbsp;';
+                spacer.style.height = '18px';
                 spacer.style.margin = '2px 0';
                 spacer.style.padding = '2px 4px';
                 spacer.style.border = '1px solid transparent';
