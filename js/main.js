@@ -786,8 +786,8 @@ function openEditor(e = null) {
     startInput.type = isAllDay ? 'date' : 'datetime-local';
     endInput.type = isAllDay ? 'date' : 'datetime-local';
     if (isAllDay) {
-        startInput.value = st.toISOString().split('T')[0];
-        endInput.value = ed.toISOString().split('T')[0];
+        startInput.value = `${st.getFullYear()}-${String(st.getMonth() + 1).padStart(2, '0')}-${String(st.getDate()).padStart(2, '0')}`;
+        endInput.value = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
     }
     else {
         const tzOffset = st.getTimezoneOffset() * 60000;
@@ -890,7 +890,13 @@ function openTaskEditor(t = null) {
     if (t && t.notes) { const extracted = extractTaskData(t.notes); cleanNotes = extracted.cleanNotes; selectTaskColor(null, extracted.colorId); } else { selectTaskColor(null, ''); }
     document.getElementById('task-edit-notes').value = cleanNotes;
     const dueInput = document.getElementById('task-edit-due');
-    if (t && t.due) { dueInput.value = new Date(t.due).toISOString().split('T')[0]; } else { dueInput.value = selectedDateStr || new Date().toISOString().split('T')[0]; }
+    if (t && t.due) { 
+        const d = new Date(t.due); 
+        dueInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
+    } else { 
+        const d = new Date(); 
+        dueInput.value = selectedDateStr || `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
+    }
     document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';
     const convertBtn = document.getElementById('btn-convert-event'); if (convertBtn) convertBtn.style.display = t ? 'block' : 'none';
     renderIconPalette('task-icon-palette', 'task-edit-title');
@@ -954,7 +960,10 @@ async function executeConversion(fromType) {
         if (id) deleteAction = { type: 'task', method: 'delete', id: id };
         insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, colorId: colorId };
         if (dueVal) { let parts = dueVal.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); insertAction.start = dueVal; const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1); insertAction.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`; }
-        else { insertAction.start = new Date().toISOString().split('T')[0]; const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = tmrw.toISOString().split('T')[0]; }
+        else { 
+            const td = new Date(); insertAction.start = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`; 
+            const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`; 
+        }
     }
     // UIを即座に閉じる（画面ロックなし）
     closeEditor(); closeTaskEditor(); closeAllModals();
@@ -1000,7 +1009,7 @@ async function dispatchManualAction(action) {
     const msgType = action.type === 'event' ? '予定' : 'タスク';
 
     // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復
-    let safeToday = new Date().toISOString().split('T')[0];
+    const _td1 = new Date(); let safeToday = `${_td1.getFullYear()}-${String(_td1.getMonth() + 1).padStart(2, '0')}-${String(_td1.getDate()).padStart(2, '0')}`;
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
     if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; }
     if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
@@ -1081,7 +1090,7 @@ async function dispatchManualAction(action) {
 
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
     // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復する
-    let safeToday = new Date().toISOString().split('T')[0];
+    const _td2 = new Date(); let safeToday = `${_td2.getFullYear()}-${String(_td2.getMonth() + 1).padStart(2, '0')}-${String(_td2.getDate()).padStart(2, '0')}`;
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
     if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; }
     if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
