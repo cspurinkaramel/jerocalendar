@@ -337,10 +337,14 @@ function isEventSpanning(eventObj, dateStr) {
         edDate.setDate(edDate.getDate() - 1); 
         edDateStr = `${edDate.getFullYear()}-${String(edDate.getMonth() + 1).padStart(2, '0')}-${String(edDate.getDate()).padStart(2, '0')}`;
     } else if (eventObj.start.dateTime && eventObj.end.dateTime) {
-        // ★UTCの時差ズレを破壊：一度ローカルのDateに戻し、確実にお前のいる国の「年-月-日」を抽出する
         const stD = new Date(eventObj.start.dateTime);
         stDateStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`;
+        
         const edD = new Date(eventObj.end.dateTime);
+        // ★深夜0時終了の予定を「前日終了」として正しく補正する
+        if (edD.getHours() === 0 && edD.getMinutes() === 0) {
+            edD.setDate(edD.getDate() - 1);
+        }
         edDateStr = `${edD.getFullYear()}-${String(edD.getMonth() + 1).padStart(2, '0')}-${String(edD.getDate()).padStart(2, '0')}`;
     } else { return 'single'; }
 
@@ -512,9 +516,8 @@ function renderMonthDOM(year, month, data, position) {
                 spacer.className = 'event'; 
                 spacer.style.visibility = 'hidden'; 
                 spacer.innerHTML = '&nbsp;';
-                // ★極限圧縮：高さを12pxまで削る
-                spacer.style.height = '12px';
-                spacer.style.minHeight = '12px';
+                spacer.style.height = '14px';
+                spacer.style.minHeight = '14px';
                 spacer.style.flexShrink = '0';
                 spacer.style.margin = '1px 0';
                 spacer.style.padding = '0';
@@ -549,7 +552,7 @@ function renderMonthDOM(year, month, data, position) {
                 txtColor = getContrastYIQ(bgColor);
             }
 
-            // ★ベーススタイル（スロット高さ12pxの限界設定）
+            // ★ベーススタイル（絶対固定）
             div.style.overflow = 'hidden';
             div.style.whiteSpace = 'nowrap';
             div.style.position = 'relative'; 
@@ -559,18 +562,17 @@ function renderMonthDOM(year, month, data, position) {
             div.style.fontWeight = '700';
 
             if (spanType !== 'single') {
-                // ★最新技術：太めのアンダーライン・スタイル
+                // ★連続予定：絶対アンダーラインスタイル
                 div.classList.add('continuous');
                 div.classList.add(spanType);
-                div.style.backgroundColor = 'transparent';
+                div.style.background = 'transparent'; // 旧コードの残骸を強制上書き
                 div.style.color = bgColor; 
                 
-                // 上の線を消し、下に3pxの太い線を引く
                 div.style.borderTop = 'none';
                 div.style.borderBottom = `3px solid ${bgColor}`;
                 
-                div.style.height = '14px'; // 文字(10px)＋下線(3px)を綺麗に収める
-                div.style.lineHeight = '11px'; 
+                div.style.height = '14px';
+                div.style.lineHeight = '11px';
                 div.style.margin = '1px 0';
                 div.style.padding = '0 2px';
                 div.style.boxShadow = 'none'; 
@@ -595,15 +597,15 @@ function renderMonthDOM(year, month, data, position) {
                     div.style.color = 'transparent'; 
                 }
             } else {
-                // ★単発予定の12px極限圧縮
+                // ★単発予定
                 div.classList.add('single');
-                div.style.backgroundColor = bgColor;
+                div.style.background = bgColor;
                 div.style.color = txtColor;
                 div.style.borderRadius = '3px';
-                div.style.height = '12px';
-                div.style.lineHeight = '12px';
+                div.style.height = '14px';
+                div.style.lineHeight = '14px';
                 div.style.margin = '1px 2px';
-                div.style.padding = '0 2px';
+                div.style.padding = '0 3px';
             }
 
             if (isPendingInsert || isPendingUpdate) {
@@ -630,14 +632,13 @@ function renderMonthDOM(year, month, data, position) {
 
             div.innerHTML = `<span style="opacity:0.8;">☑</span> ${deleteIcon}${insertIcon}${recurIcon}${pData.text}`;
 
-            if (pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; }
-            else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
+            if (pData.style) { div.style.background = pData.style.bg; div.style.color = pData.style.txt; }
+            else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.background = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
 
-            // ★タスクの12px極限圧縮
-            div.style.height = '12px';
-            div.style.lineHeight = '12px';
+            div.style.height = '14px';
+            div.style.lineHeight = '14px';
             div.style.margin = '1px 2px';
-            div.style.padding = '0 2px';
+            div.style.padding = '0 3px';
             div.style.borderRadius = '3px';
             div.style.fontSize = '10px';
             div.style.boxSizing = 'border-box';
