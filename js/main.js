@@ -430,7 +430,6 @@ function renderMonthDOM(year, month, data, position) {
     if (!data) return; const wrapper = document.createElement('div'); wrapper.className = 'month-wrapper'; wrapper.id = `month-${year}-${month}`; wrapper.innerHTML = `<div class="month-title">${year}年 ${month + 1}月</div><div class="calendar-grid"></div>`; const grid = wrapper.querySelector('.calendar-grid');
     const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); for (let i = 0; i < firstDay; i++) { const empty = document.createElement('div'); empty.className = 'day empty'; empty.style.backgroundColor = 'var(--head-bg)'; grid.appendChild(empty); }
 
-    // ★連続予定（期間が長いもの）を最優先で上に持ってくる高度なソート
     const getEventDuration = (e) => {
         if (!e || !e.start || !e.end) return 0;
         if (e.start.date && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); }
@@ -439,24 +438,22 @@ function renderMonthDOM(year, month, data, position) {
     };
     const sortedEvents = [...data.events].sort((a, b) => {
         const durA = getEventDuration(a); const durB = getEventDuration(b);
-        if (durA !== durB) return durB - durA; // 期間が長い順
+        if (durA !== durB) return durB - durA; 
         const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0;
-        if (aAllDay !== bAllDay) return bAllDay - aAllDay; // 終日優先
+        if (aAllDay !== bAllDay) return bAllDay - aAllDay; 
         const tA = a.start && (a.start.dateTime || a.start.date) ? new Date(a.start.dateTime || a.start.date).getTime() : 0;
         const tB = b.start && (b.start.dateTime || b.start.date) ? new Date(b.start.dateTime || b.start.date).getTime() : 0;
-        if (tA !== tB) return tA - tB; // 開始時間が早い順
-        return (a.id || "").localeCompare(b.id || ""); // ★最後の砦：同じ時間帯ならID順で段組みを絶対固定し、線のガタツキを防ぐ
+        if (tA !== tB) return tA - tB; 
+        return (a.id || "").localeCompare(b.id || ""); 
     });
     const today = new Date();
 
-    // ★第一原理：「スロット（段組み）固定アルゴリズム」の導入
     const slotMap = {};
     for (let i = 1; i <= daysInMonth; i++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
         slotMap[dateStr] = [];
     }
 
-    // 全ての予定を長さ順・開始時間順に舐めながら、スロットを予約していく
     sortedEvents.forEach(e => {
         if (!e.start) return;
         const occupiedDates = [];
@@ -495,7 +492,6 @@ function renderMonthDOM(year, month, data, position) {
         if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today';
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-num">${i}</div>`;
 
-        // ★スロット順に描画（nullの場合は透明なスペーサーを置く）
         const slots = slotMap[dateStr] || [];
         slots.forEach(e => {
             if (!e) {
@@ -503,12 +499,12 @@ function renderMonthDOM(year, month, data, position) {
                 spacer.className = 'event'; 
                 spacer.style.visibility = 'hidden'; 
                 spacer.innerHTML = '&nbsp;';
-                // ★極限圧縮：高さを14pxまで削る
-                spacer.style.height = '14px';
-                spacer.style.minHeight = '14px';
+                // ★極限圧縮：高さを12pxまで削る
+                spacer.style.height = '12px';
+                spacer.style.minHeight = '12px';
                 spacer.style.flexShrink = '0';
                 spacer.style.margin = '1px 0';
-                spacer.style.padding = '0 2px';
+                spacer.style.padding = '0';
                 spacer.style.border = '1px solid transparent';
                 spacer.style.boxSizing = 'border-box';
                 dayEl.appendChild(spacer);
@@ -540,7 +536,7 @@ function renderMonthDOM(year, month, data, position) {
                 txtColor = getContrastYIQ(bgColor);
             }
 
-            // ★ベーススタイル（スロット高さの極限圧縮と初期化）
+            // ★ベーススタイル（スロット高さ12pxの限界設定）
             div.style.overflow = 'hidden';
             div.style.whiteSpace = 'nowrap';
             div.style.position = 'relative'; 
@@ -550,26 +546,24 @@ function renderMonthDOM(year, month, data, position) {
             div.style.fontWeight = '700';
 
             if (spanType !== 'single') {
-                // ★最新技術：ワイヤーフレーム・レンダリング（背景透過・上下線）
+                // ★最新技術：ワイヤーフレーム極限圧縮
                 div.classList.add('continuous');
                 div.classList.add(spanType);
                 div.style.backgroundColor = 'transparent';
-                div.style.color = bgColor; // 文字色を予定の色にする
+                div.style.color = bgColor; 
                 
-                // 上下に1.5pxのシャープな線を引く
-                div.style.borderTop = `1.5px solid ${bgColor}`;
-                div.style.borderBottom = `1.5px solid ${bgColor}`;
+                // 上下に1pxの極細線を引く
+                div.style.borderTop = `1px solid ${bgColor}`;
+                div.style.borderBottom = `1px solid ${bgColor}`;
                 
-                // 余白の極限圧縮
-                div.style.height = '14px';
-                div.style.lineHeight = '11px';
+                div.style.height = '12px';
+                div.style.lineHeight = '10px'; // 12px - (上1px + 下1px) = 10px空間
                 div.style.margin = '1px 0';
                 div.style.padding = '0 2px';
-                div.style.boxShadow = 'none'; // 影を消してフラットに
+                div.style.boxShadow = 'none'; 
 
-                // ★壁の破壊と線の完全融合マジック
                 if (spanType === 'span-start') {
-                    div.style.borderLeft = `1.5px solid ${bgColor}`;
+                    div.style.borderLeft = `1px solid ${bgColor}`;
                     div.style.borderRadius = '3px 0 0 3px';
                     div.style.marginRight = '-6px'; 
                     div.style.paddingRight = '6px'; 
@@ -579,24 +573,24 @@ function renderMonthDOM(year, month, data, position) {
                     div.style.borderRight = 'none';
                     div.style.marginLeft = '-6px';  
                     div.style.marginRight = '-6px'; 
-                    div.style.color = 'transparent'; // 中間は文字を消して線だけにする
+                    div.style.color = 'transparent'; 
                 } else if (spanType === 'span-end') {
-                    div.style.borderRight = `1.5px solid ${bgColor}`;
+                    div.style.borderRight = `1px solid ${bgColor}`;
                     div.style.borderRadius = '0 3px 3px 0';
                     div.style.marginLeft = '-6px';  
                     div.style.paddingLeft = '6px';
-                    div.style.color = 'transparent'; // 終端も文字を消す
+                    div.style.color = 'transparent'; 
                 }
             } else {
-                // ★単発予定の極限圧縮（従来のベタ塗り、ただし極薄・極小）
+                // ★単発予定の12px極限圧縮
                 div.classList.add('single');
                 div.style.backgroundColor = bgColor;
                 div.style.color = txtColor;
                 div.style.borderRadius = '3px';
-                div.style.height = '14px';
-                div.style.lineHeight = '14px';
+                div.style.height = '12px';
+                div.style.lineHeight = '12px';
                 div.style.margin = '1px 2px';
-                div.style.padding = '0 3px';
+                div.style.padding = '0 2px';
             }
 
             if (isPendingInsert || isPendingUpdate) {
@@ -626,11 +620,11 @@ function renderMonthDOM(year, month, data, position) {
             if (pData.style) { div.style.backgroundColor = pData.style.bg; div.style.color = pData.style.txt; }
             else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.backgroundColor = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
 
-            // ★タスクの極限圧縮
-            div.style.height = '14px';
-            div.style.lineHeight = '14px';
+            // ★タスクの12px極限圧縮
+            div.style.height = '12px';
+            div.style.lineHeight = '12px';
             div.style.margin = '1px 2px';
-            div.style.padding = '0 3px';
+            div.style.padding = '0 2px';
             div.style.borderRadius = '3px';
             div.style.fontSize = '10px';
             div.style.boxSizing = 'border-box';
