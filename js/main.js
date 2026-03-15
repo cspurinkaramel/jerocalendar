@@ -1221,9 +1221,60 @@ window.addEventListener('offline', async () => {
     await updateSyncBadge();
 });
 
+// ★生命維持装置：サイレント・リフレッシュ機能（無音・無演出の完全同期）
+async function executeSilentRefresh() {
+    if (!navigator.onLine || isAuthError || isFetching) return;
+    
+    // オフライン退避中のデータがある場合は、コンフリクトを防ぐため同期を一時停止する
+    const queue = await getSyncQueue();
+    if (queue.length > 0) return; 
+
+    const monthsToRefresh = [...renderedMonths];
+    if (monthsToRefresh.length === 0) return;
+
+    let isUpdated = false;
+    for (const m of monthsToRefresh) {
+        try {
+            const url = `${getGasUrl()}?year=${m.year}&month=${m.month}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.success) {
+                const monthKey = `${m.year}-${m.month}`;
+                const oldDataStr = JSON.stringify(dataCache[monthKey]);
+                const newDataStr = JSON.stringify({ events: data.events || [], tasks: data.tasks || [] });
+                
+                // ★ハッシュ比較：1文字でも差分がある時だけDOMを書き換える（無駄なガタツキの完全防止）
+                if (oldDataStr !== newDataStr) {
+                    dataCache[monthKey] = { events: data.events || [], tasks: data.tasks || [] };
+                    saveDataCacheToIDB(monthKey, dataCache[monthKey]);
+                    
+                    const existingMonth = document.getElementById(`month-${m.year}-${m.month}`);
+                    if (existingMonth) {
+                        existingMonth.remove();
+                        renderMonthDOM(m.year, m.month, dataCache[monthKey], 'replace');
+                    }
+                    isUpdated = true;
+                }
+            }
+        } catch (e) { 
+            console.warn("サイレント同期スキップ:", e); 
+        }
+    }
+
+    // もし詳細ビュー（画面下部）を開いたまま復帰した場合、その中身も静かに最新化する
+    if (isUpdated && typeof selectedDateStr !== 'undefined' && selectedDateStr) {
+        const modal = document.getElementById('daily-modal');
+        if (modal && modal.classList.contains('active')) {
+            openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+        }
+    }
+}
+
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         processSyncQueue();
+        executeSilentRefresh();
     }
 });
 
