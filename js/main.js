@@ -559,25 +559,25 @@ function renderMonthDOM(year, month, data, position) {
             div.style.fontWeight = '700';
 
             if (spanType !== 'single') {
-                // ★最新技術：ワイヤーフレーム極限圧縮
+                // ★最新技術：太めのアンダーライン・スタイル
                 div.classList.add('continuous');
                 div.classList.add(spanType);
                 div.style.backgroundColor = 'transparent';
                 div.style.color = bgColor; 
                 
-                // 上下に1pxの極細線を引く
-                div.style.borderTop = `1px solid ${bgColor}`;
-                div.style.borderBottom = `1px solid ${bgColor}`;
+                // 上の線を消し、下に3pxの太い線を引く
+                div.style.borderTop = 'none';
+                div.style.borderBottom = `3px solid ${bgColor}`;
                 
-                div.style.height = '12px';
-                div.style.lineHeight = '10px'; // 12px - (上1px + 下1px) = 10px空間
+                div.style.height = '14px'; // 文字(10px)＋下線(3px)を綺麗に収める
+                div.style.lineHeight = '11px'; 
                 div.style.margin = '1px 0';
                 div.style.padding = '0 2px';
                 div.style.boxShadow = 'none'; 
 
                 if (spanType === 'span-start') {
-                    div.style.borderLeft = `1px solid ${bgColor}`;
-                    div.style.borderRadius = '3px 0 0 3px';
+                    div.style.borderLeft = 'none';
+                    div.style.borderRadius = '0'; 
                     div.style.marginRight = '-6px'; 
                     div.style.paddingRight = '6px'; 
                 } else if (spanType === 'span-mid') {
@@ -588,8 +588,8 @@ function renderMonthDOM(year, month, data, position) {
                     div.style.marginRight = '-6px'; 
                     div.style.color = 'transparent'; 
                 } else if (spanType === 'span-end') {
-                    div.style.borderRight = `1px solid ${bgColor}`;
-                    div.style.borderRadius = '0 3px 3px 0';
+                    div.style.borderRight = 'none';
+                    div.style.borderRadius = '0';
                     div.style.marginLeft = '-6px';  
                     div.style.paddingLeft = '6px';
                     div.style.color = 'transparent'; 

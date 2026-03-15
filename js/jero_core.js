@@ -318,11 +318,10 @@ async function sendToJero() {
     if (conversationHistory.length > 6) { conversationHistory = conversationHistory.slice(conversationHistory.length - 6); }
 
     try {
-        // ★感情を解放するため、JSON強制モードの手枷(generationConfig)を完全に破壊する
-        // ★APIを安定のJSONモードに戻す
+        // ★感情を解放するため、JSON強制モードの手枷(generationConfig)を完全に破壊し、自由な対話を許可する
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
+            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory })
         });
 
         if (!response.ok) { 
