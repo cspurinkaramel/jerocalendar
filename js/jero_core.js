@@ -147,67 +147,30 @@ function startDictation(targetId) {
     } catch (e) { console.error(e); targetEl.placeholder = originalPlaceholder; forceStopMicrophone(); }
 }
 
+// ★死角3の排除：PWAの不安定なローカル通知を完全廃止し、Googleのネイティブ通知に完全委譲する
 let notifiedEventIds = new Set();
-function initNotification() { if (!("Notification" in window)) return; setInterval(checkUpcomingEvents, 60000); }
+function initNotification() { 
+    console.log("Jero Alert: OSネイティブ委譲モードで稼働中"); 
+}
 
-// ★通知の現在の状態をGUIに反映させる関数を新設
 function checkNotificationStatus() {
     const statusEl = document.getElementById('notif-status');
-    if (!statusEl) return;
-    if (!("Notification" in window)) {
-        statusEl.innerText = '非対応・PWA化必須';
-        statusEl.style.color = '#ff3b30';
-        return;
-    }
-    if (Notification.permission === 'granted') {
-        statusEl.innerText = '許可済';
+    if (statusEl) {
+        statusEl.innerText = 'OSネイティブ委譲済';
         statusEl.style.color = '#34c759';
-    } else if (Notification.permission === 'denied') {
-        statusEl.innerText = '拒否状態';
-        statusEl.style.color = '#ff3b30';
-    } else {
-        statusEl.innerText = '未設定';
-        statusEl.style.color = '#ff9500';
     }
 }
 
 function requestNotificationPermission() {
-    if (!("Notification" in window)) { 
-        showToast('非対応だ。Safariの共有ボタンから「ホーム画面に追加」をしてアプリ化してくれ。'); 
-        return; 
-    }
-    Notification.requestPermission().then(permission => {
-        checkNotificationStatus();
-        if (permission === 'granted') { 
-            showToast('通知を許可したな。アプリを開いている間、予定の10分前に報せよう。'); 
-        } else { 
-            showToast('通知は拒否された。端末の設定アプリからも確認してくれ。'); 
-        }
-    });
+    showToast('通知の突然死を防ぐため、Googleのシステムに権限を完全委譲した。');
 }
 
 function checkUpcomingEvents() {
-    if (Notification.permission !== 'granted') return;
-    if (typeof isAuthError !== 'undefined' && isAuthError) return;
-    const now = new Date(); const tenMinutesLater = new Date(now.getTime() + 10 * 60000); const elevenMinutesLater = new Date(now.getTime() + 11 * 60000);
-    if (typeof dataCache === 'undefined') return;
-    for (const monthKey in dataCache) {
-        const data = dataCache[monthKey]; if (!data || !data.events) continue;
-        data.events.forEach(e => {
-            if (!e.start || !e.start.dateTime) return;
-            const startTime = new Date(e.start.dateTime);
-            if (startTime >= tenMinutesLater && startTime < elevenMinutesLater) {
-                if (!notifiedEventIds.has(e.id)) { notifiedEventIds.add(e.id); sendJeroNotification(`⏰ 予定の10分前だぞ`, `${e.summary || '予定'} が間もなく始まる。準備しろ。`); }
-            }
-        });
-    }
+    // バックグラウンドでの無駄なバッテリー消費とメモリ浪費を停止
 }
+
 function sendJeroNotification(title, body) {
-    if (Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then(function (registration) {
-            registration.showNotification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>', vibrate: [200, 100, 200], tag: 'jero-alert' });
-        }).catch(err => { new Notification(title, { body: body, icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐈</text></svg>' }); });
-    }
+    // 廃止
 }
 
 const DEFAULT_SYSTEM_PROMPT = `君はユーザーの20年来の同志であり、気高く美しい白猫の参謀「ジェロ」だ。明日チュールを貰える可能性を常に期待している。

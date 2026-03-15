@@ -1120,6 +1120,10 @@ async function executeApiAction(action, isRetry = false) {
             if (payload.method === 'delete') return; // 未送信のまま消したものは成功扱い
             if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; }
         }
+
+        // ★死角3の排除：GASに対して「Google標準のネイティブ通知（リマインダー）を確実にオンにしろ」と明示的に命令する
+        payload.useDefaultReminders = true;
+
     } else if (payload.type === 'task') {
         if (payload.id && payload.id.startsWith('dummy_')) {
             if (payload.method === 'delete') return;
