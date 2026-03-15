@@ -318,10 +318,10 @@ async function sendToJero() {
     if (conversationHistory.length > 6) { conversationHistory = conversationHistory.slice(conversationHistory.length - 6); }
 
     try {
-        // ★感情を解放するため、JSON強制モードの手枷(generationConfig)を完全に破壊し、自由な対話を許可する
+        // ★JSON強制モード(手枷)を再装着する。これを外すとAPIが雑談時に空の応答を返すことが判明した。
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory })
+            body: JSON.stringify({ system_instruction: { parts: [{ text: sysPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
         });
 
         if (!response.ok) { 
@@ -338,7 +338,7 @@ async function sendToJero() {
         
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
             console.warn("APIから空の応答。フォールバックを実行する。");
-            aiText = JSON.stringify({ reply: "フッ、頭脳が空転した。1分ほど待ってから言ってくれ。", actions: [] });
+            aiText = JSON.stringify({ reply: "ん？どうした？電波の彼方に言葉が消えたぞ。もう一度言ってくれ。", actions: [] });
         } else {
             aiText = data.candidates[0].content.parts[0].text;
         }
