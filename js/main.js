@@ -802,7 +802,53 @@ function openEditor(e = null) {
     renderIconPalette('event-icon-palette', 'edit-title');
 }
 
-function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
+function closeEditor() { 
+    document.getElementById('editor-modal').classList.remove('active'); 
+    if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } 
+    const prev = document.getElementById('edit-attach-preview');
+    if(prev) prev.innerHTML = ''; // 閉じる時にプレビューを消去
+}
+
+// ★死角の修復：リンクと画像の添付処理（欠損していた関数の復元）
+function addUrlPrompt() {
+    const url = prompt("追加するリンク(URL)を入力してくれ:");
+    if (url) {
+        const desc = document.getElementById('edit-desc');
+        desc.value = desc.value + (desc.value ? '\n' : '') + url;
+    }
+}
+
+function addTaskUrlPrompt() {
+    const url = prompt("追加するリンク(URL)を入力してくれ:");
+    if (url) {
+        const desc = document.getElementById('task-edit-notes');
+        desc.value = desc.value + (desc.value ? '\n' : '') + url;
+    }
+}
+
+function handleImageUpload(event, previewId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const imgData = e.target.result;
+        const previewContainer = document.getElementById(previewId);
+        const imgDiv = document.createElement('div');
+        imgDiv.className = 'preview-item';
+        imgDiv.innerHTML = `<img src="${imgData}"><div class="preview-del" onclick="this.parentElement.remove()">✕</div>`;
+        previewContainer.appendChild(imgDiv);
+        
+        // Google Calendarへの画像送信はDrive連携が必須なため、まずはメモ欄に記録を残す仕様
+        const descId = previewId === 'edit-attach-preview' ? 'edit-desc' : 'task-edit-notes';
+        const descEl = document.getElementById(descId);
+        if (!descEl.value.includes('[写真添付あり]')) {
+            descEl.value = descEl.value + (descEl.value ? '\n' : '') + '[写真添付あり]';
+        }
+        showToast('✅ 写真をプレビューにセットした。');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = ''; 
+}
 
 function toggleTimeInputs() {
     const isAllDay = document.getElementById('edit-allday').checked;
@@ -850,7 +896,12 @@ function openTaskEditor(t = null) {
     renderIconPalette('task-icon-palette', 'task-edit-title');
 }
 
-function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
+function closeTaskEditor() { 
+    document.getElementById('task-editor-modal').classList.remove('active'); 
+    if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } 
+    const prev = document.getElementById('task-attach-preview');
+    if(prev) prev.innerHTML = ''; // 閉じる時にプレビューを消去
+}
 
 async function toggleTaskCompletion(taskId, newStatus) {
     let targetTask = null;
