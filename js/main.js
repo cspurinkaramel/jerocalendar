@@ -14,6 +14,11 @@ const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: 
 // ==========================================
 // 1. ユーティリティ & UI操作群
 // ==========================================
+// ★名刀：絶対にズレない日本時間(ローカルタイム)の YYYY-MM-DD を返す共通関数
+function getSafeLocalDateStr(dateObj = new Date()) {
+    return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+}
+
 function getContrastYIQ(hexcolor) {
     if (!hexcolor) return '#ffffff';
     hexcolor = hexcolor.replace("#", "");
@@ -345,7 +350,7 @@ function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker
 function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if (e.isIntersecting && !isFetching && !isAuthError) { if (e.target.id === 'bottom-trigger') { loadNextMonth(); } if (e.target.id === 'top-trigger') { loadPrevMonth(); } } }); }, options);['bottom-trigger', 'top-trigger'].forEach(id => { const el = document.getElementById(id); if (el) observer.observe(el); }); }
 document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
 function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if (rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
-function scrollToToday() { const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const target = document.getElementById(`cell-${dateStr}`); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function scrollToToday() { const target = document.getElementById(`cell-${getSafeLocalDateStr()}`); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
 function triggerFullReRender() { document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderedMonths.push({ year: y, month: m }); renderMonthDOM(y, m + 1, dataCache[`${y}-${m + 1}`], 'append'); renderedMonths.push({ year: y, month: m + 1 }); }
 
@@ -783,11 +788,11 @@ function openEditor(e = null) {
         ed = new Date(e.end.dateTime || e.end.date);
         if (isAllDay) ed.setDate(ed.getDate() - 1);
     }
-    startInput.type = isAllDay ? 'date' : 'datetime-local';
+startInput.type = isAllDay ? 'date' : 'datetime-local';
     endInput.type = isAllDay ? 'date' : 'datetime-local';
     if (isAllDay) {
-        startInput.value = `${st.getFullYear()}-${String(st.getMonth() + 1).padStart(2, '0')}-${String(st.getDate()).padStart(2, '0')}`;
-        endInput.value = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+        startInput.value = getSafeLocalDateStr(st);
+        endInput.value = getSafeLocalDateStr(ed);
     }
     else {
         const tzOffset = st.getTimezoneOffset() * 60000;
@@ -890,15 +895,8 @@ function openTaskEditor(t = null) {
     if (t && t.notes) { const extracted = extractTaskData(t.notes); cleanNotes = extracted.cleanNotes; selectTaskColor(null, extracted.colorId); } else { selectTaskColor(null, ''); }
     document.getElementById('task-edit-notes').value = cleanNotes;
     const dueInput = document.getElementById('task-edit-due');
-    if (t && t.due) { 
-        const d = new Date(t.due); 
-        dueInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
-    } else { 
-        const d = new Date(); 
-        dueInput.value = selectedDateStr || `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
-    }
-    document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';
-    const convertBtn = document.getElementById('btn-convert-event'); if (convertBtn) convertBtn.style.display = t ? 'block' : 'none';
+    if (t && t.due) { dueInput.value = getSafeLocalDateStr(new Date(t.due)); } else { dueInput.value = selectedDateStr || getSafeLocalDateStr(); }
+    document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none';    const convertBtn = document.getElementById('btn-convert-event'); if (convertBtn) convertBtn.style.display = t ? 'block' : 'none';
     renderIconPalette('task-icon-palette', 'task-edit-title');
 }
 
@@ -959,10 +957,10 @@ async function executeConversion(fromType) {
         const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim() || '無名予定'; const dueVal = document.getElementById('task-edit-due').value; const notesVal = document.getElementById('task-edit-notes').value; const colorId = selectedTaskColorId;
         if (id) deleteAction = { type: 'task', method: 'delete', id: id };
         insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, colorId: colorId };
-        if (dueVal) { let parts = dueVal.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); insertAction.start = dueVal; const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1); insertAction.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`; }
+        if (dueVal) { let parts = dueVal.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); insertAction.start = dueVal; const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1); insertAction.end = getSafeLocalDateStr(ed); }
         else { 
-            const td = new Date(); insertAction.start = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`; 
-            const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`; 
+            insertAction.start = getSafeLocalDateStr(); 
+            const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = getSafeLocalDateStr(tmrw); 
         }
     }
     // UIを即座に閉じる（画面ロックなし）
@@ -1009,7 +1007,7 @@ async function dispatchManualAction(action) {
     const msgType = action.type === 'event' ? '予定' : 'タスク';
 
     // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復
-    const _td1 = new Date(); let safeToday = `${_td1.getFullYear()}-${String(_td1.getMonth() + 1).padStart(2, '0')}-${String(_td1.getDate()).padStart(2, '0')}`;
+    let safeToday = getSafeLocalDateStr();
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
     if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; }
     if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
@@ -1090,7 +1088,7 @@ async function dispatchManualAction(action) {
 
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
     // ★絶対防衛線：オブジェクト化、あるいは完全に欠損している幽霊データの日付を安全な文字列に強制修復する
-    const _td2 = new Date(); let safeToday = `${_td2.getFullYear()}-${String(_td2.getMonth() + 1).padStart(2, '0')}-${String(_td2.getDate()).padStart(2, '0')}`;
+    let safeToday = getSafeLocalDateStr();
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
     if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; }
     if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
@@ -1171,8 +1169,7 @@ async function executeApiAction(action, isRetry = false) {
 
         // それでも日付が空なら、安全策として「今日」にする
         if (!payload.start || typeof payload.start !== 'string') {
-            const td = new Date();
-            payload.start = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
+            payload.start = getSafeLocalDateStr();
         }
         if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start;
 
@@ -1241,8 +1238,7 @@ async function executeApiAction(action, isRetry = false) {
         if (code === 400 && !isRetry) {
             console.warn(`⚠️ Googleが形式を拒絶(400)。最低限のテキストデータとして今日の終日予定に強制変換して救出する。`);
             if (payload.type === 'event') {
-                const td = new Date();
-                const fallbackDate = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
+                const fallbackDate = getSafeLocalDateStr();
                 payload.start = fallbackDate;
                 payload.end = fallbackDate;
             } else {
