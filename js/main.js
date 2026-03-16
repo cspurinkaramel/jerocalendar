@@ -105,9 +105,10 @@ async function updateSyncBadge() {
     else { if (count > 0) { badge.innerText = `🔄 未送信データが ${count} 件あるぞ (タップで管理)`; badge.style.background = 'var(--accent)'; badge.classList.add('active'); badge.onclick = () => { openSyncManager(); }; } else { badge.classList.remove('active'); badge.onclick = null; } }
 }
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-async function processSyncQueue() {
+// ★サイレントモードを追加（isSilentがtrueなら画面をロックしない）
+async function processSyncQueue(isSilent = false) {
     if (!navigator.onLine) return; const queue = await getSyncQueue(); if (queue.length === 0) { await updateSyncBadge(); return; }
-    showGlobalLoader(`同期中... 残り${queue.length}件`);
+    if (!isSilent) showGlobalLoader(`同期中... 残り${queue.length}件`);
     let successCount = 0; let needsRefresh = false; let authErrorOccurred = false;
     for (let item of queue) {
         if (authErrorOccurred) break; 
@@ -135,7 +136,9 @@ async function processSyncQueue() {
             }
         }
     }
-    hideGlobalLoader(); if (successCount > 0) showToast(`✅ ${successCount}件の同期を完了した。`); await updateSyncBadge(); 
+    if (!isSilent) hideGlobalLoader(); 
+    if (successCount > 0 && !isSilent) showToast(`✅ ${successCount}件の同期を完了した。`); 
+    await updateSyncBadge(); 
     if (needsRefresh) {
         const wrappers = document.querySelectorAll('.month-wrapper');
         for (const wrapper of wrappers) { const parts = wrapper.id.split('-'); if (parts.length === 3) { const y = parseInt(parts[1]); const m = parseInt(parts[2]); const existingMonth = document.getElementById(`month-${y}-${m}`); if (existingMonth && dataCache[`${y}-${m}`]) { existingMonth.remove(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace'); } } }
@@ -432,8 +435,8 @@ function openTaskEditor(t = null) {
     if (previewContainer) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         parsed.files.forEach(f => {
-            activeTaskAttachments.push({ title: f.title, fileUrl: f.url, fileId: f.fileId });
-            const isImg = f.url.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) || true; // タスクからはMIME判別難しいため一旦true
+            activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId });
+            const isImg = f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) || true; // タスクからはMIME判別難しいため一旦true
             const thumbSrc = `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150`;
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
@@ -532,11 +535,11 @@ async function executeApiAction(action, isRetry = false) {
 // 9. その他初期化プロセス等
 // ==========================================
 async function processPDFFile(file) { showGlobalLoader('PDFを読み込み中...'); try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; const arrayBuffer = await file.arrayBuffer(); const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer }); const pdf = await loadingTask.promise; const page = await pdf.getPage(1); const viewport = page.getViewport({ scale: 1.5 }); const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: ctx, viewport: viewport }).promise; const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; chatFileBase64 = base64String; chatFileMime = 'image/jpeg'; document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)'; document.getElementById('chat-attach-box').style.display = 'flex'; openJeroChat(); document.getElementById('chat-input').value = "この画像を解析し、含まれる予定を抽出してくれ。"; unlockAudioAndSend(); } catch (error) { showToast('❌ PDF読み込み失敗'); } finally { hideGlobalLoader(); } }
-window.addEventListener('online', async () => { showToast('📶 電波回復'); await updateSyncBadge(); processSyncQueue(); }); window.addEventListener('offline', async () => { showToast('⚡️ 圏外だ。退避する'); await updateSyncBadge(); });
+window.addEventListener('online', async () => { showToast('📶 電波回復'); await updateSyncBadge(); processSyncQueue(true); }); window.addEventListener('offline', async () => { showToast('⚡️ 圏外だ。退避する'); await updateSyncBadge(); });
 async function executeSilentRefresh() { if (!navigator.onLine || isAuthError || isFetching) return; const queue = await getSyncQueue(); if (queue.length > 0) return; const monthsToRefresh = [...renderedMonths]; if (monthsToRefresh.length === 0) return; let isUpdated = false; for (const m of monthsToRefresh) { try { const url = `${getGasUrl()}?year=${m.year}&month=${m.month}`; const response = await fetch(url); const data = await response.json(); if (data.success) { const monthKey = `${m.year}-${m.month}`; const oldDataStr = JSON.stringify(dataCache[monthKey]); const newDataStr = JSON.stringify({ events: data.events || [], tasks: data.tasks || [] }); if (oldDataStr !== newDataStr) { dataCache[monthKey] = { events: data.events || [], tasks: data.tasks || [] }; saveDataCacheToIDB(monthKey, dataCache[monthKey]); const existingMonth = document.getElementById(`month-${m.year}-${m.month}`); if (existingMonth) { existingMonth.remove(); renderMonthDOM(m.year, m.month, dataCache[monthKey], 'replace'); } isUpdated = true; } } } catch (e) { } } if (isUpdated && typeof selectedDateStr !== 'undefined' && selectedDateStr) { const modal = document.getElementById('daily-modal'); if (modal && modal.classList.contains('active')) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); } } }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { processSyncQueue(); executeSilentRefresh(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { processSyncQueue(true); executeSilentRefresh(); } });
 document.addEventListener('DOMContentLoaded', async () => { try { await initIDB(); loadSettings(); loadDict(); initColorPicker(); initTaskColorPicker(); if (typeof initSpeech === 'function') initSpeech(); if (typeof initNotification === 'function') initNotification(); const eventActionBar = document.querySelector('#editor-modal .action-bar'); if (eventActionBar && !document.getElementById('btn-convert-task')) { const btn = document.createElement('button'); btn.id = 'btn-convert-task'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 タスクへ'; btn.onclick = () => executeConversion('event'); eventActionBar.insertBefore(btn, document.getElementById('btn-duplicate')); } const taskActionBar = document.querySelector('#task-editor-modal .action-bar'); if (taskActionBar && !document.getElementById('btn-convert-event')) { const btn = document.createElement('button'); btn.id = 'btn-convert-event'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 予定へ'; btn.onclick = () => executeConversion('task'); taskActionBar.insertBefore(btn, document.getElementById('task-btn-delete')); } if (localStorage.getItem('jero_token')) { setTimeout(() => { if (!isCalendarInited) { document.getElementById('offline-badge').innerText = '⚡️ 完全自律モード (キャッシュ起動)'; document.getElementById('offline-badge').classList.add('active'); initCalendar(); } }, 1500); } } catch (err) {} });
-function startApp() { document.getElementById('auth-btn').style.display = 'none'; initWeekdays(); setupObserver(); initCalendar(); setTimeout(() => { processSyncQueue(); }, 1000); }
+function startApp() { document.getElementById('auth-btn').style.display = 'none'; initWeekdays(); setupObserver(); initCalendar(); setTimeout(() => { processSyncQueue(true); }, 1000); }
 document.addEventListener('DOMContentLoaded', () => { setTimeout(startApp, 500); });
 document.addEventListener('DOMContentLoaded', () => { const resizer = document.getElementById('resizer'); const bottomView = document.getElementById('bottom-detail-view'); let startY = 0; let startHeight = 0; if (resizer && bottomView) { resizer.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; startHeight = bottomView.getBoundingClientRect().height; document.body.style.userSelect = 'none'; }, { passive: true }); document.addEventListener('touchmove', (e) => { if (startY === 0) return; const deltaY = startY - e.touches[0].clientY; let newHeight = startHeight + deltaY; const minH = window.innerHeight * 0.1; const maxH = window.innerHeight * 0.7; if (newHeight < minH) newHeight = minH; if (newHeight > maxH) newHeight = maxH; bottomView.style.height = `${newHeight}px`; }, { passive: true }); document.addEventListener('touchend', () => { startY = 0; document.body.style.userSelect = ''; }); } });
 
