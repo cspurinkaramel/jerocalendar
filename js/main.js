@@ -19,6 +19,16 @@ function getSafeLocalDateStr(dateObj = new Date()) {
     return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
 }
 
+// ★Drive Nexus: 画像フルスクリーン拡大機能
+function openImageViewer(src) {
+    const viewer = document.getElementById('img-viewer');
+    const img = document.getElementById('img-viewer-src');
+    if (viewer && img) {
+        img.src = src;
+        viewer.classList.add('active');
+    }
+}
+
 function getContrastYIQ(hexcolor) {
     if (!hexcolor) return '#ffffff';
     hexcolor = hexcolor.replace("#", "");
@@ -385,7 +395,6 @@ function getCardHtml(type, item) {
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
     const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
 
-    // ★視覚化ロジック（編集状態を追加）
     const isPendingInsert = item._localId ? true : false;
     const isPendingUpdate = item._pendingUpdate ? true : false;
     const isPendingDelete = item._pendingDelete ? true : false;
@@ -396,6 +405,22 @@ function getCardHtml(type, item) {
     if (isPendingDelete) stateIcon = ' 🗑️(削除予定)';
 
     const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + stateIcon;
+
+    // ★Drive Nexus：メモ欄からDriveのURLを検知し、美しいサムネイル画像を錬成する
+    let desc = isEvent ? (item.description || '') : (item.notes || '');
+    let driveThumbHtml = '';
+    const driveMatch = desc.match(/https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)\//);
+    if (driveMatch) {
+        const fileId = driveMatch[1];
+        // Driveの隠しAPIを使って軽量なサムネイルを直接取得する
+        const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150`;
+        const fullUrl = `https://drive.google.com/uc?id=${fileId}`;
+        
+        driveThumbHtml = `<div style="margin-top:6px; position:relative; display:inline-block;" onclick="event.stopPropagation(); openImageViewer('${fullUrl}')">
+                            <img src="${thumbUrl}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+                            <span style="position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.7); color:white; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold;">拡大🔍</span>
+                          </div>`;
+    }
 
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
@@ -421,19 +446,11 @@ function getCardHtml(type, item) {
     let titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     let cardStyle = '';
 
-    // オフライン状態での視覚スタイル適用
-    if (isPendingInsert) {
-        cardStyle = 'border: 2px dashed #0a84ff; opacity: 0.9;';
-    }
-    if (isPendingUpdate) {
-        cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; // 編集予定はオレンジ
-    }
-    if (isPendingDelete) {
-        titleStyle = 'text-decoration: line-through;';
-        cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; // クリック不可
-    }
+    if (isPendingInsert) cardStyle = 'border: 2px dashed #0a84ff; opacity: 0.9;';
+    if (isPendingUpdate) cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; 
+    if (isPendingDelete) { titleStyle = 'text-decoration: line-through;'; cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; }
 
-    return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div class="card-title">${title}</div></div></div>`;
+    return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div style="display:flex; flex-direction:column; justify-content:center;"><div class="card-title">${title}</div>${driveThumbHtml}</div></div></div>`;
 }
 
 function showTimePopup(el, text, colorCode) {
