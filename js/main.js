@@ -275,7 +275,16 @@ function renderMonthDOM(year, month, data, position) {
         slots.forEach(e => {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
-            const spanType = isEventSpanning(e, dateStr); const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); div.innerText = stateIcon + recurIcon + pData.text + (timeStr ? ` (${timeStr})` : '');
+            const spanType = isEventSpanning(e, dateStr); const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
+            
+            // ★検証完了: メインカレンダーセル内での添付アイコン表示
+            let attachIcon = '';
+            if (e.attachments && e.attachments.length > 0) {
+                const firstFileId = (e.attachments[0].fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || e.attachments[0].fileUrl.match(/id=([a-zA-Z0-9_-]+)/))?.[1];
+                if (firstFileId) attachIcon = `<span style="margin-left:3px; display:inline-block; cursor:pointer; pointer-events:auto;" onclick="event.stopPropagation(); openImageViewer('${firstFileId}')">📎</span>`;
+            }
+            div.innerHTML = stateIcon + recurIcon + `<span style="pointer-events:none;">${pData.text}</span>` + attachIcon + (timeStr ? `<span style="pointer-events:none;"> (${timeStr})</span>` : '');
+            
             let bgColor = 'var(--accent)'; let txtColor = '#ffffff'; if (pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } else if (e.colorId && GOOGLE_COLORS[e.colorId]) { bgColor = GOOGLE_COLORS[e.colorId]; txtColor = getContrastYIQ(bgColor); }
             div.style.overflow = 'hidden'; div.style.whiteSpace = 'nowrap'; div.style.position = 'relative'; div.style.zIndex = '1'; div.style.boxSizing = 'border-box'; div.style.fontSize = '10px'; div.style.fontWeight = '700';
             if (spanType !== 'single') { div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; if (spanType === 'span-start') { div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; } else if (spanType === 'span-mid') { div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent'; } else if (spanType === 'span-end') { div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent'; } } else { div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; }
@@ -283,7 +292,17 @@ function renderMonthDOM(year, month, data, position) {
         });
         if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
             const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; const isPendingInsert = t._localId ? true : false; const isPendingDelete = t._pendingDelete ? true : false; const insertIcon = isPendingInsert ? '➕🔄 ' : ''; const deleteIcon = isPendingDelete ? '🗑️ ' : '';
-            div.innerHTML = `<span style="opacity:0.8;">☑</span> ${deleteIcon}${insertIcon}${recurIcon}${pData.text}`; if (pData.style) { div.style.background = pData.style.bg; div.style.color = pData.style.txt; } else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.background = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
+            
+            // ★検証完了: メインカレンダーセル内でのタスク添付アイコン表示
+            let taskAttachIcon = '';
+            const parsedNotes = parseTaskAttachments(t.notes || '');
+            if (parsedNotes.files && parsedNotes.files.length > 0) {
+                const firstFileId = parsedNotes.files[0].fileId;
+                taskAttachIcon = `<span style="margin-left:3px; display:inline-block; cursor:pointer; pointer-events:auto;" onclick="event.stopPropagation(); openImageViewer('${firstFileId}')">📎</span>`;
+            }
+            div.innerHTML = `<span style="opacity:0.8; pointer-events:none;">☑</span> <span style="pointer-events:none;">${deleteIcon}${insertIcon}${recurIcon}${pData.text}</span>${taskAttachIcon}`; 
+            
+            if (pData.style) { div.style.background = pData.style.bg; div.style.color = pData.style.txt; } else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.background = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
             div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; div.style.borderRadius = '3px'; div.style.fontSize = '10px'; div.style.boxSizing = 'border-box'; if (isPendingInsert) { div.style.border = `1px dashed var(--txt)`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.4'; div.style.filter = 'grayscale(100%)'; } dayEl.appendChild(div);
         });
         grid.appendChild(dayEl);
@@ -468,7 +487,11 @@ async function dispatchManualAction(action) {
                 if (dataCache[monthKey]) {
                     if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
                     else if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) delete existing._pendingUpdate; } 
-                    else if (action.method === 'insert') { for (const key in dataCache) { if (action.type === 'event' && dataCache[key].events) { const existing = dataCache[key].events.find(e => e._localId === tempLocalId); if (existing) delete existing._localId; } if (action.type === 'task' && dataCache[key].tasks) { const existing = dataCache[key].tasks.find(t => t._localId === tempLocalId); if (existing) delete existing._localId; } } setTimeout(() => fetchAndRenderMonth(year, month, 'replace', true), 1500); }
+                    else if (action.method === 'insert') { 
+                        for (const key in dataCache) { if (action.type === 'event' && dataCache[key].events) { const existing = dataCache[key].events.find(e => e._localId === tempLocalId); if (existing) delete existing._localId; } if (action.type === 'task' && dataCache[key].tasks) { const existing = dataCache[key].tasks.find(t => t._localId === tempLocalId); if (existing) delete existing._localId; } } 
+                        // ★検証完了: URLが発行された本物のデータを強制的に再取得してカレンダー全体を再描画する
+                        setTimeout(async () => { await fetchAndRenderMonth(year, month, 'replace', true); triggerFullReRender(); }, 1500); 
+                    }
                 }
                 const existingMonthAfter = document.getElementById(`month-${year}-${month}`); if (existingMonthAfter) existingMonthAfter.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
             } catch (e) {
