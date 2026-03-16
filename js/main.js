@@ -38,6 +38,9 @@ function openImageViewer(fileId) {
     if (viewer && img) {
         img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`; 
         viewer.classList.add('active');
+        // ★進化：表示された画像をタップすると、別タブで本物のファイル(PDF等)を開く
+        img.onclick = () => { window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank'); };
+        showToast('画像をタップすると元のファイルを開けるぞ');
     }
 }
 
@@ -339,16 +342,17 @@ function getCardHtml(type, item) {
     if (isPendingInsert) stateIcon = ' ➕🔄(追加予定)'; if (isPendingUpdate) stateIcon = ' 📝🔄(編集予定)'; if (isPendingDelete) stateIcon = ' 🗑️(削除予定)';
     const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + stateIcon;
 
-    // ★Drive Nexus：メモ欄からDriveのURLを検知し、複数のサムネイルを美しく錬成する
+    // ★Drive Nexus：メモ欄からDriveのURLを検知し、美しいファイルチップを錬成する
     let desc = isEvent ? (item.description || '') : (item.notes || '');
     let driveThumbHtml = '';
     const parsed = parseAttachments(desc);
     if (parsed.fileIds.length > 0) {
-        driveThumbHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; padding-bottom:4px;">';
+        driveThumbHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; padding-left:2px;">';
         parsed.fileIds.forEach(fileId => {
             const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150`;
-            driveThumbHtml += `<div style="position:relative; flex-shrink:0;" onclick="event.stopPropagation(); openImageViewer('${fileId}')">
-                                <img src="${thumbUrl}" style="height:50px; width:50px; object-fit:cover; border-radius:8px; border:1px solid var(--border); box-shadow:0 2px 5px rgba(0,0,0,0.15);">
+            driveThumbHtml += `<div style="position:relative; flex-shrink:0; background:var(--head-bg); border:1px solid var(--border); border-radius:6px; padding:3px; display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1); cursor:pointer;" onclick="event.stopPropagation(); openImageViewer('${fileId}')">
+                                <img src="${thumbUrl}" style="height:32px; width:32px; object-fit:cover; border-radius:4px;">
+                                <span style="font-size:11px; color:var(--txt); padding-right:4px; font-weight:bold;">ファイル</span>
                                </div>`;
         });
         driveThumbHtml += '</div>';
@@ -356,6 +360,7 @@ function getCardHtml(type, item) {
 
     const safeData = encodeURIComponent(JSON.stringify(item));
     const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
+
     let timeHtml = "";
     if (isEvent) {
         if (item.start && item.start.dateTime) {
@@ -363,20 +368,31 @@ function getCardHtml(type, item) {
             let endTimeStr = "";
             if (item.end && item.end.dateTime) { const ed = new Date(item.end.dateTime); endTimeStr = `${ed.getHours()}:${String(ed.getMinutes()).padStart(2, '0')}`; }
             const fullTimeStr = endTimeStr ? `${timeStr} 〜 ${endTimeStr}` : timeStr;
-            timeHtml = `<span class="time-text" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')">${timeStr}</span>`;
+            timeHtml = `<span class="time-text" onclick="event.stopPropagation(); showTimePopup(this, '${fullTimeStr}', '${color}')" style="margin-right:6px;">${timeStr}</span>`;
         }
     } else {
         const checkIcon = item.status === 'completed' ? '✅' : '⬜️';
-        timeHtml = `<span style="font-size:16px; margin-right:4px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
+        timeHtml = `<span style="font-size:16px; margin-right:6px; cursor:pointer;" onclick="event.stopPropagation(); toggleTaskCompletion('${item.id}', '${item.status === 'completed' ? 'needsAction' : 'completed'}')">${checkIcon}</span>`;
     }
 
     let titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     let cardStyle = '';
+
     if (isPendingInsert) cardStyle = 'border: 2px dashed #0a84ff; opacity: 0.9;';
     if (isPendingUpdate) cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; 
     if (isPendingDelete) { titleStyle = 'text-decoration: line-through;'; cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; }
 
-    return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}"><div class="card-color-bar" style="background-color: ${color};"></div><div class="card-content" style="${titleStyle}">${timeHtml}<div style="display:flex; flex-direction:column; justify-content:center;"><div class="card-title">${title}</div>${driveThumbHtml}</div></div></div>`;
+    // ★タイトルと画像を分離する強固な2段構造レイアウト
+    return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}">
+                <div class="card-color-bar" style="background-color: ${color};"></div>
+                <div class="card-content" style="display:flex; flex-direction:column; width:100%; padding:8px 0; overflow:hidden;">
+                    <div style="display:flex; align-items:center; width:100%; ${titleStyle}">
+                        ${timeHtml}
+                        <div class="card-title" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:bold; color:var(--txt);">${title}</div>
+                    </div>
+                    ${driveThumbHtml}
+                </div>
+            </div>`;
 }
 
 function showTimePopup(el, text, colorCode) { document.querySelectorAll('.time-popup').forEach(p => p.remove()); const popup = document.createElement('div'); popup.className = 'time-popup'; popup.style.backgroundColor = colorCode; popup.innerHTML = `${text}<span style="position:absolute; bottom:-4px; left:14px; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid ${colorCode};"></span>`; const rect = el.getBoundingClientRect(); popup.style.top = (rect.top - 32) + 'px'; popup.style.left = (rect.left - 4) + 'px'; document.body.appendChild(popup); setTimeout(() => popup.classList.add('show'), 10); setTimeout(() => { popup.classList.remove('show'); setTimeout(() => popup.remove(), 200); }, 2000); }
@@ -540,6 +556,10 @@ function renderIconPalette(targetId, inputId) {
 let activeEventUrls = []; let activeTaskUrls = [];
 let pendingEventAttachments = []; let pendingTaskAttachments = [];
 
+// 既存ファイルの個別削除エンジン
+function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); const urlToRemove = activeEventUrls.find(u => u.includes(fileId)); if (urlToRemove) activeEventUrls = activeEventUrls.filter(u => u !== urlToRemove); }
+function removeExistingTaskAttachment(el, fileId) { el.parentElement.remove(); const urlToRemove = activeTaskUrls.find(u => u.includes(fileId)); if (urlToRemove) activeTaskUrls = activeTaskUrls.filter(u => u !== urlToRemove); }
+
 function openEditor(e = null) {
     document.getElementById('overlay').classList.add('active');
     document.getElementById('editor-modal').classList.add('active');
@@ -555,8 +575,12 @@ function openEditor(e = null) {
     const previewContainer = document.getElementById('edit-attach-preview');
     if (previewContainer) {
         previewContainer.innerHTML = '';
+        previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         parsed.fileIds.forEach(id => {
-            previewContainer.innerHTML += `<div class="preview-item"><img src="https://drive.google.com/thumbnail?id=${id}&sz=w150-h150" style="opacity:0.8;"></div>`;
+            previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${id}')">
+                <img src="https://drive.google.com/thumbnail?id=${id}&sz=w150-h150" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">
+                <div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${id}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px;">✕</div>
+            </div>`;
         });
     }
 
@@ -597,31 +621,35 @@ function addTaskUrlPrompt() {
 function handleImageUpload(event, previewId) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+    
+    const previewContainer = document.getElementById(previewId);
+    previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
+
     Array.from(files).forEach(file => {
         if (file.size > 5 * 1024 * 1024) { showToast(`❌ ${file.name} は5MB以上だ。弾いたぞ。`); return; }
         const reader = new FileReader();
         reader.onload = (e) => {
             const imgData = e.target.result;
             const attachmentData = { mimeType: file.type, name: file.name, base64: imgData.split(',')[1] };
-            const previewContainer = document.getElementById(previewId);
             const imgDiv = document.createElement('div');
             imgDiv.className = 'preview-item';
+            imgDiv.style.cssText = "position:relative; display:inline-block;";
             
             if (previewId === 'edit-attach-preview') {
                 pendingEventAttachments.push(attachmentData);
                 const index = pendingEventAttachments.length - 1;
-                imgDiv.innerHTML = `<img src="${imgData}"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments.splice(${index}, 1);">✕</div>`;
+                imgDiv.innerHTML = `<img src="${imgData}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border);"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments.splice(${index}, 1);" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer;">✕</div>`;
             } else {
                 pendingTaskAttachments.push(attachmentData);
                 const index = pendingTaskAttachments.length - 1;
-                imgDiv.innerHTML = `<img src="${imgData}"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments.splice(${index}, 1);">✕</div>`;
+                imgDiv.innerHTML = `<img src="${imgData}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border);"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments.splice(${index}, 1);" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer;">✕</div>`;
             }
             previewContainer.appendChild(imgDiv);
         };
         reader.readAsDataURL(file);
     });
     event.target.value = ''; 
-    showToast('✅ 写真をセットした。複数選択も可能だ。');
+    showToast('✅ ファイルをセットした。複数選択も可能だ。');
 }
 
 function toggleTimeInputs() {
@@ -669,8 +697,12 @@ function openTaskEditor(t = null) {
     const previewContainer = document.getElementById('task-attach-preview');
     if (previewContainer) {
         previewContainer.innerHTML = '';
+        previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         parsed.fileIds.forEach(id => {
-            previewContainer.innerHTML += `<div class="preview-item"><img src="https://drive.google.com/thumbnail?id=${id}&sz=w150-h150" style="opacity:0.8;"></div>`;
+            previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${id}')">
+                <img src="https://drive.google.com/thumbnail?id=${id}&sz=w150-h150" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">
+                <div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${id}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px;">✕</div>
+            </div>`;
         });
     }
 
