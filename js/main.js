@@ -811,8 +811,13 @@ function closeEditor() {
     document.getElementById('editor-modal').classList.remove('active'); 
     if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } 
     const prev = document.getElementById('edit-attach-preview');
-    if(prev) prev.innerHTML = ''; // 閉じる時にプレビューを消去
+    if(prev) prev.innerHTML = ''; 
+    pendingEventAttachment = null; // ★Drive Nexus: 閉じる時にデータも破棄
 }
+
+// ★Drive Nexus：添付ファイルの一時退避領域
+let pendingEventAttachment = null;
+let pendingTaskAttachment = null;
 
 // ★死角の修復：リンクと画像の添付処理（欠損していた関数の復元）
 function addUrlPrompt() {
@@ -834,22 +839,40 @@ function addTaskUrlPrompt() {
 function handleImageUpload(event, previewId) {
     const file = event.target.files[0];
     if (!file) return;
+    
+    // ★Drive Nexus: 5MB以上の巨大ファイルは弾く（GASの通信制限対策）
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('❌ ファイルが大きすぎる。5MB以下の画像にしてくれ。');
+        event.target.value = '';
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
         const imgData = e.target.result;
+        
+        // ★Drive Nexus: Base64実体データとメタ情報を変数に格納
+        const attachmentData = {
+            mimeType: file.type,
+            name: file.name,
+            base64: imgData.split(',')[1] // ヘッダを取り除いた純粋なBase64
+        };
+
         const previewContainer = document.getElementById(previewId);
+        previewContainer.innerHTML = ''; // 複数添付は一旦未対応とし、1枚に制限してUIをリセット
         const imgDiv = document.createElement('div');
         imgDiv.className = 'preview-item';
-        imgDiv.innerHTML = `<img src="${imgData}"><div class="preview-del" onclick="this.parentElement.remove()">✕</div>`;
-        previewContainer.appendChild(imgDiv);
         
-        // Google Calendarへの画像送信はDrive連携が必須なため、まずはメモ欄に記録を残す仕様
-        const descId = previewId === 'edit-attach-preview' ? 'edit-desc' : 'task-edit-notes';
-        const descEl = document.getElementById(descId);
-        if (!descEl.value.includes('[写真添付あり]')) {
-            descEl.value = descEl.value + (descEl.value ? '\n' : '') + '[写真添付あり]';
+        if (previewId === 'edit-attach-preview') {
+            pendingEventAttachment = attachmentData;
+            imgDiv.innerHTML = `<img src="${imgData}"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachment = null;">✕</div>`;
+        } else {
+            pendingTaskAttachment = attachmentData;
+            imgDiv.innerHTML = `<img src="${imgData}"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachment = null;">✕</div>`;
         }
-        showToast('✅ 写真をプレビューにセットした。');
+        
+        previewContainer.appendChild(imgDiv);
+        showToast('✅ 写真をセットした。保存時にDriveへ転送されるぞ。');
     };
     reader.readAsDataURL(file);
     event.target.value = ''; 
@@ -870,7 +893,16 @@ async function saveEvent() {
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value;
     if (!startVal) { showToast('開始日時が不正だ'); return; } if (!endVal) endVal = startVal;
 
-    const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
+    const action = { 
+        type: 'event', method: id ? 'update' : 'insert', id: id, title: title, 
+        location: document.getElementById('edit-loc').value, 
+        description: document.getElementById('edit-desc').value, 
+        colorId: selectedColorId 
+    };
+    // ★Drive Nexus: 添付ファイルが存在すればパケットに積み込む
+    if (pendingEventAttachment) {
+        action.attachment = pendingEventAttachment;
+    }
     try {
         if (isAllDay) {
             action.start = startVal;
@@ -904,7 +936,8 @@ function closeTaskEditor() {
     document.getElementById('task-editor-modal').classList.remove('active'); 
     if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } 
     const prev = document.getElementById('task-attach-preview');
-    if(prev) prev.innerHTML = ''; // 閉じる時にプレビューを消去
+    if(prev) prev.innerHTML = ''; 
+    pendingTaskAttachment = null; // ★Drive Nexus: 閉じる時にデータも破棄
 }
 
 async function toggleTaskCompletion(taskId, newStatus) {
@@ -938,6 +971,10 @@ async function saveTask() {
     if (!title) { showToast('タスク名を入力してくれ'); return; }
     let rawNotes = document.getElementById('task-edit-notes').value.trim(); if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
     const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes };
+    // ★Drive Nexus: 添付ファイルが存在すればパケットに積み込む
+    if (pendingTaskAttachment) {
+        action.attachment = pendingTaskAttachment;
+    }
     const dueVal = document.getElementById('task-edit-due').value; if (dueVal) { action.due = dueVal + 'T00:00:00+09:00'; }
     closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
