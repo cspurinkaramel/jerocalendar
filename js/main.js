@@ -689,8 +689,10 @@ async function executeApiAction(action, isRetry = false) {
                 }
             };
 
-            const res = await fetch(getGasUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uploadPayload) });
-            const resData = await res.json();
+            // ★幻影破壊: 'Content-Type': 'application/json' は絶対に入れてはいけない。
+            // GASはOPTIONS(プリフライト)要求に弱く、CORSエラーで通信が即死する。ヘッダーなし(text/plain)で撃ち込むのが正解だ。
+            const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(uploadPayload) });
+            const resData = await res.json();s
             if (!resData.success || !resData.data) throw { status: 500, message: "GASファイル個別アップロードエラー" };
             
             payload.keptAttachments.push(resData.data);
