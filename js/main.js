@@ -401,15 +401,19 @@ async function handleImageUpload(event, previewId) {
     showGlobalLoader('画像圧縮・処理中...');
     
     for (const file of Array.from(files)) {
-        let base64Data = '';
+        let base64Data = ''; let fileBlob = file;
         if (file.type.startsWith('image/')) {
             base64Data = await compressImage(file);
+            const byteString = atob(base64Data); const ab = new ArrayBuffer(byteString.length); const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+            fileBlob = new Blob([ab], { type: 'image/jpeg' }); fileBlob.name = file.name;
         } else {
-            if (file.size > 5 * 1024 * 1024) { showToast(`❌ ${file.name} は5MB以上だ。弾いたぞ。`); continue; }
+            if (file.size > 15 * 1024 * 1024) { showToast(`❌ ${file.name} は巨大すぎる。弾いたぞ。`); continue; }
             base64Data = await new Promise(r => { const reader = new FileReader(); reader.onload = e => r(e.target.result.split(',')[1]); reader.readAsDataURL(file); });
         }
         const uid = Date.now() + Math.floor(Math.random()*1000);
-        const attachmentData = { mimeType: file.type, name: file.name, base64: base64Data, uid: uid };
+        // ★修正：バイナリデータ(fileBlob)を通信用の弾薬として追加保持する
+        const attachmentData = { mimeType: fileBlob.type || file.type, name: file.name, base64: base64Data, fileBlob: fileBlob, uid: uid };
         const imgDiv = document.createElement('div'); imgDiv.className = 'preview-item'; imgDiv.style.cssText = "position:relative; display:inline-block;";
         const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
 
@@ -620,14 +624,7 @@ async function dispatchManualAction(action) {
         if (!navigator.onLine) { const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 圏外だ。退避した。`); await updateSyncBadge(); } 
         else {
             try {
-                // ★追加：Drive転送の可視化機構
-                if (action.attachments && action.attachments.length > 0) {
-                    showGlobalLoader(`🚀 Driveへファイル(${action.attachments.length}件)を転送中...`);
-                }
-                
                 await executeApiAction(action);
-                
-                if (action.attachments && action.attachments.length > 0) hideGlobalLoader();
                 showToast(`✅ ${msgType}の${msgAction}完了`);
                 
                 if (dataCache[monthKey]) {
@@ -641,9 +638,6 @@ async function dispatchManualAction(action) {
                 }
                 const existingMonthAfter = document.getElementById(`month-${year}-${month}`); if (existingMonthAfter) existingMonthAfter.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
             } catch (e) {
-                // ★追加：通信エラー時にも確実にローダーを解除する
-                if (action.attachments && action.attachments.length > 0) hideGlobalLoader();
-                
                 const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 通信不良だ。裏で退避した。`);
                 const existingMonthErr = document.getElementById(`month-${year}-${month}`); if (existingMonthErr) existingMonthErr.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
             }
@@ -667,41 +661,35 @@ async function executeApiAction(action, isRetry = false) {
     if (payload.type === 'event') { if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } payload.useDefaultReminders = true; } 
     else if (payload.type === 'task') { if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || ""; if (payload.due && typeof payload.due === 'string') { const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/); if (dateMatch) { payload.due = dateMatch[1] + 'T00:00:00.000Z'; } } }
             
-    // ★究極防壁3：チャンクアップロード（完全サイレント・プログレスバー連動）
+    // ★ジェロの究極アルゴリズム：バイナリ直列ストリーム通信（FormData制限突破）
     if (payload.attachments && payload.attachments.length > 0) {
         if (!payload.keptAttachments) payload.keptAttachments = [];
         
         for (let i = 0; i < payload.attachments.length; i++) {
             const f = payload.attachments[i];
-            if (!f.base64) continue; 
+            if (!f.fileBlob && !f.base64) continue; 
+            if (f.fileUrl) continue; // 既にURL化済みならスキップ
             
-            const maxChars = 2 * 1024 * 1024; 
-            const totalChunks = Math.ceil(f.base64.length / maxChars);
-            const uploadId = "up_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-            let finalResData = null;
+            if (typeof setProgress === 'function') setProgress(Math.round(((i) / payload.attachments.length) * 100));
             
-            for (let j = 0; j < totalChunks; j++) {
-                // ❌ うるさいトーストを全廃止し、画面上部の青いプログレスバーだけを静かに進める
-                let progress = Math.round(((i / payload.attachments.length) + ((j + 1) / totalChunks) / payload.attachments.length) * 100);
-                if (typeof setProgress === 'function') setProgress(progress);
-                
-                const chunkData = f.base64.substring(j * maxChars, (j + 1) * maxChars);
-                const upPayload = { 
-                    type: 'upload_chunk', uploadId: uploadId, chunkIndex: j, totalChunks: totalChunks, 
-                    chunkData: chunkData, title: payload.title, fileName: f.name, mimeType: f.mimeType || 'application/octet-stream'
-                };
-                const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
-                const resData = await res.json();
-                
-                if (!resData.success) throw { status: 500, message: "GASチャンクエラー" };
-                
-                if (j === totalChunks - 1) {
-                    if (!resData.data) throw { status: 500, message: "GAS結合エラー" };
-                    finalResData = resData.data;
-                }
+            let formData = new FormData();
+            formData.append('type', 'upload_direct');
+            formData.append('title', payload.title);
+            
+            if (f.fileBlob) {
+                formData.append('file', f.fileBlob, f.name);
+            } else if (f.base64) {
+                const byteString = atob(f.base64); const ab = new ArrayBuffer(byteString.length); const ia = new Uint8Array(ab);
+                for (let k = 0; k < byteString.length; k++) ia[k] = byteString.charCodeAt(k);
+                const blob = new Blob([ab], { type: f.mimeType }); formData.append('file', blob, f.name);
             }
-            payload.keptAttachments.push(finalResData);
-            f.base64 = null; 
+
+            const res = await fetch(getGasUrl(), { method: 'POST', body: formData });
+            const resData = await res.json();
+            if (!resData.success || !resData.data) throw { status: 500, message: "GASファイルアップロードエラー" };
+            
+            payload.keptAttachments.push(resData.data);
+            f.base64 = null; f.fileBlob = null; 
         }
         
         delete payload.attachments; 
