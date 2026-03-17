@@ -641,19 +641,30 @@ async function executeApiAction(action, isRetry = false) {
     if (payload.type === 'event') { if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } payload.useDefaultReminders = true; } 
     else if (payload.type === 'task') { if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || ""; if (payload.due && typeof payload.due === 'string') { const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/); if (dateMatch) { payload.due = dateMatch[1] + 'T00:00:00.000Z'; } } }
             
-            // ★新設：直列分割アップロード機構（巨大ペイロードでのGAS墜落を完全回避）
+            // ★新設：直列分割アップロード機構（自己修復＆死のループ防止機能付き）
             if (payload.attachments && payload.attachments.length > 0) {
                 if (!payload.keptAttachments) payload.keptAttachments = [];
+                if (!action.keptAttachments) action.keptAttachments = []; // ★元アクションも更新
+                
                 for (let i = 0; i < payload.attachments.length; i++) {
                     showGlobalLoader(`🚀 ファイル分割転送中... (${i+1}/${payload.attachments.length})`);
                     const upPayload = { type: 'upload', title: payload.title, file: payload.attachments[i] };
                     const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
                     const resData = await res.json();
-                    if (!resData.success) throw { status: 500, message: "Drive保存失敗" };
+                    
+                    // ★GAS未デプロイ時の「空の成功」を確実に見抜いて弾く防壁
+                    if (!resData.success || !resData.data) {
+                        throw { status: 500, message: "GASが更新されていないぞ。Webアプリとして「新しいデプロイ」を発行したか確認しろ。" };
+                    }
+                    
                     payload.keptAttachments.push(resData.data);
+                    action.keptAttachments.push(resData.data); // ★成功したファイルは元データにも退避
                 }
-                delete payload.attachments; // 巨大な実体データをパケットから消去
+                
+                delete payload.attachments; 
+                delete action.attachments; // ★重要：元アクションからも消去し、エラー退避時の死のループを断ち切る
                 payload.attachmentsModified = true;
+                action.attachmentsModified = true;
                 showGlobalLoader(`🚀 本体データを登録中...`);
             }
 
