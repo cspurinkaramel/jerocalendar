@@ -119,7 +119,10 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // ★サイレントモードを追加（isSilentがtrueなら画面をロックしない）
 async function processSyncQueue(isSilent = false) {
     if (!navigator.onLine) return; const queue = await getSyncQueue(); if (queue.length === 0) { await updateSyncBadge(); return; }
-    if (!isSilent) showGlobalLoader(`同期中... 残り${queue.length}件`);
+    
+    // ★修正: 画面を塞ぐ巨大ローダーを完全排除し、下部のトーストで控えめに通知する
+    if (!isSilent) showToast(`🔄 裏で未送信データ(${queue.length}件)を同期中...`);
+    
     let successCount = 0; let needsRefresh = false; let authErrorOccurred = false;
     for (let item of queue) {
         if (authErrorOccurred) break; 
@@ -147,8 +150,9 @@ async function processSyncQueue(isSilent = false) {
             }
         }
     }
-    if (!isSilent) hideGlobalLoader(); 
-    if (successCount > 0 && !isSilent) showToast(`✅ ${successCount}件の同期を完了した。`); 
+    
+    // ★修正: ローダー解除を削除し、成功時のトーストだけを残す
+    if (successCount > 0 && !isSilent) showToast(`✅ ${successCount}件の裏側同期が完了した。`); 
     await updateSyncBadge(); 
     if (needsRefresh) {
         const wrappers = document.querySelectorAll('.month-wrapper');
