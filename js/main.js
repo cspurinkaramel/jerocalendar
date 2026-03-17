@@ -35,11 +35,22 @@ async function compressImage(file) {
 function parseTaskAttachments(text) {
     if (!text) return { cleanText: '', files: [] };
     let files = []; let cleanText = text;
-    const regex = /📁 \[(.*?)\] (https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)[^\s]*)/g; let match;
-    while ((match = regex.exec(cleanText)) !== null) { files.push({ title: match[1], fileUrl: match[2], fileId: match[3] }); cleanText = cleanText.replace(match[0], ''); }
+    
+    // 1. 抽出フェーズ（イテレーション中の文字列破壊を禁止）
+    const regex = /📁 \[(.*?)\] (https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)[^\s]*)/g;
+    const matches = [...cleanText.matchAll(regex)];
+    matches.forEach(match => { files.push({ title: match[1], fileUrl: match[2], fileId: match[3] }); });
+
     const oldRegex = /(https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)[^\s]*)/g;
-    while ((match = oldRegex.exec(cleanText)) !== null) { if (!files.some(f => f.fileId === match[2])) { files.push({ title: 'ファイル', fileUrl: match[1], fileId: match[2] }); } cleanText = cleanText.replace(match[0], ''); }
-    cleanText = cleanText.replace(/📁 添付ファイル:[\s\S]*/, '').replace(/\[写真添付あり\]/g, '').trim();
+    const oldMatches = [...cleanText.matchAll(oldRegex)];
+    oldMatches.forEach(match => { if (!files.some(f => f.fileId === match[2])) { files.push({ title: 'ファイル', fileUrl: match[1], fileId: match[2] }); } });
+
+    // 2. 浄化フェーズ（抽出後に一括で削ぎ落とす）
+    cleanText = cleanText.replace(/📁 \[(.*?)\] (https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)[^\s]*)/g, '')
+                         .replace(/(https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)[^\s]*)/g, '')
+                         .replace(/📁 添付ファイル:[\s\S]*/, '')
+                         .replace(/\[写真添付あり\]/g, '')
+                         .trim();
     return { cleanText, files };
 }
 
@@ -486,7 +497,16 @@ async function dispatchManualAction(action) {
         if (!navigator.onLine) { const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 圏外だ。退避した。`); await updateSyncBadge(); } 
         else {
             try {
-                await executeApiAction(action); showToast(`✅ ${msgType}の${msgAction}完了`);
+                // ★追加：Drive転送の可視化機構
+                if (action.attachments && action.attachments.length > 0) {
+                    showGlobalLoader(`🚀 Driveへファイル(${action.attachments.length}件)を転送中...`);
+                }
+                
+                await executeApiAction(action);
+                
+                if (action.attachments && action.attachments.length > 0) hideGlobalLoader();
+                showToast(`✅ ${msgType}の${msgAction}完了`);
+                
                 if (dataCache[monthKey]) {
                     if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
                     else if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) delete existing._pendingUpdate; } 
@@ -498,6 +518,9 @@ async function dispatchManualAction(action) {
                 }
                 const existingMonthAfter = document.getElementById(`month-${year}-${month}`); if (existingMonthAfter) existingMonthAfter.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
             } catch (e) {
+                // ★追加：通信エラー時にも確実にローダーを解除する
+                if (action.attachments && action.attachments.length > 0) hideGlobalLoader();
+                
                 const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 通信不良だ。裏で退避した。`);
                 const existingMonthErr = document.getElementById(`month-${year}-${month}`); if (existingMonthErr) existingMonthErr.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
             }
