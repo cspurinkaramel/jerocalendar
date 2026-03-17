@@ -190,14 +190,13 @@ function getCardHtml(type, item) {
     }
 
     if (fileItems.length > 0) {
-        driveThumbHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; padding-left:2px;">';
+        // ★修正: 横スクロール可能にし、画像のみをスタイリッシュに並べる
+        driveThumbHtml = '<div style="display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px; margin-top:6px; padding-bottom:4px; padding-left:2px; -webkit-overflow-scrolling:touch;">';
         fileItems.forEach(f => {
-            // 画像以外ならPDFアイコンを代用
             const thumbSrc = f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
             driveThumbHtml += `
-                <div style="position:relative; flex-shrink:0; background:var(--head-bg); border:1px solid var(--border); border-radius:6px; padding:3px 6px 3px 3px; display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1); cursor:pointer; max-width: 100%; overflow:hidden;" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
-                    <img src="${thumbSrc}" style="height:32px; width:32px; object-fit:cover; border-radius:4px; flex-shrink:0; background:#f0f0f0;">
-                    <span style="font-size:11px; color:var(--txt); font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${f.title}</span>
+                <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
+                    <img src="${thumbSrc}" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
                 </div>`;
         });
         driveThumbHtml += '</div>';
@@ -442,6 +441,16 @@ function openTaskEditor(t = null) {
     const parsed = parseTaskAttachments(t ? t.notes || '' : '');
     document.getElementById('task-edit-notes').value = extractTaskData(parsed.cleanText).cleanNotes;
     
+    // ★修正: 状態の読み込み
+    const statusCheckbox = document.getElementById('task-edit-status');
+    const statusText = document.getElementById('task-edit-status-text');
+    const isCompleted = t && t.status === 'completed';
+    if (statusCheckbox && statusText) {
+        statusCheckbox.checked = isCompleted;
+        statusText.innerText = isCompleted ? '完了済' : '未完了';
+        statusText.style.color = isCompleted ? '#34c759' : '#888';
+    }
+    
     const previewContainer = document.getElementById('task-attach-preview');
     if (previewContainer) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
@@ -459,12 +468,40 @@ function openTaskEditor(t = null) {
 
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('task-attach-preview'); if(prev) prev.innerHTML = ''; pendingTaskAttachments = []; activeTaskAttachments = []; }
 
-async function toggleTaskCompletion(taskId, newStatus) { let targetTask = null; for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } } if (!targetTask) return; if (targetTask._localId) { showToast('🔄 未同期タスクの完了はできない。'); return; } targetTask.status = newStatus; const td = targetTask.due ? new Date(targetTask.due) : new Date(); await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } const payload = { type: 'task', method: 'update', id: taskId, status: newStatus }; try { if (navigator.onLine) { await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) }); } else { showToast('圏外では操作不可だ。'); targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed'; await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); } } catch (e) {} }
+async function toggleTaskCompletion(taskId, newStatus) { 
+    let targetTask = null; 
+    for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } } 
+    if (!targetTask) return; 
+    if (targetTask._localId) { showToast('🔄 未同期タスクの完了はできない。'); return; } 
+    
+    targetTask.status = newStatus; 
+    const td = targetTask.due ? new Date(targetTask.due) : new Date(); 
+    await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
+    if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
+    
+    // ★修正：ステータス変更時も全データをパケットに積むことで(無名)バグを完全に封殺
+    const payload = { type: 'task', method: 'update', id: taskId, title: targetTask.title, description: targetTask.notes, due: targetTask.due, status: newStatus }; 
+    try { 
+        if (navigator.onLine) { 
+            await executeApiAction(payload); 
+        } else { 
+            showToast('圏外では操作不可だ。'); 
+            targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed'; 
+            await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
+        } 
+    } catch (e) { 
+        showToast('通信エラーで状態を戻した。'); 
+        targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed'; 
+        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
+    } 
+}
 
 async function saveTask() {
     const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim(); if (!title) { showToast('タスク名を入力してくれ'); return; }
     let rawNotes = document.getElementById('task-edit-notes').value.trim(); if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
-    const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes };
+    // ★修正: 状態の保存を追加
+    const isCompleted = document.getElementById('task-edit-status') ? document.getElementById('task-edit-status').checked : false;
+    const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes, status: isCompleted ? 'completed' : 'needsAction' };
     
     action.keptAttachments = activeTaskAttachments;
     if (pendingTaskAttachments.length > 0) action.attachments = pendingTaskAttachments;
@@ -476,8 +513,68 @@ async function saveTask() {
 async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; const action = { type: 'task', method: 'delete', id: id }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
 async function executeConversion(fromType) {
-    if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return; let deleteAction = null; let insertAction = null; let redrawDate = new Date();
-    if (fromType === 'event') { const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim() || '無名タスク'; const startVal = document.getElementById('edit-start').value; const notes = document.getElementById('edit-desc').value; const colorId = selectedColorId; if (id) deleteAction = { type: 'event', method: 'delete', id: id }; let rawNotes = notes; if (colorId) rawNotes += (rawNotes ? '\n' : '') + `[c:${colorId}]`; let dueIso = ''; if (startVal) { let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal; let parts = dStr.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); dueIso = dStr + 'T00:00:00.000Z'; } insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso }; } else { const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim() || '無名予定'; const dueVal = document.getElementById('task-edit-due').value; const notesVal = document.getElementById('task-edit-notes').value; const colorId = selectedTaskColorId; if (id) deleteAction = { type: 'task', method: 'delete', id: id }; insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, colorId: colorId }; if (dueVal) { let parts = dueVal.split('-'); redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); insertAction.start = dueVal; const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1); insertAction.end = getSafeLocalDateStr(ed); } else { insertAction.start = getSafeLocalDateStr(); const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = getSafeLocalDateStr(tmrw); } }
+    if (pendingEventAttachments.length > 0 || pendingTaskAttachments.length > 0) { showToast('⚠️ 追加中の写真がある。先に保存しろ。'); return; }
+    if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return; 
+    let deleteAction = null; let insertAction = null; let redrawDate = new Date();
+    
+    if (fromType === 'event') { 
+        const id = document.getElementById('edit-id').value; 
+        const title = document.getElementById('edit-title').value.trim(); 
+        if (!title) { showToast('タイトルがないと変換できないぞ。'); return; }
+        const startVal = document.getElementById('edit-start').value; 
+        const endVal = document.getElementById('edit-end').value;
+        const locVal = document.getElementById('edit-loc').value.trim();
+        const notes = document.getElementById('edit-desc').value; 
+        const colorId = selectedColorId; 
+        if (id) deleteAction = { type: 'event', method: 'delete', id: id }; 
+        
+        let rawNotes = notes; 
+        if (locVal) rawNotes = `📍 場所: ${locVal}\n` + rawNotes;
+        if (startVal && startVal.includes('T')) {
+            const stStr = startVal.replace('T', ' '); const edStr = endVal && endVal.includes('T') ? endVal.replace('T', ' ') : '';
+            rawNotes = `⏰ 予定時間: ${stStr} 〜 ${edStr}\n` + rawNotes;
+        }
+        if (colorId) rawNotes += (rawNotes ? '\n' : '') + `[c:${colorId}]`; 
+        
+        let dueIso = ''; 
+        if (startVal) { 
+            let dStr = startVal.includes('T') ? startVal.split('T')[0] : startVal; 
+            let parts = dStr.split('-'); 
+            redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); 
+            dueIso = dStr + 'T00:00:00.000Z'; 
+        } 
+        insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso }; 
+        if (activeEventAttachments && activeEventAttachments.length > 0) insertAction.keptAttachments = activeEventAttachments;
+    } else { 
+        const id = document.getElementById('task-edit-id').value; 
+        const title = document.getElementById('task-edit-title').value.trim(); 
+        if (!title) { showToast('タスク名がないと変換できないぞ。'); return; }
+        const dueVal = document.getElementById('task-edit-due').value; 
+        let notesVal = document.getElementById('task-edit-notes').value; 
+        const colorId = selectedTaskColorId; 
+        if (id) deleteAction = { type: 'task', method: 'delete', id: id }; 
+        
+        let locMatch = notesVal.match(/📍 場所:\s*(.+)/);
+        let locationStr = locMatch ? locMatch[1] : '';
+        notesVal = notesVal.replace(/📍 場所:\s*(.+)\n?/, '');
+        
+        insertAction = { type: 'event', method: 'insert', title: title, description: notesVal, location: locationStr, colorId: colorId }; 
+        
+        // ★真の完全引継ぎ：タスクの添付ファイルも、予定の「純正添付ファイル」としてGASへ安全に引き渡す
+        if (activeTaskAttachments && activeTaskAttachments.length > 0) {
+            insertAction.keptAttachments = activeTaskAttachments;
+        } 
+        if (dueVal) { 
+            let parts = dueVal.split('-'); 
+            redrawDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); 
+            insertAction.start = dueVal; 
+            const ed = new Date(redrawDate); ed.setDate(ed.getDate() + 1); 
+            insertAction.end = getSafeLocalDateStr(ed); 
+        } else { 
+            insertAction.start = getSafeLocalDateStr(); const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); insertAction.end = getSafeLocalDateStr(tmrw); 
+        } 
+    }
+    
     closeEditor(); closeTaskEditor(); closeAllModals(); showToast('🔄 変換をバックグラウンドで処理中...');
     if (typeof dataCache !== 'undefined' && deleteAction) { for (let key in dataCache) { if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); } if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); } } }
     await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', false);

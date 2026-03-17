@@ -483,6 +483,13 @@
             <div id="task-icon-palette"
                 style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;"></div>
 
+            <div class="form-row" style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:bold;">状態</span>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="task-edit-status" style="width:20px; height:20px; accent-color:#34c759;" onchange="document.getElementById('task-edit-status-text').innerText = this.checked ? '完了済' : '未完了'; document.getElementById('task-edit-status-text').style.color = this.checked ? '#34c759' : '#888';">
+                    <span id="task-edit-status-text" style="font-size:14px; font-weight:bold; color:#888;">未完了</span>
+                </label>
+            </div>
             <div class="form-row"><span>期限</span><input type="date" id="task-edit-due"></div>
             <div class="form-row"><span>完了時に再生成</span><select id="task-edit-recurrence">
                     <option value="">しない</option>
