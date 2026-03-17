@@ -653,8 +653,29 @@ async function executeApiAction(action, isRetry = false) {
                     const f = payload.attachments[i];
                     if (!f.base64) continue; // ★すでにURL化されたファイルは絶対にスキップする
                     
-                    showGlobalLoader(`🚀 ファイル分割転送中... (${i+1}/${payload.attachments.length})`);
+                    // ★修正：画面を塞ぐ巨大ローダーを禁止し、トーストに降格
+                    showToast(`🚀 ファイル分割転送中... (${i+1}/${payload.attachments.length})`);
                     const upPayload = { type: 'upload', title: payload.title, file: f };
+                    const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
+                    const resData = await res.json();
+                    
+                    if (!resData.success || !resData.data) throw { status: 500, message: "GASエラー" };
+                    
+                    payload.keptAttachments.push(resData.data);
+                    
+                    // ★最重要：リトライのループ地獄を防ぐため、通信成功と同時に元データの巨大Base64を完全に破壊する
+                    f.base64 = null; 
+                }
+                
+                // 本体の送信パケットから画像データを消去し、未定義エラーも回避する
+                delete payload.attachments; 
+                if (typeof action !== 'undefined' && action) delete action.attachments; 
+                payload.attachmentsModified = true;
+                if (typeof action !== 'undefined' && action) action.attachmentsModified = true;
+                
+                // ★修正：本体登録時もトーストで控えめに通知
+                showToast(`🚀 本体データを登録中...`);
+            }
                     const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
                     const resData = await res.json();
                     
