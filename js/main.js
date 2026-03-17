@@ -439,7 +439,8 @@ async function saveEvent() {
     
     // ★既存のファイルと新規ファイルを統合してパケットに積む
     action.keptAttachments = activeEventAttachments;
-    action.attachmentsModified = true; 
+    // 無条件trueによる空配列(attachments:[])送信エラーを防ぐため、新規追加がある場合のみフラグを立てる
+    action.attachmentsModified = pendingEventAttachments.length > 0; 
     if (pendingEventAttachments.length > 0) action.attachments = pendingEventAttachments;
 
     try { if (isAllDay) { action.start = startVal; let parts = endVal.split('-'); const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); ed.setDate(ed.getDate() + 1); action.end = getSafeLocalDateStr(ed); } else { action.start = startVal + ':00+09:00'; action.end = endVal + ':00+09:00'; } } catch (err) { showToast('エラーが起きた。もう一度頼む。'); return; }
@@ -520,6 +521,7 @@ async function saveTask() {
     const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes, status: isCompleted ? 'completed' : 'needsAction' };
     
     action.keptAttachments = activeTaskAttachments;
+    action.attachmentsModified = pendingTaskAttachments.length > 0;
     if (pendingTaskAttachments.length > 0) action.attachments = pendingTaskAttachments;
     
     const dueVal = document.getElementById('task-edit-due').value; if (dueVal) { action.due = dueVal + 'T00:00:00+09:00'; }
@@ -661,32 +663,35 @@ async function executeApiAction(action, isRetry = false) {
     if (payload.type === 'event') { if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } payload.useDefaultReminders = true; } 
     else if (payload.type === 'task') { if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || ""; if (payload.due && typeof payload.due === 'string') { const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/); if (dateMatch) { payload.due = dateMatch[1] + 'T00:00:00.000Z'; } } }
             
-    // ★ジェロの究極アルゴリズム：バイナリ直列ストリーム通信（FormData制限突破）
+    // ★ジェロの真の最適解：Base64/JSON個別送信（CORS・302リダイレクトの壁を完全に突破する）
     if (payload.attachments && payload.attachments.length > 0) {
         if (!payload.keptAttachments) payload.keptAttachments = [];
         
         for (let i = 0; i < payload.attachments.length; i++) {
             const f = payload.attachments[i];
-            if (!f.fileBlob && !f.base64) continue; 
+            // 安全網：Blobしか持っていない場合はBase64を再生成してパケットに詰める
+            if (!f.base64) {
+                if (f.fileBlob) {
+                    f.base64 = await new Promise(r => { const reader = new FileReader(); reader.onload = e => r(e.target.result.split(',')[1]); reader.readAsDataURL(f.fileBlob); });
+                } else { continue; }
+            }
             if (f.fileUrl) continue; // 既にURL化済みならスキップ
             
             if (typeof setProgress === 'function') setProgress(Math.round(((i) / payload.attachments.length) * 100));
             
-            let formData = new FormData();
-            formData.append('type', 'upload_direct');
-            formData.append('title', payload.title);
-            
-            if (f.fileBlob) {
-                formData.append('file', f.fileBlob, f.name);
-            } else if (f.base64) {
-                const byteString = atob(f.base64); const ab = new ArrayBuffer(byteString.length); const ia = new Uint8Array(ab);
-                for (let k = 0; k < byteString.length; k++) ia[k] = byteString.charCodeAt(k);
-                const blob = new Blob([ab], { type: f.mimeType }); formData.append('file', blob, f.name);
-            }
+            const uploadPayload = {
+                type: 'upload',
+                title: payload.title,
+                file: {
+                    name: f.name,
+                    mimeType: f.mimeType,
+                    base64: f.base64
+                }
+            };
 
-            const res = await fetch(getGasUrl(), { method: 'POST', body: formData });
+            const res = await fetch(getGasUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uploadPayload) });
             const resData = await res.json();
-            if (!resData.success || !resData.data) throw { status: 500, message: "GASファイルアップロードエラー" };
+            if (!resData.success || !resData.data) throw { status: 500, message: "GASファイル個別アップロードエラー" };
             
             payload.keptAttachments.push(resData.data);
             f.base64 = null; f.fileBlob = null; 
