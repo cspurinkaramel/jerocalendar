@@ -645,59 +645,40 @@ async function executeApiAction(action, isRetry = false) {
     if (payload.type === 'event') { if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } payload.useDefaultReminders = true; } 
     else if (payload.type === 'task') { if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || ""; if (payload.due && typeof payload.due === 'string') { const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/); if (dateMatch) { payload.due = dateMatch[1] + 'T00:00:00.000Z'; } } }
             
-            // ★究極防壁：直列分割アップロード（Base64の物理破壊によるループ根絶）
-            if (payload.attachments && payload.attachments.length > 0) {
-                if (!payload.keptAttachments) payload.keptAttachments = [];
-                
-                for (let i = 0; i < payload.attachments.length; i++) {
-                    const f = payload.attachments[i];
-                    if (!f.base64) continue; // ★すでにURL化されたファイルは絶対にスキップする
-                    
-                    // ★修正：画面を塞ぐ巨大ローダーを禁止し、トーストに降格
-                    showToast(`🚀 ファイル分割転送中... (${i+1}/${payload.attachments.length})`);
-                    const upPayload = { type: 'upload', title: payload.title, file: f };
-                    const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
-                    const resData = await res.json();
-                    
-                    if (!resData.success || !resData.data) throw { status: 500, message: "GASエラー" };
-                    
-                    payload.keptAttachments.push(resData.data);
-                    
-                    // ★最重要：リトライのループ地獄を防ぐため、通信成功と同時に元データの巨大Base64を完全に破壊する
-                    f.base64 = null; 
-                }
-                
-                // 本体の送信パケットから画像データを消去し、未定義エラーも回避する
-                delete payload.attachments; 
-                if (typeof action !== 'undefined' && action) delete action.attachments; 
-                payload.attachmentsModified = true;
-                if (typeof action !== 'undefined' && action) action.attachmentsModified = true;
-                
-                // ★修正：本体登録時もトーストで控えめに通知
-                showToast(`🚀 本体データを登録中...`);
-            }
-                    const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
-                    const resData = await res.json();
-                    
-                    if (!resData.success || !resData.data) throw { status: 500, message: "GASエラー" };
-                    
-                    payload.keptAttachments.push(resData.data);
-                    
-                    // ★最重要：リトライのループ地獄を防ぐため、通信成功と同時に元データの巨大Base64を完全に破壊する
-                    f.base64 = null; 
-                }
-                
-                // 本体の送信パケットから画像データを消去し、未定義エラーも回避する
-                delete payload.attachments; 
-                if (typeof action !== 'undefined' && action) delete action.attachments; 
-                payload.attachmentsModified = true;
-                if (typeof action !== 'undefined' && action) action.attachmentsModified = true;
-                
-                showGlobalLoader(`🚀 本体データを登録中...`);
-            }
+    // ★究極防壁：直列分割アップロード（Base64の物理破壊によるループ根絶）
+    if (payload.attachments && payload.attachments.length > 0) {
+        if (!payload.keptAttachments) payload.keptAttachments = [];
+        
+        for (let i = 0; i < payload.attachments.length; i++) {
+            const f = payload.attachments[i];
+            if (!f.base64) continue; // ★すでにURL化されたファイルは絶対にスキップする
+            
+            // ★修正：画面を塞ぐ巨大ローダーを禁止し、トーストに降格
+            showToast(`🚀 ファイル分割転送中... (${i+1}/${payload.attachments.length})`);
+            const upPayload = { type: 'upload', title: payload.title, file: f };
+            const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(upPayload) });
+            const resData = await res.json();
+            
+            if (!resData.success || !resData.data) throw { status: 500, message: "GASエラー" };
+            
+            payload.keptAttachments.push(resData.data);
+            
+            // ★最重要：リトライのループ地獄を防ぐため、通信成功と同時に元データの巨大Base64を完全に破壊する
+            f.base64 = null; 
+        }
+        
+        // 本体の送信パケットから画像データを消去し、未定義エラーも回避する
+        delete payload.attachments; 
+        if (typeof action !== 'undefined' && action) delete action.attachments; 
+        payload.attachmentsModified = true;
+        if (typeof action !== 'undefined' && action) action.attachmentsModified = true;
+        
+        // ★修正：本体登録時もトーストで控えめに通知
+        showToast(`🚀 本体データを登録中...`);
+    }
 
-            try {
-                const response = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) }); const result = await response.json();
+    try {
+        const response = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) }); const result = await response.json();
         if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
     } catch (error) {
         const code = error.status || 500;
