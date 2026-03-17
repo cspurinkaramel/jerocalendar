@@ -116,9 +116,14 @@ async function updateSyncBadge() {
     else { if (count > 0) { badge.innerText = `🔄 未送信データが ${count} 件あるぞ (タップで管理)`; badge.style.background = 'var(--accent)'; badge.classList.add('active'); badge.onclick = () => { openSyncManager(); }; } else { badge.classList.remove('active'); badge.onclick = null; } }
 }
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+let isSyncProcessing = false; // ★究極防壁2：死の二重アップロードを防ぐ絶対ロック
+
 // ★サイレントモードを追加（isSilentがtrueなら画面をロックしない）
 async function processSyncQueue(isSilent = false) {
-    if (!navigator.onLine) return; const queue = await getSyncQueue(); if (queue.length === 0) { await updateSyncBadge(); return; }
+    if (isSyncProcessing) return; // 既に裏で通信中なら弾く（多重送信バグの根絶）
+    isSyncProcessing = true;
+    try {
+        if (!navigator.onLine) return; const queue = await getSyncQueue(); if (queue.length === 0) { await updateSyncBadge(); return; }
     
     // ★修正: 画面を塞ぐ巨大ローダーを完全排除し、下部のトーストで控えめに通知する
     if (!isSilent) showToast(`🔄 裏で未送信データ(${queue.length}件)を同期中...`);
@@ -165,6 +170,9 @@ async function processSyncQueue(isSilent = false) {
             for (const wrapper of wrappers) { const parts = wrapper.id.split('-'); if (parts.length === 3) { await fetchAndRenderMonth(parseInt(parts[1]), parseInt(parts[2]), 'replace', true); } }
             if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); }
         }, 2000);
+    }
+    } finally {
+        isSyncProcessing = false; // ★究極防壁2：処理やエラーが終われば確実にロックを解除
     }
 }
 
@@ -595,6 +603,20 @@ async function dispatchManualAction(action) {
     const year = td.getFullYear(); const month = td.getMonth(); const monthKey = `${year}-${month}`; const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); updateLocalCacheForOptimisticUI(action, tempLocalId);
     const existingMonth = document.getElementById(`month-${year}-${month}`); if (existingMonth) existingMonth.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
     (async () => {
+        // ★究極防壁1：添付ファイルがある場合は問答無用で「野戦倉庫（キュー）」に突っ込み、即座にUIを解放する
+        if (action.attachments && action.attachments.length > 0) {
+            const localId = await saveToSyncQueue(action); 
+            updateLocalCacheForOptimisticUI(action, localId, tempLocalId); 
+            
+            // UI上は即座に追加・保存されたように見せる
+            const existingMonthErr = document.getElementById(`month-${year}-${month}`); if (existingMonthErr) existingMonthErr.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+            
+            await updateSyncBadge(); // ★これにより即座に「未送信の青い帯」が確実に出現する
+            processSyncQueue(true);  // 裏で静かにチャンク送信を開始
+            return; // 画面のロックを即座に解除して終了
+        }
+
+        // 以下は添付なしの通常ルート（高速なためフォアグラウンドで処理）
         if (!navigator.onLine) { const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 圏外だ。退避した。`); await updateSyncBadge(); } 
         else {
             try {
@@ -645,7 +667,7 @@ async function executeApiAction(action, isRetry = false) {
     if (payload.type === 'event') { if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } payload.useDefaultReminders = true; } 
     else if (payload.type === 'task') { if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || ""; if (payload.due && typeof payload.due === 'string') { const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/); if (dateMatch) { payload.due = dateMatch[1] + 'T00:00:00.000Z'; } } }
             
-    // ★超究極防壁：チャンクアップロード（10MBの壁を破壊するパズルアルゴリズム）
+    // ★究極防壁3：チャンクアップロード（完全サイレント・プログレスバー連動）
     if (payload.attachments && payload.attachments.length > 0) {
         if (!payload.keptAttachments) payload.keptAttachments = [];
         
@@ -653,15 +675,17 @@ async function executeApiAction(action, isRetry = false) {
             const f = payload.attachments[i];
             if (!f.base64) continue; 
             
-            const maxChars = 2 * 1024 * 1024; // 2MB単位にスライス（GAS制限を余裕で回避）
+            const maxChars = 2 * 1024 * 1024; 
             const totalChunks = Math.ceil(f.base64.length / maxChars);
             const uploadId = "up_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
             let finalResData = null;
             
             for (let j = 0; j < totalChunks; j++) {
-                showToast(`🚀 ファイル転送中... (${i+1}/${payload.attachments.length}) [破片 ${j+1}/${totalChunks}]`);
-                const chunkData = f.base64.substring(j * maxChars, (j + 1) * maxChars);
+                // ❌ うるさいトーストを全廃止し、画面上部の青いプログレスバーだけを静かに進める
+                let progress = Math.round(((i / payload.attachments.length) + ((j + 1) / totalChunks) / payload.attachments.length) * 100);
+                if (typeof setProgress === 'function') setProgress(progress);
                 
+                const chunkData = f.base64.substring(j * maxChars, (j + 1) * maxChars);
                 const upPayload = { 
                     type: 'upload_chunk', uploadId: uploadId, chunkIndex: j, totalChunks: totalChunks, 
                     chunkData: chunkData, title: payload.title, fileName: f.name, mimeType: f.mimeType || 'application/octet-stream'
@@ -677,7 +701,7 @@ async function executeApiAction(action, isRetry = false) {
                 }
             }
             payload.keptAttachments.push(finalResData);
-            f.base64 = null; // 物理破壊
+            f.base64 = null; 
         }
         
         delete payload.attachments; 
@@ -685,7 +709,7 @@ async function executeApiAction(action, isRetry = false) {
         payload.attachmentsModified = true;
         if (typeof action !== 'undefined' && action) action.attachmentsModified = true;
         
-        showToast(`🚀 本体データを登録中...`);
+        if (typeof setProgress === 'function') setProgress(100);
     }
 
     try {
