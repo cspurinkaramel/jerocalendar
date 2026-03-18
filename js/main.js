@@ -225,7 +225,11 @@ function getCardHtml(type, item) {
     if (isEvent && item.attachments && item.attachments.length > 0) {
         item.attachments.forEach(att => {
             const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
-            if (match) fileItems.push({ id: match[1], title: att.title || 'ファイル', isImg: att.mimeType && att.mimeType.startsWith('image/'), base64: att.base64, mimeType: att.mimeType });
+            if (match) {
+                let isImg = att.mimeType && att.mimeType.startsWith('image/');
+                if (!isImg && att.title) { isImg = !att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i); }
+                fileItems.push({ id: match[1], title: att.title || 'ファイル', isImg: isImg, base64: att.base64, mimeType: att.mimeType });
+            }
         });
     } else if (!isEvent) {
         const parsed = parseTaskAttachments(item.notes);
@@ -411,7 +415,8 @@ function openEditor(e = null) {
                 const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
                 if (match) {
                     const fileId = match[1]; activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: att.mimeType, fileId: fileId });
-                    const isImg = att.mimeType && att.mimeType.startsWith('image/');
+                    let isImg = att.mimeType && att.mimeType.startsWith('image/');
+                    if (!isImg && att.title) { isImg = !att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i); }
                     const thumbSrc = (isImg && att.base64) ? `data:${att.mimeType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
                     previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
