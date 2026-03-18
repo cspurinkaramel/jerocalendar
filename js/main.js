@@ -54,10 +54,19 @@ function parseTaskAttachments(text) {
     return { cleanText, files };
 }
 
-// ★プレビュー表示エンジン（画像をタップで元ファイルを開く機能付き）
-function openImageViewer(fileId) {
+// ★プレビュー表示エンジン（野戦倉庫連携・非同期対応）
+async function openImageViewer(fileId) {
     const viewer = document.getElementById('img-viewer'); const img = document.getElementById('img-viewer-src');
     if (viewer && img) {
+        if (fileId.startsWith('dummy_')) {
+            const realUid = parseInt(fileId.replace('dummy_', ''));
+            const queue = await getSyncQueue();
+            let foundBase64 = null; let foundMime = 'image/jpeg';
+            for (const q of queue) { if (q.payload.attachments) { const match = q.payload.attachments.find(a => a.uid === realUid); if (match && match.base64) { foundBase64 = match.base64; foundMime = match.mimeType; break; } } }
+            if (foundBase64) {
+                img.src = `data:${foundMime};base64,${foundBase64}`; img.onclick = null; viewer.classList.add('active'); showToast('🔄 送信待機中の高画質プレビューだ'); return;
+            }
+        }
         img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`; viewer.classList.add('active');
         img.onclick = () => { window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank'); };
         showToast('画像をタップするとオリジナルファイルを開けるぞ');
@@ -210,18 +219,22 @@ function getCardHtml(type, item) {
     if (isEvent && item.attachments && item.attachments.length > 0) {
         item.attachments.forEach(att => {
             const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
-            if (match) fileItems.push({ id: match[1], title: att.title || 'ファイル', isImg: att.mimeType && att.mimeType.startsWith('image/') });
+            if (match) fileItems.push({ id: match[1], title: att.title || 'ファイル', isImg: att.mimeType && att.mimeType.startsWith('image/'), base64: att.base64, mimeType: att.mimeType });
         });
     } else if (!isEvent) {
         const parsed = parseTaskAttachments(item.notes);
-        parsed.files.forEach(f => fileItems.push({ id: f.fileId, title: f.title, isImg: true }));
+        parsed.files.forEach(f => {
+            let b64 = null; let mType = 'image/jpeg';
+            if (item.attachments) { const match = item.attachments.find(a => a.fileId === f.fileId); if (match) { b64 = match.base64; mType = match.mimeType; } }
+            fileItems.push({ id: f.fileId, title: f.title, isImg: true, base64: b64, mimeType: mType });
+        });
     }
 
     if (fileItems.length > 0) {
         // ★修正: 横スクロール可能にし、画像のみをスタイリッシュに並べる
         driveThumbHtml = '<div style="display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px; margin-top:6px; padding-bottom:4px; padding-left:2px; -webkit-overflow-scrolling:touch;">';
         fileItems.forEach(f => {
-            const thumbSrc = f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
+            const thumbSrc = f.base64 ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
                     <img src="${thumbSrc}" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
@@ -392,7 +405,7 @@ function openEditor(e = null) {
                 if (match) {
                     const fileId = match[1]; activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: att.mimeType, fileId: fileId });
                     const isImg = att.mimeType && att.mimeType.startsWith('image/');
-                    const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
+                    const thumbSrc = att.base64 ? `data:${att.mimeType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
                     previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
@@ -496,7 +509,8 @@ function openTaskEditor(t = null) {
         parsed.files.forEach(f => {
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId });
             const isImg = f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) || true; // タスクからはMIME判別難しいため一旦true
-            const thumbSrc = `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150`;
+            let thumbSrc = `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150`;
+            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match && match.base64) thumbSrc = `data:${match.mimeType};base64,${match.base64}`; }
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
     }
@@ -684,7 +698,7 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
     // ★真の幻影破壊: GoogleDrive正規表現をすり抜けるダミーURLを錬成する
     let tempAttachments = [];
     if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `https://drive.google.com/file/d/${a.fileId}`, title: a.title, mimeType: a.mimeType, fileId: a.fileId })));
-    if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `https://drive.google.com/file/d/dummy_${a.uid}`, title: a.name, mimeType: a.mimeType, fileId: `dummy_${a.uid}` })));
+    if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `https://drive.google.com/file/d/dummy_${a.uid}`, title: a.name, mimeType: a.mimeType, fileId: `dummy_${a.uid}`, base64: a.base64 })));
     
     let taskNotesWithAtt = action.description || '';
     if (tempAttachments.length > 0) {
@@ -694,7 +708,7 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
 
     if (action.method === 'insert') { 
         if (targetList.some(item => item._localId === localId)) return; 
-        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: 'needsAction', _localId: localId }; 
+        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: 'needsAction', attachments: tempAttachments, _localId: localId }; 
         targetList.push(newItem); 
     } 
     else if (action.method === 'update') { 
