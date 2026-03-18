@@ -64,7 +64,8 @@ async function openImageViewer(fileId) {
             let foundBase64 = null; let foundMime = 'image/jpeg';
             for (const q of queue) { if (q.payload.attachments) { const match = q.payload.attachments.find(a => a.uid === realUid); if (match && match.base64) { foundBase64 = match.base64; foundMime = match.mimeType; break; } } }
             if (foundBase64) {
-                img.src = `data:${foundMime};base64,${foundBase64}`; img.onclick = null; viewer.classList.add('active'); showToast('🔄 送信待機中の高画質プレビューだ'); return;
+                if (!foundMime.startsWith('image/')) { showToast('⚠️ 画像以外のファイルは送信完了後にDriveで開けるぞ。'); return; }
+                img.src = `data:${foundMime};base64,${foundBase64}`; img.onclick = null; viewer.classList.add('active'); showToast('🔄 送信待機中のプレビューだ'); return;
             }
         }
         img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`; viewer.classList.add('active');
@@ -239,7 +240,7 @@ function getCardHtml(type, item) {
         // ★修正: 横スクロール可能にし、画像のみをスタイリッシュに並べる
         driveThumbHtml = '<div style="display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px; margin-top:6px; padding-bottom:4px; padding-left:2px; -webkit-overflow-scrolling:touch;">';
         fileItems.forEach(f => {
-            const thumbSrc = f.base64 ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
+            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
                     <img src="${thumbSrc}" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
@@ -409,7 +410,7 @@ function openEditor(e = null) {
                 if (match) {
                     const fileId = match[1]; activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: att.mimeType, fileId: fileId });
                     const isImg = att.mimeType && att.mimeType.startsWith('image/');
-                    const thumbSrc = att.base64 ? `data:${att.mimeType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
+                    const thumbSrc = (isImg && att.base64) ? `data:${att.mimeType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
                     previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
@@ -512,9 +513,9 @@ function openTaskEditor(t = null) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         parsed.files.forEach(f => {
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId });
-            const isImg = f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) || true; // タスクからはMIME判別難しいため一旦true
+            let isImg = f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) || true; // 初期判定
             let thumbSrc = `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150`;
-            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match && match.base64) thumbSrc = `data:${match.mimeType};base64,${match.base64}`; }
+            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { isImg = match.mimeType && match.mimeType.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${match.mimeType};base64,${match.base64}`; else if (!isImg) thumbSrc = 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'; } }
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
     }
@@ -712,7 +713,7 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
 
     if (action.method === 'insert') { 
         if (targetList.some(item => item._localId === localId)) return; 
-        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: 'needsAction', attachments: tempAttachments, _localId: localId }; 
+        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: action.status || 'needsAction', attachments: tempAttachments, _localId: localId }; 
         targetList.push(newItem); 
     } 
     else if (action.method === 'update') { 
@@ -722,7 +723,7 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
                 existing.summary = action.title; existing.location = action.location; existing.description = action.description; existing.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) existing.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; existing.colorId = action.colorId; 
                 if (action.attachmentsModified) { existing.attachments = tempAttachments; }
             } else { 
-                existing.title = action.title; existing.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; existing.due = action.due; 
+                existing.title = action.title; existing.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; existing.due = action.due; existing.status = action.status || existing.status; 
             } 
             existing._pendingUpdate = true; 
         } 
