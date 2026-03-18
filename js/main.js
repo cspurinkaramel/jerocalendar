@@ -699,7 +699,7 @@ async function executeApiAction(action, isRetry = false) {
             }
 
             const res = await fetch(getGasUrl(), { method: 'POST', body: formData });
-            const resData = await res.json();s
+            const resData = await res.json();
             if (!resData.success || !resData.data) throw { status: 500, message: "GASファイル個別アップロードエラー" };
             
             payload.keptAttachments.push(resData.data);
