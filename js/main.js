@@ -358,12 +358,11 @@ function renderMonthDOM(year, month, data, position) {
         if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
             const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; const isPendingInsert = t._localId ? true : false; const isPendingDelete = t._pendingDelete ? true : false; const insertIcon = isPendingInsert ? '➕🔄 ' : ''; const deleteIcon = isPendingDelete ? '🗑️ ' : '';
             
-            // ★検証完了: メインカレンダーセル内でのタスク添付アイコン表示
+            // ★修正: 上画面のタスク📎もクリック不可（表示のみ）にし、誤爆を防ぐ
             let taskAttachIcon = '';
             const parsedNotes = parseTaskAttachments(t.notes || '');
             if (parsedNotes.files && parsedNotes.files.length > 0) {
-                const firstFileId = parsedNotes.files[0].fileId;
-                taskAttachIcon = `<span style="margin-left:3px; display:inline-block; cursor:pointer; pointer-events:auto;" onclick="event.stopPropagation(); openImageViewer('${firstFileId}')">📎</span>`;
+                taskAttachIcon = `<span style="margin-left:3px; opacity:0.8;">📎</span>`;
             }
             div.innerHTML = `<span style="opacity:0.8; pointer-events:none;">☑</span> <span style="pointer-events:none;">${deleteIcon}${insertIcon}${recurIcon}${pData.text}</span>${taskAttachIcon}`; 
             
