@@ -456,8 +456,9 @@ async function handleImageUpload(event, previewId) {
             base64Data = await new Promise(r => { const reader = new FileReader(); reader.onload = e => r(e.target.result.split(',')[1]); reader.readAsDataURL(file); });
         }
         const uid = Date.now() + Math.floor(Math.random()*1000);
-        // ★修正：バイナリデータ(fileBlob)を通信用の弾薬として追加保持する
-        const attachmentData = { mimeType: fileBlob.type || file.type, name: file.name, base64: base64Data, fileBlob: fileBlob, uid: uid };
+        // ★修正：バイナリデータ(fileBlob)を通信用の弾薬として追加保持する。不明な場合は拡張子から推論
+        const inferredMime = file.name.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'application/octet-stream';
+        const attachmentData = { mimeType: fileBlob.type || file.type || inferredMime, name: file.name, base64: base64Data, fileBlob: fileBlob, uid: uid };
         const imgDiv = document.createElement('div'); imgDiv.className = 'preview-item'; imgDiv.style.cssText = "position:relative; display:inline-block;";
         const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
 
@@ -493,7 +494,7 @@ async function saveEvent() {
     closeEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-async function confirmDeleteEvent() { const id = document.getElementById('edit-id').value; if (!id || !confirm('この予定を完全に消し去るか？')) return; const action = { type: 'event', method: 'delete', id: id }; closeEditor(); closeAllModals(); await dispatchManualAction(action); }
+async function confirmDeleteEvent() { const id = document.getElementById('edit-id').value; if (!id || !confirm('この予定を完全に消し去るか？')) return; const startVal = document.getElementById('edit-start').value; const action = { type: 'event', method: 'delete', id: id, start: startVal }; closeEditor(); closeAllModals(); await dispatchManualAction(action); }
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。保存を押せ。'); }
 
 function openTaskEditor(t = null) {
@@ -583,7 +584,7 @@ async function saveTask() {
     closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; const action = { type: 'task', method: 'delete', id: id }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
+async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; const dueVal = document.getElementById('task-edit-due').value; const action = { type: 'task', method: 'delete', id: id, due: dueVal }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
 let isConverting = false; // ★連打防止の絶対ロック
 async function executeConversion(fromType) {
@@ -604,7 +605,7 @@ async function executeConversion(fromType) {
         const locVal = document.getElementById('edit-loc').value.trim();
         const notes = document.getElementById('edit-desc').value; 
         const colorId = selectedColorId; 
-        if (id) deleteAction = { type: 'event', method: 'delete', id: id }; 
+        if (id) deleteAction = { type: 'event', method: 'delete', id: id, start: startVal }; 
         
         let rawNotes = notes; 
         if (locVal) rawNotes = `📍 場所: ${locVal}\n` + rawNotes;
@@ -622,7 +623,12 @@ async function executeConversion(fromType) {
             dueIso = dStr + 'T00:00:00.000Z'; 
         } 
         insertAction = { type: 'task', method: 'insert', title: title, description: rawNotes, due: dueIso }; 
-        if (activeEventAttachments && activeEventAttachments.length > 0) insertAction.keptAttachments = activeEventAttachments;
+        if (activeEventAttachments && activeEventAttachments.length > 0) {
+            insertAction.keptAttachments = activeEventAttachments.map(a => {
+                let inferredMime = a.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg';
+                return { ...a, mimeType: a.mimeType || inferredMime };
+            });
+        }
     } else { 
         const id = document.getElementById('task-edit-id').value; 
         const title = document.getElementById('task-edit-title').value.trim(); 
@@ -630,7 +636,7 @@ async function executeConversion(fromType) {
         const dueVal = document.getElementById('task-edit-due').value; 
         let notesVal = document.getElementById('task-edit-notes').value; 
         const colorId = selectedTaskColorId; 
-        if (id) deleteAction = { type: 'task', method: 'delete', id: id }; 
+        if (id) deleteAction = { type: 'task', method: 'delete', id: id, due: dueVal }; 
         
         let locMatch = notesVal.match(/📍 場所:\s*(.+)/);
         let locationStr = locMatch ? locMatch[1] : '';
