@@ -680,15 +680,21 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
     let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
     const monthKey = `${td.getFullYear()}-${td.getMonth()}`; if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] }; const targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
     if (replaceTempId) { const itemToReplace = targetList.find(item => item._localId === replaceTempId); if (itemToReplace) { itemToReplace._localId = localId; itemToReplace.id = 'dummy_' + localId; } return; }
+    
+    // ★真の幻影破壊: GoogleDrive正規表現をすり抜けるダミーURLを錬成する
+    let tempAttachments = [];
+    if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `https://drive.google.com/file/d/${a.fileId}`, title: a.title, mimeType: a.mimeType, fileId: a.fileId })));
+    if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `https://drive.google.com/file/d/dummy_${a.uid}`, title: a.name, mimeType: a.mimeType, fileId: `dummy_${a.uid}` })));
+    
+    let taskNotesWithAtt = action.description || '';
+    if (tempAttachments.length > 0) {
+        const fileLinks = tempAttachments.map(a => `📁 [${a.title}] ${a.fileUrl}`).join('\n');
+        taskNotesWithAtt = taskNotesWithAtt.replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim() + (taskNotesWithAtt ? '\n\n' : '') + '📁 添付ファイル:\n' + fileLinks;
+    }
+
     if (action.method === 'insert') { 
         if (targetList.some(item => item._localId === localId)) return; 
-        
-        // ★幻影破壊: 仮表示用の添付ファイル配列を生成し、UIを裏切らないようにする
-        let tempAttachments = [];
-        if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `dummy_url_${a.fileId}`, title: a.title, mimeType: a.mimeType })));
-        if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `dummy_url_${a.uid}`, title: a.name, mimeType: a.mimeType })));
-        
-        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: action.description, due: action.due, status: 'needsAction', _localId: localId }; 
+        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: 'needsAction', _localId: localId }; 
         targetList.push(newItem); 
     } 
     else if (action.method === 'update') { 
@@ -696,15 +702,9 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
         if (existing) { 
             if (action.type === 'event') { 
                 existing.summary = action.title; existing.location = action.location; existing.description = action.description; existing.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) existing.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; existing.colorId = action.colorId; 
-                // ★既存の予定更新時も添付ファイルを確実に反映する
-                if (action.attachmentsModified) {
-                    let tempAttachments = [];
-                    if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `dummy_url_${a.fileId}`, title: a.title, mimeType: a.mimeType })));
-                    if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `dummy_url_${a.uid}`, title: a.name, mimeType: a.mimeType })));
-                    existing.attachments = tempAttachments;
-                }
+                if (action.attachmentsModified) { existing.attachments = tempAttachments; }
             } else { 
-                existing.title = action.title; existing.notes = action.description; existing.due = action.due; 
+                existing.title = action.title; existing.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; existing.due = action.due; 
             } 
             existing._pendingUpdate = true; 
         } 
