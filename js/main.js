@@ -680,8 +680,35 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
     let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
     const monthKey = `${td.getFullYear()}-${td.getMonth()}`; if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] }; const targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
     if (replaceTempId) { const itemToReplace = targetList.find(item => item._localId === replaceTempId); if (itemToReplace) { itemToReplace._localId = localId; itemToReplace.id = 'dummy_' + localId; } return; }
-    if (action.method === 'insert') { if (targetList.some(item => item._localId === localId)) return; const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: action.description, due: action.due, status: 'needsAction', _localId: localId }; targetList.push(newItem); } 
-    else if (action.method === 'update') { const existing = targetList.find(item => item.id === action.id); if (existing) { if (action.type === 'event') { existing.summary = action.title; existing.location = action.location; existing.description = action.description; existing.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) existing.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; existing.colorId = action.colorId; } else { existing.title = action.title; existing.notes = action.description; existing.due = action.due; } existing._pendingUpdate = true; } } 
+    if (action.method === 'insert') { 
+        if (targetList.some(item => item._localId === localId)) return; 
+        
+        // ★幻影破壊: 仮表示用の添付ファイル配列を生成し、UIを裏切らないようにする
+        let tempAttachments = [];
+        if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `dummy_url_${a.fileId}`, title: a.title, mimeType: a.mimeType })));
+        if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `dummy_url_${a.uid}`, title: a.name, mimeType: a.mimeType })));
+        
+        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: action.description, due: action.due, status: 'needsAction', _localId: localId }; 
+        targetList.push(newItem); 
+    } 
+    else if (action.method === 'update') { 
+        const existing = targetList.find(item => item.id === action.id); 
+        if (existing) { 
+            if (action.type === 'event') { 
+                existing.summary = action.title; existing.location = action.location; existing.description = action.description; existing.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) existing.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; existing.colorId = action.colorId; 
+                // ★既存の予定更新時も添付ファイルを確実に反映する
+                if (action.attachmentsModified) {
+                    let tempAttachments = [];
+                    if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `dummy_url_${a.fileId}`, title: a.title, mimeType: a.mimeType })));
+                    if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `dummy_url_${a.uid}`, title: a.name, mimeType: a.mimeType })));
+                    existing.attachments = tempAttachments;
+                }
+            } else { 
+                existing.title = action.title; existing.notes = action.description; existing.due = action.due; 
+            } 
+            existing._pendingUpdate = true; 
+        } 
+    } 
     else if (action.method === 'delete') { const existing = targetList.find(item => item.id === action.id); if (existing) existing._pendingDelete = true; }
 }
 
@@ -707,26 +734,19 @@ async function executeApiAction(action, isRetry = false) {
             
             if (typeof setProgress === 'function') setProgress(Math.round(((i) / payload.attachments.length) * 100));
             
-            // ★第一原理の帰還：巨大ペイロードを安全に運ぶ唯一の船は FormData だ。
-            let formData = new FormData();
-            formData.append('type', 'upload_direct');
-            formData.append('title', payload.title);
-            
-            // 確実なバイナリ錬成：退避キューから復元された際は fileBlob が消滅しているため base64 から再生する
-            if (f.fileBlob && f.fileBlob instanceof Blob) {
-                formData.append('file', f.fileBlob, f.name);
-            } else if (f.base64) {
-                const byteString = atob(f.base64); 
-                const ab = new ArrayBuffer(byteString.length); 
-                const ia = new Uint8Array(ab);
-                for (let k = 0; k < byteString.length; k++) ia[k] = byteString.charCodeAt(k);
-                const blob = new Blob([ab], { type: f.mimeType }); 
-                formData.append('file', blob, f.name);
-            } else {
-                continue;
-            }
+            // ★iOS/Safariの悪魔（302リダイレクトによるFormDataのボディ消失）を完全に殺す。
+            // 最強の堅牢性を誇る「ヘッダー無し(text/plain)でのBase64/JSONペイロード送信」へ回帰する。
+            const uploadPayload = {
+                type: 'upload',
+                title: payload.title,
+                file: {
+                    name: f.name,
+                    mimeType: f.mimeType,
+                    base64: f.base64
+                }
+            };
 
-            const res = await fetch(getGasUrl(), { method: 'POST', body: formData });
+            const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(uploadPayload) });
             const resData = await res.json();
             if (!resData.success || !resData.data) throw { status: 500, message: "GASファイル個別アップロードエラー" };
             
