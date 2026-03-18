@@ -256,7 +256,8 @@ function getCardHtml(type, item) {
     }
 
     const safeData = encodeURIComponent(JSON.stringify(item));
-    const clickFn = isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`;
+    const isPending = isPendingInsert || isPendingUpdate || isPendingDelete;
+    const clickFn = isPending ? `event.stopPropagation(); showToast('⚠️ 裏側で通信中のデータだ。確定するまで数秒待て。')` : (isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`);
     let timeHtml = "";
     if (isEvent) {
         if (item.start && item.start.dateTime) {
