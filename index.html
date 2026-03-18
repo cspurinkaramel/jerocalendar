@@ -231,7 +231,7 @@
         </div>
         <div class="modal-header" style="flex-direction: column; align-items: flex-start; padding-bottom: 10px;">
             <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                <h2>設定・管理</h2><button class="close-btn" onclick="closeSettings()">✕</button>
+                <h2>設定・管理 <span id="app-version-display" style="font-size:12px; color:#888; font-weight:normal;">v10.1</span></h2><button class="close-btn" onclick="closeSettings()">✕</button>
             </div>
             <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-top:6px;">
                 <div id="account-info" style="font-size:12px; font-weight:600; color:var(--accent);">アカウント確認中...</div>
@@ -288,8 +288,14 @@
                 <div style="display:flex; gap:10px;"><button class="btn btn-gray"
                         style="font-size: 12px; padding: 10px;" onclick="exportSettings()">データ書出</button><button
                         class="btn btn-gray" style="font-size: 12px; padding: 10px;"
-                        onclick="importSettings()">データ読込</button></div><button class="btn btn-red"
-                    style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 キャッシュ完全リセット</button>
+                        onclick="importSettings()">データ読込</button></div>
+                
+                <div style="display:flex; gap:10px; margin-top: 10px;">
+                    <button class="btn btn-blue" style="font-size: 14px; flex: 1; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="forceHardReload()">🔄 最新アプリ強制取得</button>
+                </div>
+                
+                <button class="btn btn-red"
+                    style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 ローカルデータ完全消去</button>
             </div>
         </div>
         <div class="action-bar" style="padding: 15px 20px;"><button class="btn btn-blue" onclick="closeSettings()">完了
@@ -543,8 +549,8 @@
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
             onclick="event.stopPropagation()"></div>
 
-    <script src="./js/main.js?v=10.0" defer></script>
-    <script src="./js/jero_core.js?v=10.0" defer></script>
+    <script src="./js/main.js?v=10.1" defer></script>
+    <script src="./js/jero_core.js?v=10.1" defer></script>
 </body>
 
 </html>

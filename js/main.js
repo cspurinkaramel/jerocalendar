@@ -76,7 +76,23 @@ function closeSettings() { document.getElementById('settings-modal').classList.r
 function switchAccount() { if (confirm("サーバー接続設定(GAS URL)をリセットして初期状態に戻すか？")) { localStorage.removeItem('jero_gas_url'); location.reload(); } }
 function exportSettings() { const data = { theme: localStorage.getItem('jero_theme'), fs: localStorage.getItem('jero_fs'), voice: localStorage.getItem('jero_voice_enabled'), gemini_key: localStorage.getItem('jero_gemini_key'), gemini_prompt: localStorage.getItem('jero_gemini_prompt'), dict: localStorage.getItem('jero_adv_dict'), gas_url: localStorage.getItem('jero_gas_url') }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `JeroCalendar_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); showToast('✅ 辞書と設定データを書き出した。'); }
 function importSettings() { const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/json'; input.onchange = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (evt) => { try { const data = JSON.parse(evt.target.result); if (data.theme) localStorage.setItem('jero_theme', data.theme); if (data.fs) localStorage.setItem('jero_fs', data.fs); if (data.voice) localStorage.setItem('jero_voice_enabled', data.voice); if (data.gemini_key) localStorage.setItem('jero_gemini_key', data.gemini_key); if (data.gemini_prompt) localStorage.setItem('jero_gemini_prompt', data.gemini_prompt); if (data.gas_url) localStorage.setItem('jero_gas_url', data.gas_url); if (data.dict) { localStorage.setItem('jero_adv_dict', data.dict); advancedDict = JSON.parse(data.dict); } showToast('✅ 復元した。再起動するぞ。'); setTimeout(() => location.reload(), 1500); } catch (err) { showToast('❌ 形式が違うぞ。'); } }; reader.readAsText(file); }; input.click(); }
-function executeEmergencyReset() { if (confirm('全キャッシュとシステム(ServiceWorker)を消去・再起動するか？（事前に「データ書出」推奨）')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(registrations) { for(let registration of registrations) { registration.unregister(); } location.reload(true); }); } else { location.reload(true); } } }
+
+// ★新設：データを守りつつ、プログラム(JS)のキャッシュのみを強制突破するエンジン
+function forceHardReload() { 
+    if (confirm('最新のプログラム(JS/CSS)を強制取得して再起動するか？\n※予定データや設定は消えないから安心しろ。')) { 
+        if ('serviceWorker' in navigator) { 
+            navigator.serviceWorker.getRegistrations().then(function(registrations) { 
+                for(let registration of registrations) { registration.unregister(); } 
+                // URLの末尾に現在時刻(ミリ秒)を付与することで、ブラウザに「全く新しいページだ」と錯覚させキャッシュを貫通する
+                window.location.href = window.location.pathname + '?t=' + new Date().getTime(); 
+            }); 
+        } else { 
+            window.location.href = window.location.pathname + '?t=' + new Date().getTime(); 
+        } 
+    } 
+}
+
+function executeEmergencyReset() { if (confirm('全キャッシュとシステム(ServiceWorker)を消去・再起動するか？（事前に「データ書出」推奨）')) { indexedDB.deleteDatabase('JeroDB_v8'); localStorage.clear(); if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(registrations) { for(let registration of registrations) { registration.unregister(); } window.location.href = window.location.pathname + '?t=' + new Date().getTime(); }); } else { window.location.href = window.location.pathname + '?t=' + new Date().getTime(); } } }
 function showGlobalLoader(msg) { document.getElementById('loader-msg').innerText = msg; document.getElementById('global-loader').classList.add('active'); }
 function hideGlobalLoader() { document.getElementById('global-loader').classList.remove('active'); }
 function showToast(msg) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
