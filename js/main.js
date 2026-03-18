@@ -679,19 +679,26 @@ async function executeApiAction(action, isRetry = false) {
             
             if (typeof setProgress === 'function') setProgress(Math.round(((i) / payload.attachments.length) * 100));
             
-            const uploadPayload = {
-                type: 'upload',
-                title: payload.title,
-                file: {
-                    name: f.name,
-                    mimeType: f.mimeType,
-                    base64: f.base64
-                }
-            };
+            // ★第一原理の帰還：巨大ペイロードを安全に運ぶ唯一の船は FormData だ。
+            let formData = new FormData();
+            formData.append('type', 'upload_direct');
+            formData.append('title', payload.title);
+            
+            // 確実なバイナリ錬成：退避キューから復元された際は fileBlob が消滅しているため base64 から再生する
+            if (f.fileBlob && f.fileBlob instanceof Blob) {
+                formData.append('file', f.fileBlob, f.name);
+            } else if (f.base64) {
+                const byteString = atob(f.base64); 
+                const ab = new ArrayBuffer(byteString.length); 
+                const ia = new Uint8Array(ab);
+                for (let k = 0; k < byteString.length; k++) ia[k] = byteString.charCodeAt(k);
+                const blob = new Blob([ab], { type: f.mimeType }); 
+                formData.append('file', blob, f.name);
+            } else {
+                continue;
+            }
 
-            // ★幻影破壊: 'Content-Type': 'application/json' は絶対に入れてはいけない。
-            // GASはOPTIONS(プリフライト)要求に弱く、CORSエラーで通信が即死する。ヘッダーなし(text/plain)で撃ち込むのが正解だ。
-            const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(uploadPayload) });
+            const res = await fetch(getGasUrl(), { method: 'POST', body: formData });
             const resData = await res.json();s
             if (!resData.success || !resData.data) throw { status: 500, message: "GASファイル個別アップロードエラー" };
             
