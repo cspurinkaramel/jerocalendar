@@ -812,6 +812,8 @@ async function executeApiAction(action, isRetry = false) {
         if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone") || errStr.includes("deleted")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
     } catch (error) {
         const code = error.status || 500;
+        // ★真の目的達成：削除しようとして既に無い(404/410)場合は、成功として無罪放免にする
+        if ((code === 404 || code === 410) && payload.method === 'delete') return;
         if ((code === 404 || code === 410) && payload.method === 'update') { payload.method = 'insert'; delete payload.id; await executeApiAction(payload, true); return; }
         if (code === 400 && !isRetry) { if (payload.type === 'event') { const fallbackDate = getSafeLocalDateStr(); payload.start = fallbackDate; payload.end = fallbackDate; } else { delete payload.due; } await executeApiAction(payload, true); return; }
         throw error;
