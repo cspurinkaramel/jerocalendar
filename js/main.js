@@ -577,10 +577,15 @@ async function saveTask() {
 
 async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; const action = { type: 'task', method: 'delete', id: id }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
+let isConverting = false; // ★連打防止の絶対ロック
 async function executeConversion(fromType) {
+    if (isConverting) return; // ★連打されたら冷酷に弾く
     if (pendingEventAttachments.length > 0 || pendingTaskAttachments.length > 0) { showToast('⚠️ 追加中の写真がある。先に保存しろ。'); return; }
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return; 
-    let deleteAction = null; let insertAction = null; let redrawDate = new Date();
+    
+    isConverting = true;
+    try {
+        let deleteAction = null; let insertAction = null; let redrawDate = new Date();
     
     if (fromType === 'event') { 
         const id = document.getElementById('edit-id').value; 
@@ -627,7 +632,7 @@ async function executeConversion(fromType) {
         
         // ★真の完全引継ぎ：タスクの添付ファイルも、予定の「純正添付ファイル」としてGASへ安全に引き渡す
         if (activeTaskAttachments && activeTaskAttachments.length > 0) {
-            insertAction.keptAttachments = activeTaskAttachments;
+            insertAction.keptAttachments = activeTaskAttachments.map(a => ({ ...a, mimeType: a.mimeType || 'application/octet-stream' }));
         } 
         if (dueVal) { 
             let parts = dueVal.split('-'); 
@@ -640,10 +645,15 @@ async function executeConversion(fromType) {
         } 
     }
     
-    closeEditor(); closeTaskEditor(); closeAllModals(); showToast('🔄 変換をバックグラウンドで処理中...');
-    if (typeof dataCache !== 'undefined' && deleteAction) { for (let key in dataCache) { if (deleteAction.type === 'event' && dataCache[key].events) { dataCache[key].events = dataCache[key].events.filter(e => e.id !== deleteAction.id); } if (deleteAction.type === 'task' && dataCache[key].tasks) { dataCache[key].tasks = dataCache[key].tasks.filter(t => t.id !== deleteAction.id); } } }
-    await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', false);
-    (async () => { try { if (navigator.onLine) { if (deleteAction) await executeApiAction(deleteAction); await executeApiAction(insertAction); showToast('✅ 変換完了'); await fetchAndRenderMonth(redrawDate.getFullYear(), redrawDate.getMonth(), 'replace', true); } else { if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); showToast('📦 圏外のため退避した。'); await updateSyncBadge(); } } catch (e) { showToast('❌ 変換中にエラー発生。'); if (deleteAction) await saveToSyncQueue(deleteAction); await saveToSyncQueue(insertAction); await updateSyncBadge(); } })();
+    closeEditor(); closeTaskEditor(); closeAllModals();
+    
+    // ★司令塔(dispatchManualAction)への完全委譲。オプティミスティックUIも野戦倉庫も自動で効く
+    if (deleteAction) await dispatchManualAction(deleteAction);
+    await dispatchManualAction(insertAction);
+    
+    } finally {
+        isConverting = false; // ★処理が終われば確実に出口でロック解除
+    }
 }
 
 // ==========================================
@@ -799,7 +809,7 @@ async function executeApiAction(action, isRetry = false) {
 
     try {
         const response = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) }); const result = await response.json();
-        if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
+        if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone") || errStr.includes("deleted")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
     } catch (error) {
         const code = error.status || 500;
         if ((code === 404 || code === 410) && payload.method === 'update') { payload.method = 'insert'; delete payload.id; await executeApiAction(payload, true); return; }
