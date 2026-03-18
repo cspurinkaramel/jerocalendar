@@ -230,9 +230,10 @@ function getCardHtml(type, item) {
     } else if (!isEvent) {
         const parsed = parseTaskAttachments(item.notes);
         parsed.files.forEach(f => {
-            let b64 = null; let mType = 'image/jpeg';
-            if (item.attachments) { const match = item.attachments.find(a => a.fileId === f.fileId); if (match) { b64 = match.base64; mType = match.mimeType; } }
-            fileItems.push({ id: f.fileId, title: f.title, isImg: true, base64: b64, mimeType: mType });
+            let b64 = null; let mType = 'application/octet-stream';
+            let isImg = f.title.match(/\.(jpeg|jpg|gif|png)$/i) || f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) ? true : false;
+            if (item.attachments) { const match = item.attachments.find(a => a.fileId === f.fileId); if (match) { b64 = match.base64; mType = match.mimeType; isImg = mType.startsWith('image/'); } }
+            fileItems.push({ id: f.fileId, title: f.title, isImg: isImg, base64: b64, mimeType: mType });
         });
     }
 
@@ -513,8 +514,8 @@ function openTaskEditor(t = null) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         parsed.files.forEach(f => {
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId });
-            let isImg = f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) || true; // 初期判定
-            let thumbSrc = `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150`;
+            let isImg = f.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i) || f.title.match(/\.(jpeg|jpg|gif|png)$/i) ? true : false;
+            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
             if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { isImg = match.mimeType && match.mimeType.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${match.mimeType};base64,${match.base64}`; else if (!isImg) thumbSrc = 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'; } }
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
@@ -632,7 +633,13 @@ async function executeConversion(fromType) {
         
         // ★真の完全引継ぎ：タスクの添付ファイルも、予定の「純正添付ファイル」としてGASへ安全に引き渡す
         if (activeTaskAttachments && activeTaskAttachments.length > 0) {
-            insertAction.keptAttachments = activeTaskAttachments.map(a => ({ ...a, mimeType: a.mimeType || 'application/octet-stream' }));
+            insertAction.keptAttachments = activeTaskAttachments.map(a => {
+                let inferredMime = 'application/octet-stream';
+                if (a.title.match(/\.(jpeg|jpg)$/i)) inferredMime = 'image/jpeg';
+                else if (a.title.match(/\.png$/i)) inferredMime = 'image/png';
+                else if (a.title.match(/\.gif$/i)) inferredMime = 'image/gif';
+                return { ...a, mimeType: a.mimeType || inferredMime };
+            });
         } 
         if (dueVal) { 
             let parts = dueVal.split('-'); 
