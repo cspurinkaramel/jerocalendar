@@ -336,11 +336,10 @@ function renderMonthDOM(year, month, data, position) {
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             const spanType = isEventSpanning(e, dateStr); const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
             
-            // ★検証完了: メインカレンダーセル内での添付アイコン表示
+            // ★修正: 上画面の📎はクリック不可（表示のみ）にし、誤爆を防ぐ
             let attachIcon = '';
             if (e.attachments && e.attachments.length > 0) {
-                const firstFileId = (e.attachments[0].fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || e.attachments[0].fileUrl.match(/id=([a-zA-Z0-9_-]+)/))?.[1];
-                if (firstFileId) attachIcon = `<span style="margin-left:3px; display:inline-block; cursor:pointer; pointer-events:auto;" onclick="event.stopPropagation(); openImageViewer('${firstFileId}')">📎</span>`;
+                attachIcon = `<span style="margin-left:3px; opacity:0.8;">📎</span>`;
             }
             div.innerHTML = stateIcon + recurIcon + `<span style="pointer-events:none;">${pData.text}</span>` + attachIcon + (timeStr ? `<span style="pointer-events:none;"> (${timeStr})</span>` : '');
             
