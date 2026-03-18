@@ -434,7 +434,7 @@
                 <div class="attach-buttons"><button class="btn-attach"
                         onclick="document.getElementById('file-upload').click()">📎 ファイルを追加</button><button
                         class="btn-attach" onclick="addUrlPrompt()">🔗 リンクを追加</button></div><input type="file"
-                    id="file-upload" accept="image/*" style="display:none;"
+                    id="file-upload" accept="*/*" style="display:none;"
                     onchange="handleImageUpload(event, 'edit-attach-preview')">
                 <div id="edit-attach-preview" class="preview-container"></div>
             </div>
@@ -512,9 +512,9 @@
 
             <div class="attach-area">
                 <div class="attach-buttons"><button class="btn-attach"
-                        onclick="document.getElementById('task-file-upload').click()">📷 写真を追加</button><button
+                        onclick="document.getElementById('task-file-upload').click()">📎 ファイルを追加</button><button
                         class="btn-attach" onclick="addTaskUrlPrompt()">🔗 リンクを追加</button></div><input type="file"
-                    id="task-file-upload" accept="image/*" style="display:none;"
+                    id="task-file-upload" accept="*/*" style="display:none;"
                     onchange="handleImageUpload(event, 'task-attach-preview')">
                 <div id="task-attach-preview" class="preview-container"></div>
             </div>

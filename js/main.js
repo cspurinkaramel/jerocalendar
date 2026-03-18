@@ -588,7 +588,7 @@ async function confirmDeleteTask() { const id = document.getElementById('task-ed
 let isConverting = false; // ★連打防止の絶対ロック
 async function executeConversion(fromType) {
     if (isConverting) return; // ★連打されたら冷酷に弾く
-    if (pendingEventAttachments.length > 0 || pendingTaskAttachments.length > 0) { showToast('⚠️ 追加中の写真がある。先に保存しろ。'); return; }
+    if (pendingEventAttachments.length > 0 || pendingTaskAttachments.length > 0) { showToast('⚠️ 追加中のファイルがある。先に保存しろ。'); return; }
     if (!confirm(`この${fromType === 'event' ? '予定をタスク' : 'タスクを予定'}に変換して良いか？\n元のデータは消去されるぞ。`)) return; 
     
     isConverting = true;
