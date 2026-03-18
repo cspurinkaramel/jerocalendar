@@ -426,8 +426,8 @@ function openEditor(e = null) {
     initialEventAttachments = JSON.stringify(activeEventAttachments);
 }
 
-function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); activeEventAttachments = activeEventAttachments.filter(a => a.fileId !== fileId); }
-function removeExistingTaskAttachment(el, fileId) { el.parentElement.remove(); activeTaskAttachments = activeTaskAttachments.filter(a => a.fileId !== fileId); }
+function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); activeEventAttachments = activeEventAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
+function removeExistingTaskAttachment(el, fileId) { el.parentElement.remove(); activeTaskAttachments = activeTaskAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
 function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('edit-attach-preview'); if(prev) prev.innerHTML = ''; pendingEventAttachments = []; activeEventAttachments = []; }
 function addUrlPrompt() { const url = prompt("追加するリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('edit-desc'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
 function addTaskUrlPrompt() { const url = prompt("追加するリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('task-edit-notes'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
@@ -457,10 +457,10 @@ async function handleImageUpload(event, previewId) {
 
         if (previewId === 'edit-attach-preview') {
             pendingEventAttachments.push(attachmentData);
-            imgDiv.innerHTML = `<img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments = pendingEventAttachments.filter(a => a.uid !== ${uid});" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+            imgDiv.innerHTML = `<img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments = pendingEventAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
         } else {
             pendingTaskAttachments.push(attachmentData);
-            imgDiv.innerHTML = `<img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments = pendingTaskAttachments.filter(a => a.uid !== ${uid});" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+            imgDiv.innerHTML = `<img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments = pendingTaskAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
         }
         previewContainer.appendChild(imgDiv);
     }
