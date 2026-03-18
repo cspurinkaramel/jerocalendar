@@ -173,10 +173,15 @@ async function processSyncQueue(isSilent = false) {
                 await sleep(500);
             } catch (error) {
                 const code = error.status || (error.result && error.result.error && error.result.error.code);
+                const msg = error.message || "";
                 if (code === 401 || code === 403) { authErrorOccurred = true; hideGlobalLoader(); showToast('⚠️ サーバー側で認証エラーが起きた。'); await updateSyncBadge(); } 
                 else if (code === 400 || code === 404 || code === 410 || code === 413) { console.error(`❌ Google拒絶(Code:${code})。不正データ破棄。`); await clearSyncQueueItem(item.id); itemSuccess = true; needsRefresh = true; } 
                 else if (code === 429) { authErrorOccurred = true; showToast('⚠️ Google通信制限(429)。一時中断。'); } 
-                else { retries--; if (retries > 0) { const backoff = (4 - retries) * 2000; await sleep(backoff); } }
+                else { 
+                    if (msg) showToast(`⚠️ 裏側通信エラー: ${msg}`);
+                    retries--; 
+                    if (retries > 0) { const backoff = (4 - retries) * 2000; await sleep(backoff); } 
+                }
             }
         }
     }
@@ -762,14 +767,30 @@ async function executeApiAction(action, isRetry = false) {
 
             const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(uploadPayload) });
             const resData = await res.json();
-            if (!resData.success || !resData.data) throw { status: 500, message: "GASファイル個別アップロードエラー" };
+            if (!resData.success || !resData.data) throw { status: 500, message: `GAS拒絶: ${resData.error || "詳細不明"}` };
             
             payload.keptAttachments.push(resData.data);
+            
+            // ★真の進行状況の記憶：引数の元の action にも成功の証を刻み込み、リトライ時の重複を防ぐ
+            if (typeof action !== 'undefined' && action && action.attachments && action.attachments[i]) {
+                action.attachments[i].fileUrl = resData.data.fileUrl;
+                action.attachments[i].fileId = resData.data.fileId;
+                action.attachments[i].title = resData.data.title;
+                action.attachments[i].mimeType = resData.data.mimeType;
+                delete action.attachments[i].base64; // 実体を消して身軽にする
+            }
             f.base64 = null; f.fileBlob = null; 
+            
+            // ★負荷分散：連続送信によるGASのパニックを防ぐため、1秒の冷却時間を設ける
+            await new Promise(r => setTimeout(r, 1000));
         }
         
         delete payload.attachments; 
-        if (typeof action !== 'undefined' && action) delete action.attachments; 
+        // ★修正: リトライのために元の action.attachments は保持しつつ、全て fileUrl 化された場合はもう送る必要がないので破棄する
+        if (typeof action !== 'undefined' && action && action.attachments) {
+            const allSent = action.attachments.every(a => a.fileUrl);
+            if (allSent) delete action.attachments;
+        }
         payload.attachmentsModified = true;
         if (typeof action !== 'undefined' && action) action.attachmentsModified = true;
         
