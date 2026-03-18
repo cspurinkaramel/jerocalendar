@@ -359,6 +359,7 @@ function renderIconPalette(targetId, inputId) { const palette = document.getElem
 // ★退避配列（保持する既存データ群と、新規追加するデータ群）
 let activeEventAttachments = []; let activeTaskAttachments = [];
 let pendingEventAttachments = []; let pendingTaskAttachments = [];
+let initialEventAttachments = ""; let initialTaskAttachments = ""; // ★幻影検知: 変更差分を検知するための記憶領域
 
 function openEditor(e = null) {
     document.getElementById('overlay').classList.add('active'); document.getElementById('editor-modal').classList.add('active');
@@ -386,6 +387,9 @@ function openEditor(e = null) {
     startInput.type = isAllDay ? 'date' : 'datetime-local'; endInput.type = isAllDay ? 'date' : 'datetime-local';
     if (isAllDay) { startInput.value = getSafeLocalDateStr(st); endInput.value = getSafeLocalDateStr(ed); } else { const tzOffset = st.getTimezoneOffset() * 60000; startInput.value = new Date(st.getTime() - tzOffset).toISOString().slice(0, 16); endInput.value = new Date(ed.getTime() - tzOffset).toISOString().slice(0, 16); }
     document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定'; document.getElementById('btn-delete').style.display = e ? 'block' : 'none'; document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = e ? 'block' : 'none'; renderIconPalette('event-icon-palette', 'edit-title');
+    
+    // ★既存添付ファイルの状態を記憶
+    initialEventAttachments = JSON.stringify(activeEventAttachments);
 }
 
 function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); activeEventAttachments = activeEventAttachments.filter(a => a.fileId !== fileId); }
@@ -437,11 +441,13 @@ async function saveEvent() {
     
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     
-    // ★既存のファイルと新規ファイルを統合してパケットに積む
-    action.keptAttachments = activeEventAttachments;
-    // 無条件trueによる空配列(attachments:[])送信エラーを防ぐため、新規追加がある場合のみフラグを立てる
-    action.attachmentsModified = pendingEventAttachments.length > 0; 
-    if (pendingEventAttachments.length > 0) action.attachments = pendingEventAttachments;
+    // ★真の防壁：添付ファイルの「真の変更（追加or削除）」があった場合のみパケットに載せ、不要な400エラーを回避する
+    const isAttachmentsChanged = (pendingEventAttachments.length > 0) || (JSON.stringify(activeEventAttachments) !== initialEventAttachments);
+    if (isAttachmentsChanged) {
+        action.keptAttachments = activeEventAttachments;
+        action.attachmentsModified = true;
+        if (pendingEventAttachments.length > 0) action.attachments = pendingEventAttachments;
+    }
 
     try { if (isAllDay) { action.start = startVal; let parts = endVal.split('-'); const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); ed.setDate(ed.getDate() + 1); action.end = getSafeLocalDateStr(ed); } else { action.start = startVal + ':00+09:00'; action.end = endVal + ':00+09:00'; } } catch (err) { showToast('エラーが起きた。もう一度頼む。'); return; }
     closeEditor(); closeAllModals(); await dispatchManualAction(action);
@@ -481,6 +487,9 @@ function openTaskEditor(t = null) {
     selectTaskColor(null, t ? extractTaskData(t.notes).colorId : '');
     const dueInput = document.getElementById('task-edit-due'); if (t && t.due) { dueInput.value = getSafeLocalDateStr(new Date(t.due)); } else { dueInput.value = selectedDateStr || getSafeLocalDateStr(); }
     document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none'; const convertBtn = document.getElementById('btn-convert-event'); if (convertBtn) convertBtn.style.display = t ? 'block' : 'none'; renderIconPalette('task-icon-palette', 'task-edit-title');
+    
+    // ★既存添付ファイルの状態を記憶（修正4の補完）
+    initialTaskAttachments = JSON.stringify(activeTaskAttachments);
 }
 
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('task-attach-preview'); if(prev) prev.innerHTML = ''; pendingTaskAttachments = []; activeTaskAttachments = []; }
@@ -520,9 +529,12 @@ async function saveTask() {
     const isCompleted = document.getElementById('task-edit-status') ? document.getElementById('task-edit-status').checked : false;
     const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes, status: isCompleted ? 'completed' : 'needsAction' };
     
-    action.keptAttachments = activeTaskAttachments;
-    action.attachmentsModified = pendingTaskAttachments.length > 0;
-    if (pendingTaskAttachments.length > 0) action.attachments = pendingTaskAttachments;
+    const isAttachmentsChanged = (pendingTaskAttachments.length > 0) || (JSON.stringify(activeTaskAttachments) !== initialTaskAttachments);
+    if (isAttachmentsChanged) {
+        action.keptAttachments = activeTaskAttachments;
+        action.attachmentsModified = true;
+        if (pendingTaskAttachments.length > 0) action.attachments = pendingTaskAttachments;
+    }
     
     const dueVal = document.getElementById('task-edit-due').value; if (dueVal) { action.due = dueVal + 'T00:00:00+09:00'; }
     closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
