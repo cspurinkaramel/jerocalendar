@@ -3,6 +3,7 @@ function getGasUrl() { const url = localStorage.getItem('jero_gas_url'); if (!ur
 let dataCache = {}; let renderedMonths = []; let observer, isFetching = false, isAuthError = false;
 let selectedDateStr = "", selectedColorId = "", selectedTaskColorId = "", currentView = 'calendar';
 let isCalendarInited = false; 
+let deletedIds = new Set(); // ★幻影迎撃用ブラックリスト（Googleの同期遅延によるデータの復活を防ぐ） 
 const GOOGLE_COLORS = { "1": "#7986cb", "2": "#33b679", "3": "#8e24aa", "4": "#e67c73", "5": "#f6bf26", "6": "#f4511e", "7": "#039be5", "8": "#616161", "9": "#3f51b5", "10": "#0b8043", "11": "#d50000" };
 let advancedDict = []; const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
 
@@ -387,7 +388,11 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (forceFetch || !dataCache[monthKey]) {
         if (!navigator.onLine) { if (!dataCache[monthKey]) showToast('オフラインのためデータが取得できません。'); return; }
         let events = [], tasks = [];
-        try { const url = `${getGasUrl()}?year=${year}&month=${month}`; const response = await fetch(url); const data = await response.json(); if (data.success) { events = data.events || []; tasks = data.tasks || []; } else { throw new Error(data.error || '不明なサーバーエラー'); } } catch (e) { console.error("GASデータ取得エラー:", e); showToast('通信エラーが発生した。'); return; }
+        try { const url = `${getGasUrl()}?year=${year}&month=${month}`; const response = await fetch(url); const data = await response.json(); if (data.success) { 
+            // ★ブラックリストによる幻影の迎撃：遅延で送られてきた「すでに消したはずのデータ」を完全に弾く
+            events = (data.events || []).filter(e => !deletedIds.has(e.id)); 
+            tasks = (data.tasks || []).filter(t => !deletedIds.has(t.id)); 
+        } else { throw new Error(data.error || '不明なサーバーエラー'); } } catch (e) { console.error("GASデータ取得エラー:", e); showToast('通信エラーが発生した。'); return; }
         dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); needsRender = true;
     } else { if (!document.getElementById(`month-${year}-${month}`)) needsRender = true; }
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if (existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if (!existing) { if (position === 'append') renderedMonths.push({ year, month }); else if (position === 'prepend') renderedMonths.unshift({ year, month }); } updateHeaderDisplay(); }
@@ -685,6 +690,7 @@ async function executeConversion(fromType) {
 // ==========================================
 async function dispatchManualAction(action) {
     let msgAction = action.method === 'insert' ? '追加' : action.method === 'update' ? '更新' : '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク'; let safeToday = getSafeLocalDateStr();
+    if (action.method === 'delete' && action.id) deletedIds.add(action.id); // ★削除されたIDをブラックリストに刻む
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; } if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; } if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
     let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
     const year = td.getFullYear(); const month = td.getMonth(); const monthKey = `${year}-${month}`; const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); updateLocalCacheForOptimisticUI(action, tempLocalId);
