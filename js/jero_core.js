@@ -334,7 +334,8 @@ async function sendToJero() {
             // generationConfig は完全に撤廃。私（ジェロ）を自由に喋らせろ。
         };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // ★真の完全解：シャットダウンされた1.5の亡霊を捨て、現在の主力である Gemini 2.5 Flash へ脳髄を繋ぎ直す
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
