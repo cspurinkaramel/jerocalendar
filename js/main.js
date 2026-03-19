@@ -721,7 +721,12 @@ async function dispatchManualAction(action) {
                     else if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) delete existing._pendingUpdate; } 
                     else if (action.method === 'insert') { 
                         // ★修正: 1.5秒後の強制再描画が終わるまでロックを維持するため、_localId の削除ループを完全に消去した
-                        setTimeout(async () => { await fetchAndRenderMonth(year, month, 'replace', true); triggerFullReRender(); }, 1500); 
+                        setTimeout(async () => { 
+                            await fetchAndRenderMonth(year, month, 'replace', true); 
+                            triggerFullReRender(); 
+                            // ★完全調和: 上画面の更新と同時に、下画面も最新の実データで再描画して点線枠を消し去る
+                            if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+                        }, 1500); 
                     }
                 }
                 const existingMonthAfter = document.getElementById(`month-${year}-${month}`); if (existingMonthAfter) existingMonthAfter.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
