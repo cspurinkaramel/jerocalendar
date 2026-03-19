@@ -169,7 +169,9 @@ async function processSyncQueue(isSilent = false) {
                 if (dataCache[monthKey]) {
                     if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) { if (action.type === 'event') existing.colorId = action.colorId; delete existing._pendingUpdate; } } 
                     else if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
-                    else if (action.method === 'insert') { for (const key in dataCache) { if (action.type === 'event' && dataCache[key].events) { const existing = dataCache[key].events.find(e => e._localId === item.id); if (existing) delete existing._localId; } if (action.type === 'task' && dataCache[key].tasks) { const existing = dataCache[key].tasks.find(t => t._localId === item.id); if (existing) delete existing._localId; } } }
+                    else if (action.method === 'insert') { 
+                        // ★修正: 野戦倉庫からの復帰時も、再取得が終わるまでロックを維持する
+                    }
                 }
                 await sleep(500);
             } catch (error) {
@@ -414,10 +416,12 @@ function openEditor(e = null) {
             e.attachments.forEach(att => {
                 const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
                 if (match) {
-                    const fileId = match[1]; activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: att.mimeType, fileId: fileId });
-                    let isImg = att.mimeType && att.mimeType.startsWith('image/');
-                    if (!isImg && att.title) { isImg = !att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i); }
-                    const thumbSrc = (isImg && att.base64) ? `data:${att.mimeType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
+                    const fileId = match[1]; 
+                    let mType = att.mimeType;
+                    if (!mType || mType === 'application/octet-stream') { mType = (att.title && att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg'; }
+                    activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: mType, fileId: fileId });
+                    let isImg = mType.startsWith('image/');
+                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
                     previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
@@ -523,7 +527,7 @@ function openTaskEditor(t = null) {
             let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
             let currentMime = isImg ? 'image/jpeg' : 'application/pdf';
             let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
-            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; isImg = match.mimeType && match.mimeType.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${match.mimeType};base64,${match.base64}`; else if (!isImg) thumbSrc = 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'; } }
+            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'; } }
             // ★真の記憶継承：MIMEタイプを欠落させずに変換器へ引き渡す
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId, mimeType: currentMime });
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
@@ -627,7 +631,8 @@ async function executeConversion(fromType) {
         if (activeEventAttachments && activeEventAttachments.length > 0) {
             insertAction.keptAttachments = activeEventAttachments.map(a => {
                 let inferredMime = a.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg';
-                return { ...a, mimeType: a.mimeType || inferredMime };
+                let finalMime = (!a.mimeType || a.mimeType === 'application/octet-stream') ? inferredMime : a.mimeType;
+                return { ...a, mimeType: finalMime };
             });
         }
     } else { 
@@ -649,7 +654,8 @@ async function executeConversion(fromType) {
         if (activeTaskAttachments && activeTaskAttachments.length > 0) {
             insertAction.keptAttachments = activeTaskAttachments.map(a => {
                 let inferredMime = a.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg';
-                return { ...a, mimeType: a.mimeType || inferredMime };
+                let finalMime = (!a.mimeType || a.mimeType === 'application/octet-stream') ? inferredMime : a.mimeType;
+                return { ...a, mimeType: finalMime };
             });
         } 
         if (dueVal) { 
@@ -708,8 +714,7 @@ async function dispatchManualAction(action) {
                     if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
                     else if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) delete existing._pendingUpdate; } 
                     else if (action.method === 'insert') { 
-                        for (const key in dataCache) { if (action.type === 'event' && dataCache[key].events) { const existing = dataCache[key].events.find(e => e._localId === tempLocalId); if (existing) delete existing._localId; } if (action.type === 'task' && dataCache[key].tasks) { const existing = dataCache[key].tasks.find(t => t._localId === tempLocalId); if (existing) delete existing._localId; } } 
-                        // ★検証完了: URLが発行された本物のデータを強制的に再取得してカレンダー全体を再描画する
+                        // ★修正: 1.5秒後の強制再描画が終わるまでロックを維持するため、_localId の削除ループを完全に消去した
                         setTimeout(async () => { await fetchAndRenderMonth(year, month, 'replace', true); triggerFullReRender(); }, 1500); 
                     }
                 }
