@@ -243,17 +243,22 @@ async function handleChatFileUpload(e) {
     if (file.type === 'application/pdf') {
         if (typeof processPDFFile === 'function') { await processPDFFile(file); } else { showToast('PDF処理機能が見つからない。'); }
     } else if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-            chatFileBase64 = evt.target.result.split(',')[1];
-            chatFileMime = file.type;
+        if (typeof showGlobalLoader === 'function') showGlobalLoader('視覚データを圧縮中だ...');
+        try {
+            // ★第一防衛線：main.jsの圧縮エンジン(compressImage)を呼び出し、ペイロード爆発を物理的に防ぐ
+            chatFileBase64 = await compressImage(file);
+            chatFileMime = 'image/jpeg'; // compressImageはjpegを返す仕様だ
             document.getElementById('chat-file-name').innerText = file.name;
             document.getElementById('chat-attach-box').style.display = 'flex';
             document.getElementById('chat-input').value = "この画像を解析し、含まれる予定をすべて抽出してくれ。";
             document.getElementById('chat-input').dispatchEvent(new Event('input'));
-            unlockAudioAndSend();
-        };
-        reader.readAsDataURL(file);
+        } catch (e) {
+            console.error("画像圧縮エラー:", e);
+            showToast('画像の処理に失敗したぞ。');
+        } finally {
+            if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+        }
+        unlockAudioAndSend();
     } else { showToast('画像かPDFを選択してくれ。'); }
     e.target.value = '';
 }
