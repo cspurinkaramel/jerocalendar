@@ -874,3 +874,84 @@ function closeSyncManager() { document.getElementById('sync-manager-modal').clas
 async function renderSyncQueueList() { const listEl = document.getElementById('sync-queue-list'); if (!listEl) return; const queue = await getSyncQueue(); if (queue.length === 0) { listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888; font-size:13px;">未送信のデータはない。平和だ。</div>'; return; } let html = ''; queue.forEach(item => { const payload = item.payload; const isEvent = payload.type === 'event'; const method = payload.method === 'insert' ? '追加' : payload.method === 'update' ? '更新' : '削除'; const title = payload.title || '(無名)'; let dateStr = "日時不明"; if (payload.start) dateStr = payload.start.includes('T') ? new Date(payload.start).toLocaleString('ja-JP') : payload.start; else if (payload.due) dateStr = new Date(payload.due).toLocaleDateString('ja-JP'); html += `<div style="background:var(--head-bg); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; justify-content:space-between; align-items:center;"><div style="flex:1; overflow:hidden; margin-right:10px;"><div style="font-size:10px; color:var(--accent); font-weight:bold; margin-bottom:2px;">[${isEvent ? '予定' : 'タスク'} : ${method}]</div><div style="font-size:14px; font-weight:bold; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div><div style="font-size:11px; color:#888;">${dateStr}</div></div><div style="display:flex; gap:6px; flex-shrink:0;"><button class="btn-gray" style="padding:6px 10px; font-size:12px; border-radius:6px; border:none; color:white; cursor:pointer;" onclick="retrySingleSyncItem('${item.id}')">再送</button><button class="btn-red" style="padding:6px 10px; font-size:12px; border-radius:6px; border:none; color:white; cursor:pointer;" onclick="discardSingleSyncItem('${item.id}')">破棄</button></div></div>`; }); listEl.innerHTML = html; }
 async function discardSingleSyncItem(id) { if (!confirm("破棄していいか？")) return; await clearSyncQueueItem(id); await renderSyncQueueList(); await updateSyncBadge(); showToast("🚮 データを破棄した。"); const today = new Date(); showGlobalLoader("最新化中..."); await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true); hideGlobalLoader(); }
 async function retrySingleSyncItem(id) { const queue = await getSyncQueue(); const item = queue.find(q => q.id === id); if (!item) return; showGlobalLoader("送信中..."); try { await executeApiAction(item.payload); await clearSyncQueueItem(id); showToast("✅ 送信成功だ！"); await renderSyncQueueList(); await updateSyncBadge(); const today = new Date(); await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true); } catch (e) { showToast("❌ やはり弾かれた。破棄を勧めるぞ。"); } finally { hideGlobalLoader(); } }
+// ==========================================
+// ★ ストレージ大掃除 (ガベージコレクション) エンジン
+// ==========================================
+let orphanFilesCache = [];
+
+function openStorageCleaner() {
+    closeSettings();
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('cleaner-modal').classList.add('active');
+    document.getElementById('cleaner-results').innerHTML = '';
+    document.getElementById('cleaner-action-bar').style.display = 'none';
+    orphanFilesCache = [];
+}
+
+async function runStorageScan() {
+    if (!navigator.onLine) { showToast('圏外ではスキャンできないぞ。'); return; }
+    const btn = document.getElementById('btn-run-scan');
+    const resultsArea = document.getElementById('cleaner-results');
+    btn.innerText = '⏳ 全カレンダーとDriveを照合中... (最大1〜2分)';
+    btn.disabled = true;
+    resultsArea.innerHTML = '<div style="text-align:center; padding: 20px;"><div class="spinner" style="border-top-color: var(--accent);"></div></div>';
+
+    try {
+        // GASに新設する「cleanup_scan」エンドポイントを叩く
+        const res = await fetch(`${getGasUrl()}?action=cleanup_scan`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error || 'スキャン失敗');
+        
+        orphanFilesCache = data.orphanFiles || [];
+        
+        if (orphanFilesCache.length === 0) {
+            resultsArea.innerHTML = '<div style="text-align:center; padding:20px; color:#34c759; font-weight:bold;">孤立ファイルはゼロだ。完璧に美しい状態だ。</div>';
+            document.getElementById('cleaner-action-bar').style.display = 'none';
+        } else {
+            let html = `<div style="color:#ff3b30; font-weight:bold; margin-bottom: 5px;">⚠️ ${orphanFilesCache.length}件の孤立ファイルを発見した。</div>`;
+            orphanFilesCache.forEach(f => {
+                const thumbSrc = f.mimeType.startsWith('image/') ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w100-h100` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
+                html += `
+                <div style="background:var(--head-bg); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px;">
+                    <img src="${thumbSrc}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; background:#f0f0f0;">
+                    <div style="flex:1; overflow:hidden;">
+                        <div style="font-size:12px; font-weight:bold; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${f.name}</div>
+                        <div style="font-size:10px; color:#888;">作成: ${new Date(f.created).toLocaleDateString('ja-JP')} / サイズ: ${Math.round(f.size/1024)}KB</div>
+                    </div>
+                    <a href="${f.url}" target="_blank" style="font-size:12px; color:var(--accent); text-decoration:none; padding:4px;">確認</a>
+                </div>`;
+            });
+            resultsArea.innerHTML = html;
+            document.getElementById('cleaner-action-bar').style.display = 'block';
+        }
+    } catch (e) {
+        resultsArea.innerHTML = `<div style="text-align:center; color:#ff3b30; padding:20px;">エラーが発生した: ${e.message}</div>`;
+    } finally {
+        btn.innerText = '🔍 再スキャンする';
+        btn.disabled = false;
+    }
+}
+
+async function executeStorageCleanup() {
+    if (orphanFilesCache.length === 0) return;
+    if (!confirm(`本当にこれら ${orphanFilesCache.length} 件のファイルを「ゴミ箱」へ移動していいか？\n（※Google Driveのゴミ箱から30日以内なら復元可能だ）`)) return;
+
+    showGlobalLoader('ゴミ箱へ転送中...');
+    try {
+        const payload = { type: 'cleanup_execute', fileIds: orphanFilesCache.map(f => f.id) };
+        const response = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) });
+        const result = await response.json();
+        
+        if (!result.success) throw new Error(result.error || '削除失敗');
+        
+        showToast(`✅ ${result.deletedCount}件のファイルをゴミ箱に送った。`);
+        document.getElementById('cleaner-action-bar').style.display = 'none';
+        document.getElementById('cleaner-results').innerHTML = '<div style="text-align:center; padding:20px; color:#34c759; font-weight:bold;">掃討完了。システムは浄化された。</div>';
+        orphanFilesCache = [];
+    } catch (e) {
+        showToast(`❌ エラー: ${e.message}`);
+    } finally {
+        hideGlobalLoader();
+    }
+}

@@ -294,6 +294,9 @@
                     <button class="btn btn-blue" style="font-size: 14px; flex: 1; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="forceHardReload()">🔄 最新アプリ強制取得</button>
                 </div>
                 
+                <button class="btn"
+                    style="margin-top: 10px; font-size: 14px; background: #ff9500; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;" onclick="openStorageCleaner()">🧹 ストレージ大掃除 (孤立ファイル診断)</button>
+
                 <button class="btn btn-red"
                     style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 ローカルデータ完全消去</button>
             </div>
@@ -551,6 +554,27 @@
 
     <script src="./js/main.js?v=10.4" defer></script>
     <script src="./js/jero_core.js?v=10.2" defer></script>
+    <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
+        <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
+            <div class="modal-drag"></div>
+        </div>
+        <div class="modal-header">
+            <h2 style="display:flex; align-items:center; gap:8px;">🧹 ストレージ診断</h2>
+            <button class="close-btn" onclick="document.getElementById('cleaner-modal').classList.remove('active');">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 15px; background: var(--bg);">
+            <div style="font-size:12px; color:#888; margin-bottom:10px; line-height: 1.4;">
+                カレンダーやタスクに紐付いていない「孤立したファイル」を専用フォルダ内から探し出す。<br>
+                ※安全のため、過去24時間以内のファイルは無視され、削除時は「ゴミ箱」へ移動するだけだ。
+            </div>
+            <button class="btn btn-blue" id="btn-run-scan" style="width: 100%; margin-bottom: 15px;" onclick="runStorageScan()">🔍 孤立ファイルをスキャンする</button>
+            <div id="cleaner-results" style="display:flex; flex-direction:column; gap:10px;">
+                </div>
+        </div>
+        <div class="action-bar" id="cleaner-action-bar" style="display: none;">
+            <button class="btn btn-red" style="width: 100%;" onclick="executeStorageCleanup()">🗑️ リストのファイルをゴミ箱へ移動</button>
+        </div>
+    </div>
 </body>
 
 </html>
