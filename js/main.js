@@ -486,7 +486,9 @@ async function handleImageUpload(event, previewId) {
 
 function toggleTimeInputs() { const isAllDay = document.getElementById('edit-allday').checked; const startInput = document.getElementById('edit-start'); const endInput = document.getElementById('edit-end'); let startVal = startInput.value; let endVal = endInput.value; startInput.type = isAllDay ? 'date' : 'datetime-local'; endInput.type = isAllDay ? 'date' : 'datetime-local'; if (startVal) startInput.value = isAllDay ? startVal.split('T')[0] : (startVal.includes('T') ? startVal : startVal + 'T12:00'); if (endVal) endInput.value = isAllDay ? endVal.split('T')[0] : (endVal.includes('T') ? endVal : endVal + 'T13:00'); }
 
+let isSavingLock = false; // ★通常保存・削除の連打防止ロック
 async function saveEvent() {
+    if (isSavingLock) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000);
     const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim(); if (!title) { showToast('タイトルを入力してくれ'); return; }
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value; if (!startVal) { showToast('開始日時が不正だ'); return; } if (!endVal) endVal = startVal;
     
@@ -504,7 +506,7 @@ async function saveEvent() {
     closeEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-async function confirmDeleteEvent() { const id = document.getElementById('edit-id').value; if (!id || !confirm('この予定を完全に消し去るか？')) return; const startVal = document.getElementById('edit-start').value; const action = { type: 'event', method: 'delete', id: id, start: startVal }; closeEditor(); closeAllModals(); await dispatchManualAction(action); }
+async function confirmDeleteEvent() { if (isSavingLock) return; const id = document.getElementById('edit-id').value; if (!id || !confirm('この予定を完全に消し去るか？')) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const startVal = document.getElementById('edit-start').value; const action = { type: 'event', method: 'delete', id: id, start: startVal }; closeEditor(); closeAllModals(); await dispatchManualAction(action); }
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。保存を押せ。'); }
 
 function openTaskEditor(t = null) {
@@ -577,6 +579,7 @@ async function toggleTaskCompletion(taskId, newStatus) {
 }
 
 async function saveTask() {
+    if (isSavingLock) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000);
     const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim(); if (!title) { showToast('タスク名を入力してくれ'); return; }
     let rawNotes = document.getElementById('task-edit-notes').value.trim(); if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
     // ★修正: 状態の保存を追加
@@ -594,7 +597,7 @@ async function saveTask() {
     closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-async function confirmDeleteTask() { const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; const dueVal = document.getElementById('task-edit-due').value; const action = { type: 'task', method: 'delete', id: id, due: dueVal }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
+async function confirmDeleteTask() { if (isSavingLock) return; const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const dueVal = document.getElementById('task-edit-due').value; const action = { type: 'task', method: 'delete', id: id, due: dueVal }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
 let isConverting = false; // ★連打防止の絶対ロック
 async function executeConversion(fromType) {
