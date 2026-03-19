@@ -444,7 +444,7 @@ function openEditor(e = null) {
 
 function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); activeEventAttachments = activeEventAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
 function removeExistingTaskAttachment(el, fileId) { el.parentElement.remove(); activeTaskAttachments = activeTaskAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
-function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('edit-attach-preview'); if(prev) prev.innerHTML = ''; pendingEventAttachments = []; activeEventAttachments = []; }
+function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('edit-attach-preview'); if(prev) prev.innerHTML = ''; pendingEventAttachments = []; activeEventAttachments = []; if (typeof resetAiEditState === 'function') resetAiEditState(); }
 function addUrlPrompt() { const url = prompt("追加するリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('edit-desc'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
 function addTaskUrlPrompt() { const url = prompt("追加するリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('task-edit-notes'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
 
@@ -503,6 +503,10 @@ async function saveEvent() {
     }
 
     try { if (isAllDay) { action.start = startVal; let parts = endVal.split('-'); const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); ed.setDate(ed.getDate() + 1); action.end = getSafeLocalDateStr(ed); } else { action.start = startVal + ':00+09:00'; action.end = endVal + ':00+09:00'; } } catch (err) { showToast('エラーが起きた。もう一度頼む。'); return; }
+    
+    // ★AIインターセプト：検閲モード中の保存なら、野戦倉庫へは送らずに検閲リストを上書きして終わる
+    if (typeof handleAiEditIntercept === 'function' && handleAiEditIntercept(action, 'event')) return;
+
     closeEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
@@ -548,7 +552,7 @@ function openTaskEditor(t = null) {
     initialTaskAttachments = JSON.stringify(activeTaskAttachments);
 }
 
-function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('task-attach-preview'); if(prev) prev.innerHTML = ''; pendingTaskAttachments = []; activeTaskAttachments = []; }
+function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('task-attach-preview'); if(prev) prev.innerHTML = ''; pendingTaskAttachments = []; activeTaskAttachments = []; if (typeof resetAiEditState === 'function') resetAiEditState(); }
 
 async function toggleTaskCompletion(taskId, newStatus) { 
     let targetTask = null; 
@@ -594,6 +598,10 @@ async function saveTask() {
     }
     
     const dueVal = document.getElementById('task-edit-due').value; if (dueVal) { action.due = dueVal + 'T00:00:00+09:00'; }
+
+    // ★AIインターセプト：検閲モード中の保存なら、野戦倉庫へは送らずに検閲リストを上書きして終わる
+    if (typeof handleAiEditIntercept === 'function' && handleAiEditIntercept(action, 'task')) return;
+
     closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 

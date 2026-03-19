@@ -356,17 +356,13 @@ async function sendToJero() {
         speakText(result.reply || "処理を完了したぞ。");
 
         if (result.actions && result.actions.length > 0) {
-            let html = `<div style="margin-bottom:8px;">${result.reply || "処理を構築した。確認しろ。"}</div><div style="display:flex; flex-direction:column; gap:8px;">`;
-            for (const action of result.actions) {
-                if (action.method === "search") { executeSearch(action, thinkingEl); return; }
-                pendingDrafts.push(action); const draftIdx = pendingDrafts.length - 1;
-                const timeStr = action.start ? (action.start.includes('T') ? new Date(action.start).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }) : action.start) : (action.due || "日時不明");
-                let btnText = "追加"; let btnClass = "btn-blue"; let actionLabel = "新規";
-                if (action.method === "update") { btnText = "更新"; btnClass = "btn-yellow"; actionLabel = "変更"; }
-                if (action.method === "delete") { btnText = "削除"; btnClass = "btn-red"; actionLabel = "削除"; }
-                html += `<div id="draft-card-${draftIdx}" style="background:var(--card-bg); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.05);"><div style="font-size:13px; line-height:1.3; flex:1; margin-right:10px;"><span style="font-size:10px; background:var(--border); padding:2px 4px; border-radius:4px; margin-bottom:4px; display:inline-block; font-weight:bold;">${actionLabel}</span><br><strong>${action.title || "名称不明"}</strong><br><span style="color:#666; font-size:11px;">${timeStr}</span></div><div style="display:flex; gap:6px;"><button class="btn-gray" style="padding:6px 10px; font-size:12px; border-radius:6px; font-weight:bold; border:none; color:white; cursor:pointer;" onclick="editDraft(${draftIdx})">編集</button><button class="${btnClass}" style="padding:6px 10px; font-size:12px; border-radius:6px; font-weight:bold; border:none; color:white; cursor:pointer;" onclick="commitDraft(${draftIdx})">${btnText}</button></div></div>`;
-            }
-            html += `</div>`; thinkingEl.innerHTML = html;
+            const searchAction = result.actions.find(a => a.method === 'search');
+            if (searchAction) { executeSearch(searchAction, thinkingEl); return; }
+
+            currentAiDrafts = result.actions;
+            let html = `<div style="margin-bottom:12px;">${result.reply || "データを抽出したぞ。検閲ルームで一括確認してくれ。"}</div>`;
+            html += `<button class="btn-blue" style="width:100%; padding:12px; border-radius:8px; border:none; color:white; font-weight:bold; cursor:pointer; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);" onclick="openAiReview()">👁️ ${currentAiDrafts.length}件の抽出データを検閲する</button>`;
+            thinkingEl.innerHTML = html;
         }
     } catch (err) { console.error(err); thinkingEl.classList.remove('pulse-think'); thinkingEl.innerText = `【通信エラー】\n${err.message}`; speakText("通信エラーが発生した。"); conversationHistory.pop(); }
 }
@@ -420,53 +416,116 @@ async function executeSearch(action, containerEl) {
 }
 
 
-async function commitDraft(idx) {
-    const action = pendingDrafts[idx];
-    const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
+// ==========================================
+// ★ AI検閲ルーム (仮配置UI) と バッチ処理エンジン
+// ==========================================
+let currentAiDrafts = [];
+let aiEditTargetIndex = -1;
 
-    // 二重送信防止のロック
-    btn.innerText = "⏳";
-    btn.disabled = true;
-
-    // ★第一原理：通信、エラー迎撃、野戦倉庫への退避、カレンダーの再描画まで
-    // すべて main.js の dispatchManualAction（司令塔）に丸投げする
-    await dispatchManualAction(action);
-
-    // 司令塔の処理が終われば、UIを完了状態にする
-    btn.innerText = "✅ 完了";
-    btn.className = "btn-gray";
+function openAiReview() {
+    document.getElementById('jero-chat-modal').classList.remove('active'); // チャットを一時隠蔽
+    document.getElementById('ai-review-modal').classList.add('active');
+    renderAiReviewList();
 }
 
-function editDraft(idx) {
-    const action = pendingDrafts[idx];
-    closeJeroChat();
+function closeAiReview() {
+    document.getElementById('ai-review-modal').classList.remove('active');
+    document.getElementById('jero-chat-modal').classList.add('active'); // チャットに復帰
+}
+
+function renderAiReviewList() {
+    const listEl = document.getElementById('ai-review-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    
+    if (currentAiDrafts.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center; color:#888; padding:20px; font-weight:bold;">抽出データはない。</div>';
+        document.getElementById('btn-batch-execute').disabled = true;
+        return;
+    }
+    document.getElementById('btn-batch-execute').disabled = false;
+
+    let html = '';
+    currentAiDrafts.forEach((action, idx) => {
+        const timeStr = action.start ? (action.start.includes('T') ? new Date(action.start).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }) : action.start) : (action.due || "日時不明");
+        const icon = action.type === 'event' ? '📅' : '☑️';
+        const methodLabel = action.method === 'insert' ? '新規' : (action.method === 'update' ? '変更' : '削除');
+        const methodColor = action.method === 'delete' ? '#ff3b30' : (action.method === 'update' ? '#ff9500' : 'var(--accent)');
+
+        html += `
+        <div style="background:var(--card-bg); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; align-items:center; gap:10px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+            <input type="checkbox" id="ai-check-${idx}" checked style="width:20px; height:20px; accent-color:var(--accent);">
+            <div style="flex:1; overflow:hidden;" onclick="editAiDraft(${idx})">
+                <div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+                    <span style="font-size:10px; background:${methodColor}; color:white; padding:2px 4px; border-radius:4px; font-weight:bold;">${methodLabel}</span>
+                    <span style="font-size:11px; color:#888; font-weight:bold;">${icon} ${action.type === 'event' ? '予定' : 'タスク'}</span>
+                </div>
+                <div style="font-weight:bold; font-size:14px; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${action.title || "(無名)"}</div>
+                <div style="font-size:11px; color:#666; margin-top:2px;">${timeStr}</div>
+            </div>
+            <button class="btn-gray" style="padding:6px 12px; font-size:12px; border-radius:6px; font-weight:bold; border:none; color:white; cursor:pointer; flex-shrink:0;" onclick="editAiDraft(${idx})">編集</button>
+        </div>`;
+    });
+    listEl.innerHTML = html;
+}
+
+function editAiDraft(idx) {
+    aiEditTargetIndex = idx;
+    const action = currentAiDrafts[idx];
+    document.getElementById('ai-review-modal').classList.remove('active'); // z-index競合回避のため検閲画面を隠す
+    
     if (action.type === 'event') {
-        // ★浄化：AIの出力にプロパティが存在しない場合の安全対策
-        const draftEvent = {
-            id: action.method === 'update' ? (action.id || '') : '',
-            summary: action.title || '',
-            description: action.description || '',
-            location: action.location || '',
-            colorId: action.colorId || ''
-        };
-        if (action.start) {
-            if (action.start.includes('T')) {
-                draftEvent.start = { dateTime: action.start }; draftEvent.end = { dateTime: action.end || action.start };
-            } else {
-                draftEvent.start = { date: action.start };
-                let edStr = action.end || action.start;
-                if (edStr === action.start) {
-                    let parts = action.start.split('-'); let ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                    ed.setDate(ed.getDate() + 1); edStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
-                }
-                draftEvent.end = { date: edStr };
-            }
-        }
+        const draftEvent = { id: action.method === 'update' ? (action.id || '') : '', summary: action.title || '', description: action.description || '', location: action.location || '', colorId: action.colorId || '' };
+        if (action.start) { if (action.start.includes('T')) { draftEvent.start = { dateTime: action.start }; draftEvent.end = { dateTime: action.end || action.start }; } else { draftEvent.start = { date: action.start }; let edStr = action.end || action.start; if (edStr === action.start) { let parts = action.start.split('-'); let ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); ed.setDate(ed.getDate() + 1); edStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`; } draftEvent.end = { date: edStr }; } }
         openEditor(draftEvent);
     } else {
         const draftTask = { id: action.method === 'update' ? action.id : '', title: action.title || '', notes: action.description || '', due: action.due || '' };
         openTaskEditor(draftTask);
     }
-    const btn = document.querySelector(`#draft-card-${idx} button:last-child`);
-    if (btn) { btn.innerText = "手動済"; btn.className = "btn-gray"; btn.disabled = true; }
+}
+
+// ★main.jsから呼び出されるインターセプト（横取り）関数
+function handleAiEditIntercept(action, type) {
+    if (aiEditTargetIndex < 0) return false;
+    
+    // 元のメソッド（新規・更新・削除）は維持しつつ、編集結果で上書き
+    const originalMethod = currentAiDrafts[aiEditTargetIndex].method;
+    currentAiDrafts[aiEditTargetIndex] = { ...action, method: originalMethod };
+    
+    if (type === 'event') closeEditor(); else closeTaskEditor();
+    
+    document.getElementById('ai-review-modal').classList.add('active'); // 検閲画面を復帰
+    renderAiReviewList();
+    showToast('✅ 検閲データを修正・上書きしたぞ。');
+    
+    aiEditTargetIndex = -1;
+    return true; 
+}
+
+// キャンセル時も安全に検閲画面へ戻す
+function resetAiEditState() {
+    if (aiEditTargetIndex >= 0) {
+        aiEditTargetIndex = -1;
+        document.getElementById('ai-review-modal').classList.add('active');
+    }
+}
+
+async function executeAiBatch() {
+    const btn = document.getElementById('btn-batch-execute');
+    btn.disabled = true; btn.innerText = "⏳ 野戦倉庫へ転送中...";
+    
+    let successCount = 0; const total = currentAiDrafts.length;
+    for (let i = 0; i < total; i++) {
+        const checkbox = document.getElementById(`ai-check-${i}`);
+        if (checkbox && checkbox.checked) {
+            // ★Phase 1で作った最強の司令塔へ一斉に投げ込む
+            await dispatchManualAction(currentAiDrafts[i]);
+            successCount++;
+        }
+    }
+    
+    showToast(`✅ ${successCount}件の予定を一括登録（野戦倉庫へ転送）した。`);
+    closeAiReview(); closeJeroChat();
+    currentAiDrafts = [];
+    btn.disabled = false; btn.innerText = "✅ 選択した項目を一括登録する";
 }

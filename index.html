@@ -344,6 +344,26 @@
         </div>
     </div>
 
+    <div id="ai-review-modal" class="bottom-modal" style="z-index: 109; height: 80vh;">
+        <div class="modal-drag-area" onclick="closeAiReview()">
+            <div class="modal-drag"></div>
+        </div>
+        <div class="modal-header">
+            <h2 style="display:flex; align-items:center; gap:8px;">👁️ 抽出データ検閲</h2>
+            <button class="close-btn" onclick="closeAiReview()">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 15px; background: var(--bg); display: flex; flex-direction: column;">
+            <div style="font-size:12px; color:#888; margin-bottom:10px; line-height: 1.4;">
+                AIが抽出したデータだ。不要なもののチェックを外し、必要なら「編集」をタップして個別に修正しろ。
+            </div>
+            <div id="ai-review-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+        </div>
+        <div class="action-bar" style="padding: 15px 20px;">
+            <button class="btn btn-blue" id="btn-batch-execute" onclick="executeAiBatch()" style="width: 100%; padding: 12px; font-size: 14px;">✅ 選択した項目を一括登録する</button>
+        </div>
+    </div>
+
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
         <div class="modal-drag-area" onclick="closeDictEditor()">
             <div class="modal-drag"></div>
