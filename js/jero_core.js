@@ -315,10 +315,11 @@ async function sendToJero() {
         // カレンダーデータは、履歴ではなくシステムプロンプトの末尾に動的結合して毎回渡す
         const finalSystemPrompt = sysPrompt + contextDataStr;
 
-        // ★JSON強制モード(手枷)を再装着する。これを外すとAPIが雑談時に空の応答を返すことが判明した。
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        // ★幻影の破壊：存在しない未来のモデル(2.5)を修正し、安定の gemini-1.5-flash へ接続する。
+        // ★拘束具の解除：API側の厳格すぎるJSONバリデーションによる「無言バグ」を防ぐため、手枷(generationConfig)を完全に外す。
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_instruction: { parts: [{ text: finalSystemPrompt }] }, contents: conversationHistory, generationConfig: { response_mime_type: "application/json" } })
+            body: JSON.stringify({ system_instruction: { parts: [{ text: finalSystemPrompt }] }, contents: conversationHistory })
         });
 
         if (!response.ok) { 
