@@ -951,6 +951,15 @@ async function executeApiAction(action, isRetry = false) {
         if (typeof setProgress === 'function') setProgress(100);
     }
 
+    // ★ネットワーク層の最終変換（タスク専用）：GASへ送る直前に、確実にURLをテキストに再結合する
+    if (payload.type === 'task') {
+        payload.description = (payload.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim();
+        if (payload.keptAttachments && payload.keptAttachments.length > 0) {
+            const fileLinks = payload.keptAttachments.map(a => `📁 [${a.title || 'ファイル'}] ${a.fileUrl}`).join('\n');
+            payload.description += (payload.description ? '\n\n' : '') + '📁 添付ファイル:\n' + fileLinks;
+        }
+    }
+
     try {
         const response = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) }); const result = await response.json();
         if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone") || errStr.includes("deleted")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
@@ -1126,16 +1135,12 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
     }
     if (!item) return;
 
-    // ★真の共通化のための前処理：タスクはテキスト(notes)の中に画像を隠し持っているため、それを抽出して「ボックス」に詰め直す
+    // ★真の分別：タスク固有の「テキスト内URL」を正確に抽出する専用パーサーを通す
     if (type === 'task' && (!item.attachments || item.attachments.length === 0) && item.notes) {
-        let extracted = [];
-        const regex = /📁 \[(.*?)\] (https?:\/\/[^\s\n]+)/g;
-        let m;
-        while ((m = regex.exec(item.notes)) !== null) {
-            let fId = m[2].match(/d\/([a-zA-Z0-9_-]+)/) || m[2].match(/id=([a-zA-Z0-9_-]+)/);
-            extracted.push({ title: m[1], fileUrl: m[2], fileId: fId ? fId[1] : null });
+        const parsed = parseTaskAttachments(item.notes);
+        if (parsed.files.length > 0) {
+            item.attachments = parsed.files.map(f => ({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId }));
         }
-        if (extracted.length > 0) item.attachments = extracted;
     }
 
     if (item._localId) { showToast('⚠️ 通信中のデータは動かせない。少し待て。'); return; }
@@ -1181,9 +1186,8 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
             payload.end = formatIso(newEd);
         }
     } else {
-        // ★最適化：テキスト内の画像URLは一旦掃除して送る（システムが後で綺麗に再結合するため、重複を防ぐ）
-        const cleanNotes = (item.notes || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim();
-        payload.title = item.title; payload.description = cleanNotes; payload.status = item.status;
+        // ★テキストの保護：通信直前(ネットワーク層)で掃除と再結合を行うため、ここでは元のテキストをそのまま渡す
+        payload.title = item.title; payload.description = item.notes || ''; payload.status = item.status;
         // タスク：これもオフセット移動させることで、どの画面から掴んでも正確に移動できる
         if (item.due && offsetDays !== 0) {
             const dueD = new Date(item.due);
