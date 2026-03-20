@@ -296,8 +296,11 @@ function getCardHtml(type, item) {
     if (isPendingUpdate) cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; 
     if (isPendingDelete) { titleStyle = 'text-decoration: line-through;'; cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; }
 
+    // ★D&Dの神経接続（ドラッグ属性とIDの付与）
+    const dragAttrs = isPending ? "" : `draggable="true" data-type="${type}" data-id="${item.id}" ondragstart="handleDragStart(event)"`;
+
     // ★タイトルと画像を分離する強固なレイアウト
-    return `<div class="item-card" onclick="${clickFn}" style="${cardStyle}">
+    return `<div class="item-card" onclick="${clickFn}" ${dragAttrs} style="${cardStyle}">
                 <div class="card-color-bar" style="background-color: ${color};"></div>
                 <div class="card-content" style="display:flex; flex-direction:column; width:100%; padding:8px 0; overflow:hidden;">
                     <div style="display:flex; align-items:center; width:100%; ${titleStyle}">
@@ -363,7 +366,7 @@ function renderMonthDOM(year, month, data, position) {
     const today = new Date(); const slotMap = {}; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; }
     sortedEvents.forEach(e => { if (!e.start) return; const occupiedDates = []; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; let isTargetDay = false; if (e.start.date) { isTargetDay = e.start.date === dateStr; } else if (e.start.dateTime) { const stD = new Date(e.start.dateTime); const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`; isTargetDay = stStr === dateStr; } if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } } if (occupiedDates.length === 0) return; let slotIndex = 0; while (true) { let isFree = true; for (const d of occupiedDates) { if (slotMap[d][slotIndex]) { isFree = false; break; } } if (isFree) break; slotIndex++; } for (const d of occupiedDates) { while (slotMap[d].length <= slotIndex) slotMap[d].push(null); slotMap[d][slotIndex] = e; } });
     for (let i = 1; i <= daysInMonth; i++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today'; dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.innerHTML = `<div class="day-header"><span class="day-num">${i}</span></div>`;
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today'; dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); dayEl.innerHTML = `<div class="day-header"><span class="day-num">${i}</span></div>`;
         const slots = slotMap[dateStr] || [];
         slots.forEach(e => {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
@@ -988,4 +991,87 @@ async function executeStorageCleanup() {
     } finally {
         hideGlobalLoader();
     }
+}
+
+// ==========================================
+// ★ ドラッグ＆ドロップ (D&D) エンジン
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        if (typeof MobileDragDrop !== 'undefined') {
+            MobileDragDrop.polyfill({
+                holdToDrag: 250, // 0.25秒長押しでドラッグ開始（スクロールと区別）
+                dragImageTranslateOverride: MobileDragDrop.scrollBehaviourDragImageTranslateOverride
+            });
+            // iOS Safariのスクロールバグ回避
+            window.addEventListener('touchmove', function() {}, {passive: false});
+        }
+    }, 500);
+});
+
+function handleDragStart(e) {
+    if (!e.currentTarget.getAttribute('data-id')) { e.preventDefault(); return; }
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+        id: e.currentTarget.getAttribute('data-id'),
+        type: e.currentTarget.getAttribute('data-type')
+    }));
+    e.dataTransfer.effectAllowed = 'move';
+    if (navigator.vibrate) navigator.vibrate(50); // 触覚フィードバック
+}
+
+function handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function handleDragEnter(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+
+async function handleDrop(e, targetDateStr) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    const dataStr = e.dataTransfer.getData('text/plain');
+    if (!dataStr) return;
+    
+    try {
+        const data = JSON.parse(dataStr);
+        await moveItemToDate(data.type, data.id, targetDateStr);
+    } catch(err) { console.error("Drop Error:", err); }
+}
+
+async function moveItemToDate(type, id, targetDateStr) {
+    let item = null;
+    for (const key in dataCache) {
+        const list = type === 'event' ? dataCache[key].events : dataCache[key].tasks;
+        if (list) { item = list.find(x => x.id === id); if (item) break; }
+    }
+    if (!item) return;
+
+    if (item._localId) { showToast('⚠️ 通信中のデータは動かせない。少し待て。'); return; }
+
+    const payload = { type: type, method: 'update', id: id };
+    if (type === 'event') {
+        payload.title = item.summary; payload.description = item.description; payload.location = item.location; payload.colorId = item.colorId;
+        const isAllDay = item.start && item.start.date;
+        if (isAllDay) {
+            payload.start = targetDateStr;
+            const stD = new Date(item.start.date); const edD = new Date(item.end.date);
+            const diffDays = Math.round((edD - stD) / (1000 * 60 * 60 * 24));
+            const newSt = new Date(targetDateStr); const newEd = new Date(newSt); newEd.setDate(newEd.getDate() + diffDays);
+            payload.end = getSafeLocalDateStr(newEd);
+        } else {
+            const timeMatchSt = item.start.dateTime.match(/T(\d{2}:\d{2}:\d{2})/);
+            const timePartSt = timeMatchSt ? timeMatchSt[1] : "00:00:00";
+            payload.start = `${targetDateStr}T${timePartSt}+09:00`;
+            const stTime = new Date(item.start.dateTime).getTime(); const edTime = new Date(item.end.dateTime).getTime();
+            const newStTime = new Date(payload.start).getTime(); const newEdTime = new Date(newStTime + (edTime - stTime));
+            const d = new Date(newEdTime); const pad = (n) => String(n).padStart(2, '0');
+            payload.end = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}+09:00`;
+        }
+    } else {
+        payload.title = item.title; payload.description = item.notes; payload.status = item.status;
+        payload.due = targetDateStr + 'T00:00:00+09:00';
+    }
+    
+    closeAllModals();
+    showToast('🔄 日付を移動中...');
+    // 司令塔に投げ込み、野戦倉庫とオプティミスティックUIを自動発動させる
+    await dispatchManualAction(payload);
 }
