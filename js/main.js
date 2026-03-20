@@ -371,29 +371,27 @@ function renderMonthDOM(year, month, data, position) {
         slots.forEach(e => {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
-            const spanType = isEventSpanning(e, dateStr); const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
+            let spanType = isEventSpanning(e, dateStr); 
+            // ★究極のハック：月を跨いだ「1日」のマスは、強制的に「スタートマス」として振る舞わせることで、文字を表示させつつ線を完璧に繋ぐ
+            if (dateStr.endsWith('-01') && (spanType === 'span-mid' || spanType === 'span-end')) { spanType = 'span-start'; }
             
-            // ★修正: 上画面の📎はクリック不可（表示のみ）にし、誤爆を防ぐ
+            const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
+            
             let attachIcon = '';
-            if (e.attachments && e.attachments.length > 0) {
-                attachIcon = `<span style="margin-left:3px; opacity:0.8;">📎</span>`;
-            }
+            if (e.attachments && e.attachments.length > 0) { attachIcon = `<span style="margin-left:3px; opacity:0.8;">📎</span>`; }
             div.innerHTML = stateIcon + recurIcon + `<span style="pointer-events:none;">${pData.text}</span>` + attachIcon + (timeStr ? `<span style="pointer-events:none;"> (${timeStr})</span>` : '');
             
             let bgColor = 'var(--accent)'; let txtColor = '#ffffff'; if (pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } else if (e.colorId && GOOGLE_COLORS[e.colorId]) { bgColor = GOOGLE_COLORS[e.colorId]; txtColor = getContrastYIQ(bgColor); }
             div.style.overflow = 'hidden'; div.style.whiteSpace = 'nowrap'; div.style.textOverflow = 'clip'; div.style.position = 'relative'; div.style.zIndex = '1'; div.style.boxSizing = 'border-box'; div.style.fontSize = '10px'; div.style.fontWeight = '700';
+            
             if (spanType !== 'single') { 
                 div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; 
                 if (spanType === 'span-start') { 
                     div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; 
                 } else if (spanType === 'span-mid') { 
-                    div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; 
-                    /* ★月跨ぎ対応: 1日のマスなら透明にせず強制的に文字を見せる */
-                    if (dateStr.endsWith('-01')) { div.style.color = bgColor; div.style.paddingLeft = '8px'; } else { div.style.color = 'transparent'; }
+                    div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent';
                 } else if (spanType === 'span-end') { 
-                    div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; 
-                    /* ★月跨ぎ対応: 1日のマスなら透明にせず強制的に文字を見せる */
-                    if (dateStr.endsWith('-01')) { div.style.color = bgColor; div.style.paddingLeft = '8px'; } else { div.style.color = 'transparent'; }
+                    div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent';
                 } 
             } else { 
                 div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; 
@@ -803,16 +801,29 @@ async function dispatchManualAction(action) {
 
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
     let safeToday = getSafeLocalDateStr(); if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; } if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; } if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
-    let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-    const monthKey = `${td.getFullYear()}-${td.getMonth()}`; if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] }; const targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
     
+    // ★真の月跨ぎ対応：開始月から終了月までの「全ての月」のキー（配列）を生成し、全方位にキャッシュを配備する
+    let targetMonthKeys = [];
+    if (action.type === 'event' && action.start && action.end) {
+        let stD = action.start.includes('T') ? new Date(action.start) : new Date(action.start + 'T00:00:00');
+        let edD = action.end.includes('T') ? new Date(action.end) : new Date(action.end + 'T00:00:00');
+        if (edD < stD) edD = stD;
+        let currD = new Date(stD.getFullYear(), stD.getMonth(), 1);
+        while (currD <= edD) { targetMonthKeys.push(`${currD.getFullYear()}-${currD.getMonth()}`); currD.setMonth(currD.getMonth() + 1); }
+    } else {
+        let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+        targetMonthKeys.push(`${td.getFullYear()}-${td.getMonth()}`);
+    }
+    
+    // 存在しない月のキャッシュを事前生成
+    targetMonthKeys.forEach(mKey => { if (!dataCache[mKey]) dataCache[mKey] = { events: [], tasks: [] }; });
+
     if (replaceTempId) { 
-        // ★全キャッシュを舐めて探す（月を跨いで移動している可能性があるため）
         for (const key in dataCache) {
             const list = action.type === 'event' ? dataCache[key].events : dataCache[key].tasks;
             if (list) {
                 const itemToReplace = list.find(item => item._localId === replaceTempId); 
-                if (itemToReplace) { itemToReplace._localId = localId; itemToReplace.id = 'dummy_' + localId; return; }
+                if (itemToReplace) { itemToReplace._localId = localId; itemToReplace.id = 'dummy_' + localId; } // returnせずに全月舐める
             }
         }
         return; 
@@ -829,19 +840,17 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
     }
 
     if (action.method === 'insert') { 
-        if (targetList.some(item => item._localId === localId)) return; 
         const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: action.status || 'needsAction', attachments: tempAttachments, _localId: localId }; 
-        targetList.push(newItem); 
+        targetMonthKeys.forEach(mKey => {
+            const list = action.type === 'event' ? dataCache[mKey].events : dataCache[mKey].tasks;
+            if (!list.some(item => item._localId === localId)) list.push({ ...newItem }); // 全ての対象月にクローンを投下
+        });
     } 
     else if (action.method === 'update') { 
         let oldItem = null;
-        // ★月跨ぎ移動のため、旧データを全キャッシュから根こそぎ取り除く
         for (const key in dataCache) {
             const list = action.type === 'event' ? dataCache[key].events : dataCache[key].tasks;
-            if (list) {
-                const idx = list.findIndex(e => e.id === action.id);
-                if (idx !== -1) { oldItem = list[idx]; list.splice(idx, 1); }
-            }
+            if (list) { const idx = list.findIndex(e => e.id === action.id); if (idx !== -1) { oldItem = list[idx]; list.splice(idx, 1); } }
         }
         if (!oldItem) oldItem = { id: action.id }; 
         
@@ -852,7 +861,11 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
             oldItem.title = action.title; oldItem.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; oldItem.due = action.due; oldItem.status = action.status || oldItem.status; 
         } 
         oldItem._pendingUpdate = true;
-        targetList.push(oldItem); // ★新しい月(targetList)へ転生させる
+        
+        targetMonthKeys.forEach(mKey => {
+            const list = action.type === 'event' ? dataCache[mKey].events : dataCache[mKey].tasks;
+            list.push({ ...oldItem }); // 全ての対象月に更新後データを投下
+        });
     } 
     else if (action.method === 'delete') { 
         for (const key in dataCache) {
