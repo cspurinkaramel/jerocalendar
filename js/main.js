@@ -1130,8 +1130,8 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
 
     const payload = { type: type, method: 'update', id: id };
     
-    // ★情報の完全引継ぎ：予定（イベント）の場合のみ、添付ファイル情報をパケットに縛り付ける（タスクはテキストで保持するため干渉させない）
-    if (type === 'event' && item.attachments && item.attachments.length > 0) {
+    // ★共通化ロジックの萌芽：予定(Event)もタスク(Task)も全く同じ基準で、添付ファイルの「完全引継ぎチケット」を発行する
+    if (item.attachments && item.attachments.length > 0) {
         payload.keptAttachments = item.attachments;
         payload.attachmentsModified = true;
     }
