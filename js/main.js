@@ -1011,9 +1011,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function handleDragStart(e) {
     if (!e.currentTarget.getAttribute('data-id')) { e.preventDefault(); return; }
+    // ★掴んだ元のセルの日付(sourceDate)を記憶する
+    const parentCell = e.currentTarget.closest('.day');
+    const sourceDateStr = parentCell ? parentCell.id.replace('cell-', '') : null;
+
     e.dataTransfer.setData('text/plain', JSON.stringify({
         id: e.currentTarget.getAttribute('data-id'),
-        type: e.currentTarget.getAttribute('data-type')
+        type: e.currentTarget.getAttribute('data-type'),
+        sourceDate: sourceDateStr
     }));
     e.dataTransfer.effectAllowed = 'move';
     if (navigator.vibrate) navigator.vibrate(50); // 触覚フィードバック
@@ -1032,11 +1037,12 @@ async function handleDrop(e, targetDateStr) {
     
     try {
         const data = JSON.parse(dataStr);
-        await moveItemToDate(data.type, data.id, targetDateStr);
+        // ★掴んだ元の日付(sourceDate)も一緒に渡す
+        await moveItemToDate(data.type, data.id, targetDateStr, data.sourceDate);
     } catch(err) { console.error("Drop Error:", err); }
 }
 
-async function moveItemToDate(type, id, targetDateStr) {
+async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
     let item = null;
     for (const key in dataCache) {
         const list = type === 'event' ? dataCache[key].events : dataCache[key].tasks;
@@ -1047,27 +1053,49 @@ async function moveItemToDate(type, id, targetDateStr) {
     if (item._localId) { showToast('⚠️ 通信中のデータは動かせない。少し待て。'); return; }
 
     const payload = { type: type, method: 'update', id: id };
+    
+    // ★真のシフトロジック：掴んだ日からドロップ先への「相対移動日数(オフセット)」を計算する
+    let offsetDays = 0;
+    if (sourceDateStr) {
+        const srcParts = sourceDateStr.split('-'); const tgtParts = targetDateStr.split('-');
+        const srcD = new Date(parseInt(srcParts[0]), parseInt(srcParts[1]) - 1, parseInt(srcParts[2]));
+        const tgtD = new Date(parseInt(tgtParts[0]), parseInt(tgtParts[1]) - 1, parseInt(tgtParts[2]));
+        offsetDays = Math.round((tgtD.getTime() - srcD.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
     if (type === 'event') {
         payload.title = item.summary; payload.description = item.description; payload.location = item.location; payload.colorId = item.colorId;
         const isAllDay = item.start && item.start.date;
         if (isAllDay) {
-            payload.start = targetDateStr;
-            const stD = new Date(item.start.date); const edD = new Date(item.end.date);
-            const diffDays = Math.round((edD - stD) / (1000 * 60 * 60 * 24));
-            const newSt = new Date(targetDateStr); const newEd = new Date(newSt); newEd.setDate(newEd.getDate() + diffDays);
+            // 終日予定：本来の開始・終了日にオフセット日数をそのまま加算する（間隔を完全に維持）
+            const stParts = item.start.date.split('-'); const edParts = item.end.date.split('-');
+            const newSt = new Date(parseInt(stParts[0]), parseInt(stParts[1]) - 1, parseInt(stParts[2]));
+            const newEd = new Date(parseInt(edParts[0]), parseInt(edParts[1]) - 1, parseInt(edParts[2]));
+            newSt.setDate(newSt.getDate() + offsetDays);
+            newEd.setDate(newEd.getDate() + offsetDays);
+            payload.start = getSafeLocalDateStr(newSt);
             payload.end = getSafeLocalDateStr(newEd);
         } else {
-            const timeMatchSt = item.start.dateTime.match(/T(\d{2}:\d{2}:\d{2})/);
-            const timePartSt = timeMatchSt ? timeMatchSt[1] : "00:00:00";
-            payload.start = `${targetDateStr}T${timePartSt}+09:00`;
-            const stTime = new Date(item.start.dateTime).getTime(); const edTime = new Date(item.end.dateTime).getTime();
-            const newStTime = new Date(payload.start).getTime(); const newEdTime = new Date(newStTime + (edTime - stTime));
-            const d = new Date(newEdTime); const pad = (n) => String(n).padStart(2, '0');
-            payload.end = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}+09:00`;
+            // 時間指定予定：同じくオフセット日数を加算し、時間はそのまま維持する
+            const newSt = new Date(item.start.dateTime);
+            const newEd = new Date(item.end.dateTime);
+            newSt.setDate(newSt.getDate() + offsetDays);
+            newEd.setDate(newEd.getDate() + offsetDays);
+            const pad = (n) => String(n).padStart(2, '0');
+            const formatIso = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}+09:00`;
+            payload.start = formatIso(newSt);
+            payload.end = formatIso(newEd);
         }
     } else {
         payload.title = item.title; payload.description = item.notes; payload.status = item.status;
-        payload.due = targetDateStr + 'T00:00:00+09:00';
+        // タスク：これもオフセット移動させることで、どの画面から掴んでも正確に移動できる
+        if (item.due && offsetDays !== 0) {
+            const dueD = new Date(item.due);
+            dueD.setDate(dueD.getDate() + offsetDays);
+            payload.due = getSafeLocalDateStr(dueD) + 'T00:00:00+09:00';
+        } else {
+            payload.due = targetDateStr + 'T00:00:00+09:00';
+        }
     }
     
     closeAllModals();
