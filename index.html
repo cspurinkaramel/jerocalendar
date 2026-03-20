@@ -173,31 +173,42 @@
             z-index: 20;
         }
 
-        /* ★呼吸するブルー枠線（動的パルスアニメーション） */
+        /* ★本日の背景をおしゃれに点滅（オレンジ系の優しい光） */
+        @keyframes pulse-today-bg {
+            0% { background-color: rgba(255, 149, 0, 0.02); }
+            50% { background-color: rgba(255, 149, 0, 0.15); }
+            100% { background-color: rgba(255, 149, 0, 0.02); }
+        }
+        .day.today {
+            animation: pulse-today-bg 3s infinite ease-in-out !important;
+        }
+
+        /* ★呼吸する枠線（動的パルスアニメーション・色可変対応） */
         @keyframes pulse-selected {
-            0% { box-shadow: inset 0 0 0 2px var(--accent); background-color: rgba(0, 122, 255, 0.1); }
-            50% { box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.4); background-color: rgba(0, 122, 255, 0.03); }
-            100% { box-shadow: inset 0 0 0 2px var(--accent); background-color: rgba(0, 122, 255, 0.1); }
+            0% { box-shadow: inset 0 0 0 2px var(--sel-hex, #ff3b30); background-color: rgba(var(--sel-rgb, 255, 59, 48), 0.1); }
+            50% { box-shadow: inset 0 0 0 1px rgba(var(--sel-rgb, 255, 59, 48), 0.4); background-color: rgba(var(--sel-rgb, 255, 59, 48), 0.03); }
+            100% { box-shadow: inset 0 0 0 2px var(--sel-hex, #ff3b30); background-color: rgba(var(--sel-rgb, 255, 59, 48), 0.1); }
         }
         .day.selected {
             animation: pulse-selected 2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+            z-index: 10;
         }
 
-        /* ★ヘッダーの土日の文字色指定 */
-        #weekdays .wd:first-child { color: #ff3b30; } /* 日曜 */
-        #weekdays .wd:last-child { color: #007aff; }  /* 土曜 */
+        /* ★ヘッダーと日付(数字)の土日カラー同期 */
+        #weekdays .wd:first-child { color: #ff3b30; } /* 日曜ヘッダー */
+        #weekdays .wd:last-child { color: #007aff; }  /* 土曜ヘッダー */
+        .day:nth-child(7n+1) .day-num { color: #ff3b30; } /* 日曜の日付 */
+        .day:nth-child(7n) .day-num { color: #007aff; }   /* 土曜の日付 */
 
-        /* ★グリッドの視認性強化とジェロの提案（週末の背景色ダウン） */
+        /* ★グリッドの視認性強化と週末の背景色ダウン */
         .day {
-            /* 週を区切る横線は実線で少し濃く、日を区切る縦線は点線で薄くして明確に区別する */
             border-bottom: 1px solid rgba(0, 0, 0, 0.25) !important;
             border-right: 1px dotted rgba(0, 0, 0, 0.15) !important;
         }
-        .day:nth-child(7n) { border-right: none !important; } /* 右端の線を消す */
+        .day:nth-child(7n) { border-right: none !important; }
         
-        /* ★ジェロの提案：土日のカラムの背景をほんのり暗くして、曜日の構造を直感的にする */
-        .day:nth-child(7n+1) { background-color: rgba(255, 59, 48, 0.03); } /* 日曜の列 */
-        .day:nth-child(7n) { background-color: rgba(0, 122, 255, 0.03); }   /* 土曜の列 */
+        .day:nth-child(7n+1) { background-color: rgba(255, 59, 48, 0.03); }
+        .day:nth-child(7n) { background-color: rgba(0, 122, 255, 0.03); }
 
         #daily-modal {
             display: none !important;
@@ -311,6 +322,13 @@
                 </select></div>
             <div class="setting-row"><label>文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs"
                     min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
+            <div class="setting-row"><label>選択枠の色 (タップ時)</label><select id="st-sel-color" onchange="saveAndApplySettings()">
+                    <option value="red">レッド (情熱)</option>
+                    <option value="blue">ブルー (初期値)</option>
+                    <option value="green">グリーン (調和)</option>
+                    <option value="orange">オレンジ (活力)</option>
+                    <option value="purple">パープル (高貴)</option>
+                </select></div>
             <div class="setting-row">
                 <div style="display:flex; justify-content:space-between; align-items:center;"><label
                         style="color: var(--accent);">肉声 (音声合成)</label><label class="toggle-switch"><input
