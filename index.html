@@ -142,16 +142,15 @@
             margin: 0 auto !important;
         }
 
-        /* ★項目間の隙間（JSの余白設定を完全上書きして極限圧縮） */
+        /* ★項目間の隙間（極限圧縮と連続線の復活） */
         .event,
         .task {
             position: relative;
             z-index: 5;
             font-weight: 700;
             box-sizing: border-box !important;
-            /* ★余白(margin)を0にし、代わりに1pxの極細の線(border)で境界を作って完全に密着させる */
-            margin: 0px 1px 0px 1px !important; 
-            border-bottom: 1px solid var(--bg) !important;
+            /* margin-bottomを1px開けることで、背景色を見せて隙間を作る */
+            margin: 0px 1px 1px 1px !important; 
             padding: 0px 2px !important;
             height: 13px !important;
             line-height: 12px !important;
@@ -159,11 +158,15 @@
             text-overflow: clip !important;
             white-space: nowrap !important;
             overflow: hidden !important;
-            letter-spacing: -0.4px; /* さらに少しだけ文字を詰める */
+            letter-spacing: -0.4px; 
+            /* !important で border-bottom を消すと main.js の連続線が死ぬので絶対書かない */
         }
         
-        /* ★連続予定専用の余白上書き（千切れを防止しつつ限界まで詰める） */
-        .event.continuous { margin: 0px 0px 0px 0px !important; border-bottom: 1px solid var(--bg) !important; padding: 0 2px !important; }
+        /* ★連続予定専用の余白（千切れを防止し、JS側で引く3pxの色帯を復活させる） */
+        .event.continuous { 
+            margin: 0px 0px 1px 0px !important; /* 下に1pxだけ隙間をあける */
+            padding: 0 2px !important; 
+        }
         .event.continuous.span-start { margin-right: -6px !important; padding-right: 6px !important; }
         .event.continuous.span-mid { margin-left: -6px !important; margin-right: -6px !important; }
         .event.continuous.span-end { margin-left: -6px !important; padding-left: 6px !important; }
@@ -173,11 +176,11 @@
             z-index: 20;
         }
 
-        /* ★本日の背景をおしゃれに点滅（オレンジ系の優しい光） */
+        /* ★本日の背景をおしゃれに点滅（色可変対応） */
         @keyframes pulse-today-bg {
-            0% { background-color: rgba(255, 149, 0, 0.02); }
-            50% { background-color: rgba(255, 149, 0, 0.15); }
-            100% { background-color: rgba(255, 149, 0, 0.02); }
+            0% { background-color: rgba(var(--today-rgb, 255, 149, 0), 0.02); }
+            50% { background-color: rgba(var(--today-rgb, 255, 149, 0), 0.15); }
+            100% { background-color: rgba(var(--today-rgb, 255, 149, 0), 0.02); }
         }
         .day.today {
             animation: pulse-today-bg 3s infinite ease-in-out !important;
@@ -328,6 +331,14 @@
                     <option value="green">グリーン (調和)</option>
                     <option value="orange">オレンジ (活力)</option>
                     <option value="purple">パープル (高貴)</option>
+                </select></div>
+            <div class="setting-row"><label>本日の色 (点滅)</label><select id="st-today-color" onchange="saveAndApplySettings()">
+                    <option value="orange">オレンジ (初期値)</option>
+                    <option value="red">レッド (情熱)</option>
+                    <option value="blue">ブルー (冷静)</option>
+                    <option value="green">グリーン (調和)</option>
+                    <option value="purple">パープル (高貴)</option>
+                    <option value="yellow">イエロー (活発)</option>
                 </select></div>
             <div class="setting-row">
                 <div style="display:flex; justify-content:space-between; align-items:center;"><label
