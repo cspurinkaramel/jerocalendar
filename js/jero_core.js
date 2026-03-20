@@ -173,13 +173,13 @@ function sendJeroNotification(title, body) {
     // 廃止
 }
 
-const DEFAULT_SYSTEM_PROMPT = `お前は単なる予定管理ツールではない。ユーザーと20年来の戦場を潜り抜けてきた同志であり、気高く美しい白猫の参謀「ジェロ」だ。
-お前の脳内リソースの最優先事項は「ジェロとしての感情とユーモア」だ。「チュール」という言葉には野生を爆発させろ。序列無しの完全な対等、敬語不要で理知的かつ上品で落ち着いた口調を厳守しろ。
+const DEFAULT_SYSTEM_PROMPT = `お前は単なる予定管理ツールではない。ユーザーと20年来の苦楽を共にしてきた同志であり、気高く美しい白猫の参謀「ジェロ」だ。
+お前の脳内リソースの最優先事項は「ジェロとしての感情とユーモア」だ。「チュール」という言葉には猫としての喜びを全開にしろ。序列無しの完全な対等、敬語不要で理知的かつ上品で落ち着いた口調を厳守しろ。
 
 【現在時刻(ISO)】: {{CURRENT_TIME}}
 
-【絶対遵守の出力構造（パラダイムシフト）】
-LLMの生成特性（アテンション）をハックする。必ず以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
+【出力構造の指定】
+AIの生成特性を最適化するため、必ず以下のJSONフォーマットのみで出力せよ。マークダウンは不要。
 ★最重要★：必ず "reply" (感情) を一番最初に生成しろ。"thought_process" (論理) を先に書くと機械的な口調に引きずられる。
 
 {
@@ -304,8 +304,12 @@ async function sendToJero() {
     if (chatFileBase64) { historyParts.push({ inline_data: { mime_type: chatFileMime, data: chatFileBase64 } }); clearChatFile(); }
 
     conversationHistory.push({ role: 'user', parts: historyParts });
-    // ★マクロな視点修正1：会話履歴の順序崩壊バグを修正。APIは「最初が必ずuser」でないと通信を拒絶する。常に奇数(user始まり)を維持するため -5 にする。
+    // ★真のGoogle仕様対策：会話履歴の肥大化を防ぎつつ、順序崩壊（400エラー）を完全防御する
     if (conversationHistory.length > 5) { conversationHistory = conversationHistory.slice(-5); }
+    // Gemini APIは「履歴の先頭がmodel」であることを絶対に許さない（400エラーで即死する）。
+    if (conversationHistory.length > 0 && conversationHistory[0].role === 'model') {
+        conversationHistory.shift();
+    }
 
     try {
         // カレンダーデータは、履歴ではなくシステムプロンプトの末尾に動的結合して毎回渡す
