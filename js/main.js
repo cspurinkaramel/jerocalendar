@@ -1011,9 +1011,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function handleDragStart(e) {
     if (!e.currentTarget.getAttribute('data-id')) { e.preventDefault(); return; }
-    // ★掴んだ元のセルの日付(sourceDate)を記憶する
+    
+    // ★真の起点記憶：カレンダー上から掴んだ場合はそのセル、下のリストから掴んだ場合は「現在選択中の日付(selectedDateStr)」を起点とする
     const parentCell = e.currentTarget.closest('.day');
-    const sourceDateStr = parentCell ? parentCell.id.replace('cell-', '') : null;
+    const sourceDateStr = parentCell ? parentCell.id.replace('cell-', '') : (typeof selectedDateStr !== 'undefined' ? selectedDateStr : null);
+
+    if (!sourceDateStr) { showToast('⚠️ 起点の日付が不明だ。もう一度選び直してくれ。'); e.preventDefault(); return; }
 
     e.dataTransfer.setData('text/plain', JSON.stringify({
         id: e.currentTarget.getAttribute('data-id'),
