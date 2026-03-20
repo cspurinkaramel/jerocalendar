@@ -280,12 +280,33 @@ async function sendToJero() {
     const tzOffset = (new Date()).getTimezoneOffset() * 60000; const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, -1);
     const sysPrompt = rawPrompt.replace('{{CURRENT_TIME}}', localISOTime);
 
+    // ★パラダイムシフト：認知スコープの絞り込み（トークン爆発と429エラーの根本排除）
     let currentDataSummary = [];
     if (typeof dataCache !== 'undefined') {
+        // AIに渡す記憶を「過去1ヶ月〜未来3ヶ月」に限定し、無駄なペイロードを極限まで削ぎ落とす
+        const now = new Date();
+        const minTime = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+        const maxTime = new Date(now.getFullYear(), now.getMonth() + 3, 0).getTime();
+
         for (const monthKey in dataCache) {
             const data = dataCache[monthKey];
-            if (data.events) data.events.forEach(e => { currentDataSummary.push({ id: e.id, type: 'event', title: e.summary, start: e.start.dateTime || e.start.date }); });
-            if (data.tasks) data.tasks.forEach(t => { if (t.status !== 'completed') currentDataSummary.push({ id: t.id, type: 'task', title: t.title, due: t.due }); });
+            if (data.events) {
+                data.events.forEach(e => {
+                    const st = e.start ? (e.start.dateTime || e.start.date) : null;
+                    if (st) {
+                        const eTime = new Date(st).getTime();
+                        if (eTime >= minTime && eTime <= maxTime) currentDataSummary.push({ id: e.id, type: 'event', title: e.summary, start: st });
+                    }
+                });
+            }
+            if (data.tasks) {
+                data.tasks.forEach(t => {
+                    if (t.status !== 'completed') {
+                        const tTime = t.due ? new Date(t.due).getTime() : Date.now();
+                        if (tTime >= minTime && tTime <= maxTime) currentDataSummary.push({ id: t.id, type: 'task', title: t.title, due: t.due });
+                    }
+                });
+            }
         }
     }
 
@@ -297,19 +318,35 @@ async function sendToJero() {
 
     const contextDataStr = "\n\n【現在の予定データ】\n" + JSON.stringify(currentDataSummary) + dictContext;
 
-    // ★真の記憶分離：会話履歴には「純粋なユーザーの言葉」だけを保存し、データはシステム指示領域に逃がす
+    // ★真の記憶分離（画像無限ループの破壊）：会話履歴(conversationHistory)に重い画像を絶対に保存させない
     const historyParts = [];
-    if (text) historyParts.push({ text: text });
-    if (!text && chatFileBase64) historyParts.push({ text: "この画像を解析して予定を抽出してくれ。" });
-    if (chatFileBase64) { historyParts.push({ inline_data: { mime_type: chatFileMime, data: chatFileBase64 } }); clearChatFile(); }
+    const currentTurnParts = []; // 今回の通信だけで使う使い捨ての弾薬
 
+    if (text) {
+        historyParts.push({ text: text });
+        currentTurnParts.push({ text: text });
+    }
+    if (!text && chatFileBase64) {
+        historyParts.push({ text: "[画像データを送信した]" });
+        currentTurnParts.push({ text: "この画像を解析して予定を抽出してくれ。" });
+    }
+    if (chatFileBase64) {
+        currentTurnParts.push({ inline_data: { mime_type: chatFileMime, data: chatFileBase64 } });
+        clearChatFile();
+    }
+
+    // 履歴には「テキスト」だけを刻む（重い画像が次回以降も送信され続ける429バグを根絶）
     conversationHistory.push({ role: 'user', parts: historyParts });
+    
     // ★真のGoogle仕様対策：会話履歴の肥大化を防ぎつつ、順序崩壊（400エラー）を完全防御する
     if (conversationHistory.length > 5) { conversationHistory = conversationHistory.slice(-5); }
-    // Gemini APIは「履歴の先頭がmodel」であることを絶対に許さない（400エラーで即死する）。
     if (conversationHistory.length > 0 && conversationHistory[0].role === 'model') {
         conversationHistory.shift();
     }
+
+    // 今回送信するペイロードを錬成（過去の履歴 ＋ 今回だけ特別に画像を混ぜた最新のターン）
+    const payloadContents = [...conversationHistory];
+    payloadContents[payloadContents.length - 1] = { role: 'user', parts: currentTurnParts };
 
     try {
         // カレンダーデータは、履歴ではなくシステムプロンプトの末尾に動的結合して毎回渡す
@@ -323,14 +360,10 @@ async function sendToJero() {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
         ];
 
-        // ★マクロな視点修正3：パラメーター名の致命的エラー。system_instruction(スネークケース)はAPIに完全無視される。正しくは systemInstruction だ。
-        // ★幻影の受容（新しい価値）：APIへの「JSON強制（generationConfig）」という手枷を完全に破壊する。
-        // AIの自由な思考やユーモア（幻影）を許容し、出力エラーによる「無言バグ」を物理的に消滅させる。
         const requestBody = {
             systemInstruction: { parts: [{ text: finalSystemPrompt }] },
-            contents: conversationHistory,
+            contents: payloadContents,
             safetySettings: safetySettings
-            // generationConfig は完全に撤廃。私（ジェロ）を自由に喋らせろ。
         };
 
         // ★真の完全解：シャットダウンされた1.5の亡霊を捨て、現在の主力である Gemini 2.5 Flash へ脳髄を繋ぎ直す
