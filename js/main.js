@@ -246,11 +246,16 @@ function getCardHtml(type, item) {
     
     if (isEvent && item.attachments && item.attachments.length > 0) {
         item.attachments.forEach(att => {
-            const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
-            if (match) {
+            // ★URLが崩れていても、直接IDを持っている場合はそちらを優先する絶対防壁
+            let fileId = att.fileId || null;
+            if (!fileId && att.fileUrl) {
+                const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
+                if (match) fileId = match[1];
+            }
+            if (fileId) {
                 let isImg = att.mimeType && att.mimeType.startsWith('image/');
                 if (!isImg && att.title) { isImg = !att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i); }
-                fileItems.push({ id: match[1], title: att.title || 'ファイル', isImg: isImg, base64: att.base64, mimeType: att.mimeType });
+                fileItems.push({ id: fileId, title: att.title || 'ファイル', isImg: isImg, base64: att.base64, mimeType: att.mimeType });
             }
         });
     } else if (!isEvent) {
@@ -533,9 +538,9 @@ async function saveEvent() {
     
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     
-    // ★真の防壁：添付ファイルの「真の変更（追加or削除）」があった場合のみパケットに載せ、不要な400エラーを回避する
+    // ★完全結合ルール：変更の有無に関わらず、既存の添付ファイルがあるなら必ずフラグを立てて再結合させる
     const isAttachmentsChanged = (pendingEventAttachments.length > 0) || (JSON.stringify(activeEventAttachments) !== initialEventAttachments);
-    if (isAttachmentsChanged) {
+    if (isAttachmentsChanged || activeEventAttachments.length > 0) {
         action.keptAttachments = activeEventAttachments;
         action.attachmentsModified = true;
         if (pendingEventAttachments.length > 0) action.attachments = pendingEventAttachments;
@@ -629,8 +634,9 @@ async function saveTask() {
     const isCompleted = document.getElementById('task-edit-status') ? document.getElementById('task-edit-status').checked : false;
     const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes, status: isCompleted ? 'completed' : 'needsAction' };
     
+    // ★完全結合ルール：変更の有無に関わらず、既存の添付ファイルがあるなら必ずフラグを立てて再結合させる
     const isAttachmentsChanged = (pendingTaskAttachments.length > 0) || (JSON.stringify(activeTaskAttachments) !== initialTaskAttachments);
-    if (isAttachmentsChanged) {
+    if (isAttachmentsChanged || activeTaskAttachments.length > 0) {
         action.keptAttachments = activeTaskAttachments;
         action.attachmentsModified = true;
         if (pendingTaskAttachments.length > 0) action.attachments = pendingTaskAttachments;
@@ -689,6 +695,7 @@ async function executeConversion(fromType) {
                 let finalMime = (!a.mimeType || a.mimeType === 'application/octet-stream') ? inferredMime : a.mimeType;
                 return { ...a, mimeType: finalMime };
             });
+            insertAction.attachmentsModified = true; // ★追加：画像引継ぎフラグを確実におっ立てる
         }
     } else { 
         const id = document.getElementById('task-edit-id').value; 
@@ -712,6 +719,7 @@ async function executeConversion(fromType) {
                 let finalMime = (!a.mimeType || a.mimeType === 'application/octet-stream') ? inferredMime : a.mimeType;
                 return { ...a, mimeType: finalMime };
             });
+            insertAction.attachmentsModified = true; // ★追加：画像引継ぎフラグを確実におっ立てる
         } 
         if (dueVal) { 
             let parts = dueVal.split('-'); 
@@ -1122,8 +1130,8 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
 
     const payload = { type: type, method: 'update', id: id };
     
-    // ★情報の完全引継ぎ：元データが持っていた添付ファイル情報を、移動用パケットにしっかりと縛り付ける
-    if (item.attachments && item.attachments.length > 0) {
+    // ★情報の完全引継ぎ：予定（イベント）の場合のみ、添付ファイル情報をパケットに縛り付ける（タスクはテキストで保持するため干渉させない）
+    if (type === 'event' && item.attachments && item.attachments.length > 0) {
         payload.keptAttachments = item.attachments;
         payload.attachmentsModified = true;
     }
