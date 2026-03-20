@@ -100,18 +100,19 @@
             cursor: pointer;
         }
 
-        /* ★日付セル1行分を独立させ、下罫線を引く */
+        /* ★日付セルの完全中央揃え */
         .day-header {
             width: 100%;
             height: 16px;
             min-height: 16px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.15); /* 日付の直下に横線を引く */
-            margin-bottom: 1px; /* 1行目と2行目(イベント)の限界まで狭い間隔(1px) */
+            border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+            margin-bottom: 1px;
             display: flex;
-            align-items: center;
-            padding-left: 3px;
+            align-items: center;      /* 垂直の中央揃え */
+            justify-content: center;  /* 水平の中央揃え */
+            padding: 0;               /* 左の余白を消して真ん中に */
             box-sizing: border-box;
-            background: rgba(255, 255, 255, 0.3); /* 少し背景を入れてヘッダー感を強調 */
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .day-num {
@@ -122,6 +123,7 @@
             text-align: center;
         }
 
+        /* ★本日の赤丸印も綺麗に中央配置する */
         .today .day-num {
             background: #ff3b30;
             color: white;
@@ -129,26 +131,35 @@
             width: 15px;
             height: 15px;
             line-height: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
+        /* ★項目間の隙間（JSの余白設定を完全上書きして極限圧縮） */
         .event,
         .task {
             position: relative;
             z-index: 5;
             font-weight: 700;
             box-sizing: border-box !important;
-            /* ★連続予定の千切れバグを直すため、margin/paddingの !important を解除 */
-            margin: 0px 1px 1px 1px; 
-            padding: 0px 2px;
+            /* 強制的に上余白0、下余白1pxにする（これで隙間は1pxが限界になる） */
+            margin: 0px 1px 1px 1px !important; 
+            padding: 0px 2px !important;
             height: 13px !important;
             line-height: 13px !important;
             font-size: 9.5px !important;
-            /* ★文字の限界表示 */
             text-overflow: clip !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             letter-spacing: -0.3px;
         }
+        
+        /* ★連続予定専用の余白上書き（千切れを防止しつつ限界まで詰める） */
+        .event.continuous { margin: 0px 0px 1px 0px !important; padding: 0 2px !important; }
+        .event.continuous.span-start { margin-right: -6px !important; padding-right: 6px !important; }
+        .event.continuous.span-mid { margin-left: -6px !important; margin-right: -6px !important; }
+        .event.continuous.span-end { margin-left: -6px !important; padding-left: 6px !important; }
         
         .event.continuous.span-start {
             overflow: visible !important;
