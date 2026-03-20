@@ -8,6 +8,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="manifest" href="./manifest.json">
     <title>JeroCalendar v8.8</title>
     <link rel="stylesheet" href="./css/style.css?v=8.8">
@@ -123,6 +126,17 @@
             z-index: 5;
             font-weight: 700;
             box-sizing: border-box !important;
+            /* ★限界圧縮：行間と余白をミリ単位で削ぎ落とす */
+            margin: 0px 1px 1px 1px !important; 
+            padding: 0px 2px !important;
+            height: 13px !important;
+            line-height: 13px !important;
+            font-size: 9.5px !important;
+            /* ★文字の限界表示：「...」で誤魔化さず、枠いっぱいまで文字を見せる */
+            text-overflow: clip !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            letter-spacing: -0.3px; /* 文字をほんの少し詰めて情報量を増やす */
         }
         
         .event.continuous.span-start {
@@ -130,10 +144,31 @@
             z-index: 20;
         }
 
-        .day.selected {
-            background-color: rgba(0, 122, 255, 0.1) !important;
-            box-shadow: inset 0 0 0 1.5px var(--accent) !important;
+        /* ★呼吸するブルー枠線（動的パルスアニメーション） */
+        @keyframes pulse-selected {
+            0% { box-shadow: inset 0 0 0 2px var(--accent); background-color: rgba(0, 122, 255, 0.1); }
+            50% { box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.4); background-color: rgba(0, 122, 255, 0.03); }
+            100% { box-shadow: inset 0 0 0 2px var(--accent); background-color: rgba(0, 122, 255, 0.1); }
         }
+        .day.selected {
+            animation: pulse-selected 2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+        }
+
+        /* ★ヘッダーの土日の文字色指定 */
+        #weekdays .wd:first-child { color: #ff3b30; } /* 日曜 */
+        #weekdays .wd:last-child { color: #007aff; }  /* 土曜 */
+
+        /* ★グリッドの視認性強化とジェロの提案（週末の背景色ダウン） */
+        .day {
+            /* 週を区切る横線は実線で少し濃く、日を区切る縦線は点線で薄くして明確に区別する */
+            border-bottom: 1px solid rgba(0, 0, 0, 0.25) !important;
+            border-right: 1px dotted rgba(0, 0, 0, 0.15) !important;
+        }
+        .day:nth-child(7n) { border-right: none !important; } /* 右端の線を消す */
+        
+        /* ★ジェロの提案：土日のカラムの背景をほんのり暗くして、曜日の構造を直感的にする */
+        .day:nth-child(7n+1) { background-color: rgba(255, 59, 48, 0.03); } /* 日曜の列 */
+        .day:nth-child(7n) { background-color: rgba(0, 122, 255, 0.03); }   /* 土曜の列 */
 
         #daily-modal {
             display: none !important;
