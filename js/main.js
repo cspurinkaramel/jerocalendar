@@ -859,6 +859,8 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
             if (action.attachmentsModified) { oldItem.attachments = tempAttachments; }
         } else { 
             oldItem.title = action.title; oldItem.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; oldItem.due = action.due; oldItem.status = action.status || oldItem.status; 
+            // ★タスクの場合も、添付ファイル（画像）のキャッシュを確実に引き継ぐ
+            if (action.attachmentsModified) { oldItem.attachments = tempAttachments; }
         } 
         oldItem._pendingUpdate = true;
         
@@ -1120,6 +1122,12 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
 
     const payload = { type: type, method: 'update', id: id };
     
+    // ★情報の完全引継ぎ：元データが持っていた添付ファイル情報を、移動用パケットにしっかりと縛り付ける
+    if (item.attachments && item.attachments.length > 0) {
+        payload.keptAttachments = item.attachments;
+        payload.attachmentsModified = true;
+    }
+
     // ★真のシフトロジック：掴んだ日からドロップ先への「相対移動日数(オフセット)」を計算する
     let offsetDays = 0;
     if (sourceDateStr) {
