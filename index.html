@@ -94,6 +94,7 @@
             padding: 0 0 1px 0 !important; /* 上余白をゼロにし、中身を上から順に詰め込む */
             display: flex;
             flex-direction: column;
+            gap: 0px !important; /* ★Flexbox特有の見えない隙間を完全に殺す */
             overflow: visible !important;
             position: relative;
             transition: background-color 0.2s;
@@ -121,19 +122,24 @@
             color: var(--txt);
             display: inline-block;
             text-align: center;
+            /* ★外部CSSの古い呪縛（position: absolute）を完全に破壊して中央へ引きずり出す */
+            position: static !important;
+            margin: 0 auto !important;
         }
 
         /* ★本日の赤丸印も綺麗に中央配置する */
         .today .day-num {
-            background: #ff3b30;
-            color: white;
-            border-radius: 50%;
-            width: 15px;
-            height: 15px;
-            line-height: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: #ff3b30 !important;
+            color: white !important;
+            border-radius: 50% !important;
+            width: 16px !important;
+            height: 16px !important;
+            line-height: 16px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: static !important;
+            margin: 0 auto !important;
         }
 
         /* ★項目間の隙間（JSの余白設定を完全上書きして極限圧縮） */
@@ -143,20 +149,21 @@
             z-index: 5;
             font-weight: 700;
             box-sizing: border-box !important;
-            /* 強制的に上余白0、下余白1pxにする（これで隙間は1pxが限界になる） */
-            margin: 0px 1px 1px 1px !important; 
+            /* ★余白(margin)を0にし、代わりに1pxの極細の線(border)で境界を作って完全に密着させる */
+            margin: 0px 1px 0px 1px !important; 
+            border-bottom: 1px solid var(--bg) !important;
             padding: 0px 2px !important;
             height: 13px !important;
-            line-height: 13px !important;
+            line-height: 12px !important;
             font-size: 9.5px !important;
             text-overflow: clip !important;
             white-space: nowrap !important;
             overflow: hidden !important;
-            letter-spacing: -0.3px;
+            letter-spacing: -0.4px; /* さらに少しだけ文字を詰める */
         }
         
         /* ★連続予定専用の余白上書き（千切れを防止しつつ限界まで詰める） */
-        .event.continuous { margin: 0px 0px 1px 0px !important; padding: 0 2px !important; }
+        .event.continuous { margin: 0px 0px 0px 0px !important; border-bottom: 1px solid var(--bg) !important; padding: 0 2px !important; }
         .event.continuous.span-start { margin-right: -6px !important; padding-right: 6px !important; }
         .event.continuous.span-mid { margin-left: -6px !important; margin-right: -6px !important; }
         .event.continuous.span-end { margin-left: -6px !important; padding-left: 6px !important; }
