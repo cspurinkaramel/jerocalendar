@@ -382,7 +382,22 @@ function renderMonthDOM(year, month, data, position) {
             
             let bgColor = 'var(--accent)'; let txtColor = '#ffffff'; if (pData.style) { bgColor = pData.style.bg; txtColor = pData.style.txt; } else if (e.colorId && GOOGLE_COLORS[e.colorId]) { bgColor = GOOGLE_COLORS[e.colorId]; txtColor = getContrastYIQ(bgColor); }
             div.style.overflow = 'hidden'; div.style.whiteSpace = 'nowrap'; div.style.textOverflow = 'clip'; div.style.position = 'relative'; div.style.zIndex = '1'; div.style.boxSizing = 'border-box'; div.style.fontSize = '10px'; div.style.fontWeight = '700';
-            if (spanType !== 'single') { div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; if (spanType === 'span-start') { div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; } else if (spanType === 'span-mid') { div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent'; } else if (spanType === 'span-end') { div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent'; } } else { div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; }
+            if (spanType !== 'single') { 
+                div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; 
+                if (spanType === 'span-start') { 
+                    div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; 
+                } else if (spanType === 'span-mid') { 
+                    div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; 
+                    /* ★月跨ぎ対応: 1日のマスなら透明にせず強制的に文字を見せる */
+                    if (dateStr.endsWith('-01')) { div.style.color = bgColor; div.style.paddingLeft = '8px'; } else { div.style.color = 'transparent'; }
+                } else if (spanType === 'span-end') { 
+                    div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; 
+                    /* ★月跨ぎ対応: 1日のマスなら透明にせず強制的に文字を見せる */
+                    if (dateStr.endsWith('-01')) { div.style.color = bgColor; div.style.paddingLeft = '8px'; } else { div.style.color = 'transparent'; }
+                } 
+            } else { 
+                div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; 
+            }
             if (isPendingInsert || isPendingUpdate) { div.style.border = `1px dashed ${txtColor}`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.3'; div.style.filter = 'grayscale(100%)'; } dayEl.appendChild(div);
         });
         if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
@@ -725,51 +740,62 @@ async function executeConversion(fromType) {
 // ==========================================
 // 8. アクション司令塔 
 // ==========================================
+// ★ヘルパー：表示中の「全ての月」を一斉に再描画する
+function refreshAllVisibleMonths() {
+    const wrappers = document.querySelectorAll('.month-wrapper');
+    for (const wrapper of wrappers) {
+        const parts = wrapper.id.split('-');
+        if (parts.length === 3) {
+            const y = parseInt(parts[1]); const m = parseInt(parts[2]);
+            wrapper.remove();
+            if (dataCache[`${y}-${m}`]) renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace');
+        }
+    }
+    if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+}
+
 async function dispatchManualAction(action) {
     let msgAction = action.method === 'insert' ? '追加' : action.method === 'update' ? '更新' : '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク'; let safeToday = getSafeLocalDateStr();
-    if (action.method === 'delete' && action.id) deletedIds.add(action.id); // ★削除されたIDをブラックリストに刻む
+    if (action.method === 'delete' && action.id) deletedIds.add(action.id);
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; } if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; } if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
-    let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-    const year = td.getFullYear(); const month = td.getMonth(); const monthKey = `${year}-${month}`; const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); updateLocalCacheForOptimisticUI(action, tempLocalId);
-    const existingMonth = document.getElementById(`month-${year}-${month}`); if (existingMonth) existingMonth.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+    
+    const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); 
+    updateLocalCacheForOptimisticUI(action, tempLocalId);
+    refreshAllVisibleMonths(); // ★全ての月のUIを即座に更新(月跨ぎの重複描画を根絶)
+
     (async () => {
-        // ★究極防壁1：添付ファイルがある場合は問答無用で「野戦倉庫（キュー）」に突っ込み、即座にUIを解放する
         if (action.attachments && action.attachments.length > 0) {
             const localId = await saveToSyncQueue(action); 
             updateLocalCacheForOptimisticUI(action, localId, tempLocalId); 
-            
-            // UI上は即座に追加・保存されたように見せる
-            const existingMonthErr = document.getElementById(`month-${year}-${month}`); if (existingMonthErr) existingMonthErr.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
-            
-            await updateSyncBadge(); // ★これにより即座に「未送信の青い帯」が確実に出現する
-            processSyncQueue(true);  // 裏で静かにチャンク送信を開始
-            return; // 画面のロックを即座に解除して終了
+            refreshAllVisibleMonths();
+            await updateSyncBadge(); 
+            processSyncQueue(true); 
+            return; 
         }
 
-        // 以下は添付なしの通常ルート（高速なためフォアグラウンドで処理）
-        if (!navigator.onLine) { const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 圏外だ。退避した。`); await updateSyncBadge(); } 
+        if (!navigator.onLine) { 
+            const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); 
+            showToast(`📦 圏外だ。退避した。`); await updateSyncBadge(); 
+        } 
         else {
             try {
                 await executeApiAction(action);
                 showToast(`✅ ${msgType}の${msgAction}完了`);
                 
-                if (dataCache[monthKey]) {
-                    if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
-                    else if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) delete existing._pendingUpdate; } 
-                    else if (action.method === 'insert') { 
-                        // ★修正: 1.5秒後の強制再描画が終わるまでロックを維持するため、_localId の削除ループを完全に消去した
-                        setTimeout(async () => { 
-                            await fetchAndRenderMonth(year, month, 'replace', true); 
-                            triggerFullReRender(); 
-                            // ★完全調和: 上画面の更新と同時に、下画面も最新の実データで再描画して点線枠を消し去る
-                            if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
-                        }, 1500); 
+                // ★1.5秒後に表示中の「全ての月」をサーバーから一斉再取得して完璧に同期する
+                setTimeout(async () => { 
+                    const wrappers = document.querySelectorAll('.month-wrapper');
+                    for (const wrapper of wrappers) {
+                        const parts = wrapper.id.split('-');
+                        if (parts.length === 3) await fetchAndRenderMonth(parseInt(parts[1]), parseInt(parts[2]), 'replace', true);
                     }
-                }
-                const existingMonthAfter = document.getElementById(`month-${year}-${month}`); if (existingMonthAfter) existingMonthAfter.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
+                    if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+                }, 1500); 
+                
+                refreshAllVisibleMonths(); await updateSyncBadge();
             } catch (e) {
                 const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 通信不良だ。裏で退避した。`);
-                const existingMonthErr = document.getElementById(`month-${year}-${month}`); if (existingMonthErr) existingMonthErr.remove(); if (dataCache[monthKey]) renderMonthDOM(year, month, dataCache[monthKey], 'replace'); if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); await updateSyncBadge();
+                refreshAllVisibleMonths(); await updateSyncBadge();
             }
         }
     })();
@@ -779,9 +805,19 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
     let safeToday = getSafeLocalDateStr(); if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; } if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; } if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
     let tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
     const monthKey = `${td.getFullYear()}-${td.getMonth()}`; if (!dataCache[monthKey]) dataCache[monthKey] = { events: [], tasks: [] }; const targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks;
-    if (replaceTempId) { const itemToReplace = targetList.find(item => item._localId === replaceTempId); if (itemToReplace) { itemToReplace._localId = localId; itemToReplace.id = 'dummy_' + localId; } return; }
     
-    // ★真の幻影破壊: GoogleDrive正規表現をすり抜けるダミーURLを錬成する
+    if (replaceTempId) { 
+        // ★全キャッシュを舐めて探す（月を跨いで移動している可能性があるため）
+        for (const key in dataCache) {
+            const list = action.type === 'event' ? dataCache[key].events : dataCache[key].tasks;
+            if (list) {
+                const itemToReplace = list.find(item => item._localId === replaceTempId); 
+                if (itemToReplace) { itemToReplace._localId = localId; itemToReplace.id = 'dummy_' + localId; return; }
+            }
+        }
+        return; 
+    }
+    
     let tempAttachments = [];
     if (action.keptAttachments) tempAttachments = tempAttachments.concat(action.keptAttachments.map(a => ({ fileUrl: a.fileUrl || `https://drive.google.com/file/d/${a.fileId}`, title: a.title, mimeType: a.mimeType, fileId: a.fileId })));
     if (action.attachments) tempAttachments = tempAttachments.concat(action.attachments.map(a => ({ fileUrl: `https://drive.google.com/file/d/dummy_${a.uid}`, title: a.name, mimeType: a.mimeType, fileId: `dummy_${a.uid}`, base64: a.base64 })));
@@ -798,18 +834,32 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
         targetList.push(newItem); 
     } 
     else if (action.method === 'update') { 
-        const existing = targetList.find(item => item.id === action.id); 
-        if (existing) { 
-            if (action.type === 'event') { 
-                existing.summary = action.title; existing.location = action.location; existing.description = action.description; existing.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) existing.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; existing.colorId = action.colorId; 
-                if (action.attachmentsModified) { existing.attachments = tempAttachments; }
-            } else { 
-                existing.title = action.title; existing.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; existing.due = action.due; existing.status = action.status || existing.status; 
-            } 
-            existing._pendingUpdate = true; 
+        let oldItem = null;
+        // ★月跨ぎ移動のため、旧データを全キャッシュから根こそぎ取り除く
+        for (const key in dataCache) {
+            const list = action.type === 'event' ? dataCache[key].events : dataCache[key].tasks;
+            if (list) {
+                const idx = list.findIndex(e => e.id === action.id);
+                if (idx !== -1) { oldItem = list[idx]; list.splice(idx, 1); }
+            }
+        }
+        if (!oldItem) oldItem = { id: action.id }; 
+        
+        if (action.type === 'event') { 
+            oldItem.summary = action.title; oldItem.location = action.location; oldItem.description = action.description; oldItem.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) oldItem.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; oldItem.colorId = action.colorId; 
+            if (action.attachmentsModified) { oldItem.attachments = tempAttachments; }
+        } else { 
+            oldItem.title = action.title; oldItem.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; oldItem.due = action.due; oldItem.status = action.status || oldItem.status; 
         } 
+        oldItem._pendingUpdate = true;
+        targetList.push(oldItem); // ★新しい月(targetList)へ転生させる
     } 
-    else if (action.method === 'delete') { const existing = targetList.find(item => item.id === action.id); if (existing) existing._pendingDelete = true; }
+    else if (action.method === 'delete') { 
+        for (const key in dataCache) {
+            const list = action.type === 'event' ? dataCache[key].events : dataCache[key].tasks;
+            if (list) { const existing = list.find(item => item.id === action.id); if (existing) existing._pendingDelete = true; }
+        }
+    }
 }
 
 async function rehydrateSyncQueue() { const queue = await getSyncQueue(); for (const item of queue) { updateLocalCacheForOptimisticUI(item.payload, item.id); } }
