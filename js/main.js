@@ -1126,11 +1126,23 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
     }
     if (!item) return;
 
+    // ★真の共通化のための前処理：タスクはテキスト(notes)の中に画像を隠し持っているため、それを抽出して「ボックス」に詰め直す
+    if (type === 'task' && (!item.attachments || item.attachments.length === 0) && item.notes) {
+        let extracted = [];
+        const regex = /📁 \[(.*?)\] (https?:\/\/[^\s\n]+)/g;
+        let m;
+        while ((m = regex.exec(item.notes)) !== null) {
+            let fId = m[2].match(/d\/([a-zA-Z0-9_-]+)/) || m[2].match(/id=([a-zA-Z0-9_-]+)/);
+            extracted.push({ title: m[1], fileUrl: m[2], fileId: fId ? fId[1] : null });
+        }
+        if (extracted.length > 0) item.attachments = extracted;
+    }
+
     if (item._localId) { showToast('⚠️ 通信中のデータは動かせない。少し待て。'); return; }
 
     const payload = { type: type, method: 'update', id: id };
     
-    // ★共通化ロジックの萌芽：予定(Event)もタスク(Task)も全く同じ基準で、添付ファイルの「完全引継ぎチケット」を発行する
+    // ★共通化ロジック：予定もタスクも、ここで「完全引継ぎチケット」を平等に発行する
     if (item.attachments && item.attachments.length > 0) {
         payload.keptAttachments = item.attachments;
         payload.attachmentsModified = true;
@@ -1169,7 +1181,9 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
             payload.end = formatIso(newEd);
         }
     } else {
-        payload.title = item.title; payload.description = item.notes; payload.status = item.status;
+        // ★最適化：テキスト内の画像URLは一旦掃除して送る（システムが後で綺麗に再結合するため、重複を防ぐ）
+        const cleanNotes = (item.notes || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim();
+        payload.title = item.title; payload.description = cleanNotes; payload.status = item.status;
         // タスク：これもオフセット移動させることで、どの画面から掴んでも正確に移動できる
         if (item.due && offsetDays !== 0) {
             const dueD = new Date(item.due);
