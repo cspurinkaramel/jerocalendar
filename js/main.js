@@ -505,7 +505,9 @@ async function handleImageUpload(event, previewId) {
             base64Data = await compressImage(file);
             const byteString = atob(base64Data); const ab = new ArrayBuffer(byteString.length); const ia = new Uint8Array(ab);
             for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-            fileBlob = new Blob([ab], { type: 'image/jpeg' }); fileBlob.name = file.name;
+            // ★完全同期：中身をWebPとして正しく宣言し、元のファイル名の拡張子を「.webp」にすげ替える
+            fileBlob = new Blob([ab], { type: 'image/webp' }); 
+            fileBlob.name = file.name.replace(/\.[^/.]+$/, "") + ".webp";
         } else {
             if (file.size > 15 * 1024 * 1024) { showToast(`❌ ${file.name} は巨大すぎる。弾いたぞ。`); continue; }
             base64Data = await new Promise(r => { const reader = new FileReader(); reader.onload = e => r(e.target.result.split(',')[1]); reader.readAsDataURL(file); });
