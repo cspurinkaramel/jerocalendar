@@ -872,8 +872,8 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
         if (!oldItem) oldItem = { id: action.id, status: action.type === 'task' ? 'needsAction' : undefined }; 
         
         const updatedItem = { ...oldItem, ...buildCommonItem(action.id), _pendingUpdate: true };
-        // ★最適化：タスクで画像に変更がない場合は、古い画像をそのまま保護して引き継ぐ
-        if (action.type === 'task' && !action.attachmentsModified && oldItem.attachments) {
+        // ★絶対防壁：予定もタスクも、画像に変更指示がない場合は、UI上の既存画像を完全に保護する
+        if (!action.attachmentsModified && oldItem.attachments) {
             updatedItem.attachments = oldItem.attachments;
         }
         
@@ -1140,11 +1140,31 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
     }
     if (!item) return;
 
-    // ★真の分別：タスク固有の「テキスト内URL」を正確に抽出する専用パーサーを通す
-    if (type === 'task' && (!item.attachments || item.attachments.length === 0) && item.notes) {
+    // ★真の浄化（パージ＆クリーン）：APIの生データをそのまま投げ返さず、サーバーが100%理解できる純粋な形に整形し直す
+    let cleanAttachments = [];
+    if (item.attachments && item.attachments.length > 0) {
+        cleanAttachments = item.attachments.map(att => {
+            let fileId = att.fileId;
+            if (!fileId && att.fileUrl) {
+                const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
+                if (match) fileId = match[1];
+            }
+            let mType = att.mimeType || 'image/jpeg';
+            if (!att.mimeType || att.mimeType === 'application/octet-stream') { 
+                mType = (att.title && att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg'; 
+            }
+            return { fileUrl: att.fileUrl, title: att.title || 'ファイル', mimeType: mType, fileId: fileId };
+        }).filter(a => a.fileId); // IDのない不正データは絶対に混入させない
+    }
+    
+    // タスク特有の抽出処理
+    if (type === 'task' && cleanAttachments.length === 0 && item.notes) {
         const parsed = parseTaskAttachments(item.notes);
         if (parsed.files.length > 0) {
-            item.attachments = parsed.files.map(f => ({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId }));
+            cleanAttachments = parsed.files.map(f => {
+                let mType = (f.title && f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg';
+                return { title: f.title, fileUrl: f.fileUrl, fileId: f.fileId, mimeType: mType };
+            });
         }
     }
 
@@ -1152,9 +1172,9 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
 
     const payload = { type: type, method: 'update', id: id };
     
-    // ★共通化ロジック：予定もタスクも、ここで「完全引継ぎチケット」を平等に発行する
-    if (item.attachments && item.attachments.length > 0) {
-        payload.keptAttachments = item.attachments;
+    // ★完璧な引継ぎチケットの発行：浄化された完全なデータだけをパケットに縛り付ける
+    if (cleanAttachments.length > 0) {
+        payload.keptAttachments = cleanAttachments;
         payload.attachmentsModified = true;
     }
 
