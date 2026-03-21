@@ -847,11 +847,20 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
         taskNotesWithAtt = taskNotesWithAtt.replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim() + (taskNotesWithAtt ? '\n\n' : '') + '📁 添付ファイル:\n' + fileLinks;
     }
 
+    // ★アーキテクチャの共通化：アイテムを整形する専用のビルダ関数を定義し、予定とタスクの生成ロジックを統合する
+    const buildCommonItem = (baseId) => {
+        if (action.type === 'event') {
+            return { id: baseId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments };
+        } else {
+            return { id: baseId, title: action.title, notes: action.attachmentsModified ? taskNotesWithAtt : action.description, due: action.due, status: action.status || 'needsAction', attachments: action.attachmentsModified ? tempAttachments : undefined };
+        }
+    };
+
     if (action.method === 'insert') { 
-        const newItem = action.type === 'event' ? { id: 'dummy_' + localId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, _localId: localId } : { id: 'dummy_' + localId, title: action.title, notes: taskNotesWithAtt, due: action.due, status: action.status || 'needsAction', attachments: tempAttachments, _localId: localId }; 
+        const newItem = { ...buildCommonItem('dummy_' + localId), _localId: localId };
         targetMonthKeys.forEach(mKey => {
             const list = action.type === 'event' ? dataCache[mKey].events : dataCache[mKey].tasks;
-            if (!list.some(item => item._localId === localId)) list.push({ ...newItem }); // 全ての対象月にクローンを投下
+            if (!list.some(item => item._localId === localId)) list.push({ ...newItem });
         });
     } 
     else if (action.method === 'update') { 
@@ -860,21 +869,17 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
             const list = action.type === 'event' ? dataCache[key].events : dataCache[key].tasks;
             if (list) { const idx = list.findIndex(e => e.id === action.id); if (idx !== -1) { oldItem = list[idx]; list.splice(idx, 1); } }
         }
-        if (!oldItem) oldItem = { id: action.id }; 
+        if (!oldItem) oldItem = { id: action.id, status: action.type === 'task' ? 'needsAction' : undefined }; 
         
-        if (action.type === 'event') { 
-            oldItem.summary = action.title; oldItem.location = action.location; oldItem.description = action.description; oldItem.start = action.start.includes('T') ? { dateTime: action.start } : { date: action.start }; if (action.end) oldItem.end = action.end.includes('T') ? { dateTime: action.end } : { date: action.end }; oldItem.colorId = action.colorId; 
-            if (action.attachmentsModified) { oldItem.attachments = tempAttachments; }
-        } else { 
-            oldItem.title = action.title; oldItem.notes = action.attachmentsModified ? taskNotesWithAtt : action.description; oldItem.due = action.due; oldItem.status = action.status || oldItem.status; 
-            // ★タスクの場合も、添付ファイル（画像）のキャッシュを確実に引き継ぐ
-            if (action.attachmentsModified) { oldItem.attachments = tempAttachments; }
-        } 
-        oldItem._pendingUpdate = true;
+        const updatedItem = { ...oldItem, ...buildCommonItem(action.id), _pendingUpdate: true };
+        // ★最適化：タスクで画像に変更がない場合は、古い画像をそのまま保護して引き継ぐ
+        if (action.type === 'task' && !action.attachmentsModified && oldItem.attachments) {
+            updatedItem.attachments = oldItem.attachments;
+        }
         
         targetMonthKeys.forEach(mKey => {
             const list = action.type === 'event' ? dataCache[mKey].events : dataCache[mKey].tasks;
-            list.push({ ...oldItem }); // 全ての対象月に更新後データを投下
+            list.push({ ...updatedItem });
         });
     } 
     else if (action.method === 'delete') { 
