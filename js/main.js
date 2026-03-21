@@ -24,7 +24,8 @@ async function compressImage(file) {
                 if (w > maxD || h > maxD) { if (w > h) { h = Math.round(h * maxD / w); w = maxD; } else { w = Math.round(w * maxD / h); h = maxD; } }
                 canvas.width = w; canvas.height = h;
                 const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+                // ★極限圧縮：次世代フォーマットWebPを採用。JPEGと同画質でファイルサイズをさらに削減する
+                resolve(canvas.toDataURL('image/webp', 0.8).split(',')[1]);
             };
             img.src = e.target.result;
         };
@@ -276,7 +277,7 @@ function getCardHtml(type, item) {
             const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
-                    <img src="${thumbSrc}" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
+                    <img src="${thumbSrc}" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
                 </div>`;
         });
         driveThumbHtml += '</div>';
@@ -764,47 +765,25 @@ async function dispatchManualAction(action) {
     let msgAction = action.method === 'insert' ? '追加' : action.method === 'update' ? '更新' : '削除'; const msgType = action.type === 'event' ? '予定' : 'タスク'; let safeToday = getSafeLocalDateStr();
     if (action.method === 'delete' && action.id) deletedIds.add(action.id);
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; } if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; } if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
-    
-    const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000); 
+
+    // ★第1層：オプティミスティックUI（仮IDで即座に画面反映）
+    const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000);
     updateLocalCacheForOptimisticUI(action, tempLocalId);
-    refreshAllVisibleMonths(); // ★全ての月のUIを即座に更新(月跨ぎの重複描画を根絶)
+    refreshAllVisibleMonths();
 
-    (async () => {
-        if (action.attachments && action.attachments.length > 0) {
-            const localId = await saveToSyncQueue(action); 
-            updateLocalCacheForOptimisticUI(action, localId, tempLocalId); 
-            refreshAllVisibleMonths();
-            await updateSyncBadge(); 
-            processSyncQueue(true); 
-            return; 
-        }
+    // ★第2層：ハブ＆スポーク（すべての操作を必ずローカルキューへ通し、永続化）
+    const localId = await saveToSyncQueue(action);
+    updateLocalCacheForOptimisticUI(action, localId, tempLocalId);
+    refreshAllVisibleMonths();
+    await updateSyncBadge();
 
-        if (!navigator.onLine) { 
-            const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); 
-            showToast(`📦 圏外だ。退避した。`); await updateSyncBadge(); 
-        } 
-        else {
-            try {
-                await executeApiAction(action);
-                showToast(`✅ ${msgType}の${msgAction}完了`);
-                
-                // ★1.5秒後に表示中の「全ての月」をサーバーから一斉再取得して完璧に同期する
-                setTimeout(async () => { 
-                    const wrappers = document.querySelectorAll('.month-wrapper');
-                    for (const wrapper of wrappers) {
-                        const parts = wrapper.id.split('-');
-                        if (parts.length === 3) await fetchAndRenderMonth(parseInt(parts[1]), parseInt(parts[2]), 'replace', true);
-                    }
-                    if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
-                }, 1500); 
-                
-                refreshAllVisibleMonths(); await updateSyncBadge();
-            } catch (e) {
-                const localId = await saveToSyncQueue(action); updateLocalCacheForOptimisticUI(action, localId, tempLocalId); showToast(`📦 通信不良だ。裏で退避した。`);
-                refreshAllVisibleMonths(); await updateSyncBadge();
-            }
-        }
-    })();
+    // ★第3層：バックグラウンド通信網へ完全委譲
+    if (navigator.onLine) {
+        showToast(`✅ ${msgType}の${msgAction}を指示した`);
+        processSyncQueue(true); // 裏で一斉送信と再取得を自動化
+    } else {
+        showToast(`📦 圏外だ。退避した。`);
+    }
 }
 
 function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) {
@@ -981,7 +960,7 @@ async function executeApiAction(action, isRetry = false) {
 // ==========================================
 // 9. その他初期化プロセス等
 // ==========================================
-async function processPDFFile(file) { showGlobalLoader('PDFを読み込み中...'); try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; const arrayBuffer = await file.arrayBuffer(); const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer }); const pdf = await loadingTask.promise; const page = await pdf.getPage(1); const viewport = page.getViewport({ scale: 1.5 }); const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: ctx, viewport: viewport }).promise; const base64String = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; chatFileBase64 = base64String; chatFileMime = 'image/jpeg'; document.getElementById('chat-file-name').innerText = file.name + ' (画像化済)'; document.getElementById('chat-attach-box').style.display = 'flex'; openJeroChat(); document.getElementById('chat-input').value = "この画像を解析し、含まれる予定を抽出してくれ。"; unlockAudioAndSend(); } catch (error) { showToast('❌ PDF読み込み失敗'); } finally { hideGlobalLoader(); } }
+async function processPDFFile(file) { showGlobalLoader('PDFを読み込み中...'); try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; const arrayBuffer = await file.arrayBuffer(); const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer }); const pdf = await loadingTask.promise; const page = await pdf.getPage(1); const viewport = page.getViewport({ scale: 1.5 }); const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: ctx, viewport: viewport }).promise; const base64String = canvas.toDataURL('image/webp', 0.8).split(',')[1]; chatFileBase64 = base64String; chatFileMime = 'image/webp'; document.getElementById('chat-file-name').innerText = file.name + ' (極限圧縮済)'; document.getElementById('chat-attach-box').style.display = 'flex'; openJeroChat(); document.getElementById('chat-input').value = "この画像を解析し、含まれる予定を抽出してくれ。"; unlockAudioAndSend(); } catch (error) { showToast('❌ PDF読み込み失敗'); } finally { hideGlobalLoader(); } }
 window.addEventListener('online', async () => { showToast('📶 電波回復'); await updateSyncBadge(); processSyncQueue(true); }); window.addEventListener('offline', async () => { showToast('⚡️ 圏外だ。退避する'); await updateSyncBadge(); });
 async function executeSilentRefresh() { if (!navigator.onLine || isAuthError || isFetching) return; const queue = await getSyncQueue(); if (queue.length > 0) return; const monthsToRefresh = [...renderedMonths]; if (monthsToRefresh.length === 0) return; let isUpdated = false; for (const m of monthsToRefresh) { try { const url = `${getGasUrl()}?year=${m.year}&month=${m.month}`; const response = await fetch(url); const data = await response.json(); if (data.success) { const monthKey = `${m.year}-${m.month}`; const oldDataStr = JSON.stringify(dataCache[monthKey]); const newDataStr = JSON.stringify({ events: data.events || [], tasks: data.tasks || [] }); if (oldDataStr !== newDataStr) { dataCache[monthKey] = { events: data.events || [], tasks: data.tasks || [] }; saveDataCacheToIDB(monthKey, dataCache[monthKey]); const existingMonth = document.getElementById(`month-${m.year}-${m.month}`); if (existingMonth) { existingMonth.remove(); renderMonthDOM(m.year, m.month, dataCache[monthKey], 'replace'); } isUpdated = true; } } } catch (e) { } } if (isUpdated && typeof selectedDateStr !== 'undefined' && selectedDateStr) { const modal = document.getElementById('daily-modal'); if (modal && modal.classList.contains('active')) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); } } }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { processSyncQueue(true); executeSilentRefresh(); } });
