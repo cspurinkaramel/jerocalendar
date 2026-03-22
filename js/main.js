@@ -390,9 +390,6 @@ function showTimePopup(el, text, colorCode) { document.querySelectorAll('.time-p
 async function openDailyModal(dateStr, dow) {
     triggerHaptic('light'); // ★触覚：日付タップ
     
-    // ★スタンプモード迎撃：ハンコを持っている時はモーダルを開かず、直で予定を刻む
-    if (typeof currentStampMode !== 'undefined' && currentStampMode) { await handleStampAction(dateStr); return; }
-
     selectedDateStr = dateStr; const days = ['日', '月', '火', '水', '木', '金', '土']; const [y, m, d] = dateStr.split('-'); document.querySelectorAll('.day').forEach(el => el.classList.remove('selected')); const selectedCell = document.getElementById(`cell-${dateStr}`); if (selectedCell) selectedCell.classList.add('selected'); document.getElementById('bottom-detail-date').innerHTML = `<span style="font-size:24px; font-weight:300;">${parseInt(d)}</span> <span style="font-size:12px; color:#888;">${days[dow]}</span>`;
     const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m) - 1}`; const data = dataCache[monthKey]; let hasItems = false; let modalItems = [];
     if (data) { if (data.events) { const events = data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({ type: 'event', data: e })); } if (data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({ type: 'task', data: t })); } }
@@ -1245,8 +1242,13 @@ async function handleDrop(e, targetDateStr) {
     
     try {
         const data = JSON.parse(dataStr);
-        // ★掴んだ元の日付(sourceDate)も一緒に渡す
-        await moveItemToDate(data.type, data.id, targetDateStr, data.sourceDate);
+        if (data.isTemplate) {
+            // ★最強の解決策：上からアイコンを落とした場合は「新規スタンプ」として発動
+            await applyTemplateStamp(data.templateType, targetDateStr);
+        } else {
+            // 既存の移動
+            await moveItemToDate(data.type, data.id, targetDateStr, data.sourceDate);
+        }
     } catch(err) { console.error("Drop Error:", err); }
 }
 
@@ -1417,9 +1419,44 @@ async function saveQuickMemo(id, type) {
 }
 
 // ==========================================
-// ★ ハンコ（スタンプ）モード ＆ ドラッグパレット・エンジン
+// ★ 究極の最適解：D&D式 休日スタンプエンジン
 // ==========================================
-let currentStampMode = null; // 'holiday' | 'paidleave' | null
+function handleTemplateDrag(e) {
+    const templateType = e.currentTarget.getAttribute('data-template');
+    e.dataTransfer.setData('text/plain', JSON.stringify({ isTemplate: true, templateType: templateType }));
+    e.dataTransfer.effectAllowed = 'copy';
+    triggerHaptic('light');
+}
+
+async function applyTemplateStamp(templateType, targetDateStr) {
+    const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';
+    const tagsPStr = localStorage.getItem('jero_paidleave_tags') || '有休),【有休】';
+    const tagH = tagsHStr.split(',')[0].trim() || '休)';
+    const tagP = tagsPStr.split(',')[0].trim() || '有休)';
+    const targetTag = templateType === 'holiday' ? tagH : tagP;
+    const checkTags = templateType === 'holiday' ? tagsHStr.split(',').map(t=>t.trim()).filter(t=>t) : tagsPStr.split(',').map(t=>t.trim()).filter(t=>t);
+    
+    const [y, m, d] = targetDateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
+    let existingItem = null;
+    if (data && data.events) {
+        existingItem = data.events.find(e => {
+            if (!e.start) return false;
+            const isTargetDay = (e.start.date === targetDateStr) || (e.start.dateTime && e.start.dateTime.startsWith(targetDateStr));
+            return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
+        });
+    }
+
+    if (existingItem) {
+        // すでに休みがある日に落とした場合は「剥がす（削除）」
+        triggerHaptic('heavy');
+        await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: targetDateStr });
+    } else {
+        // 新規配置
+        triggerHaptic('success');
+        const edD = new Date(targetDateStr); edD.setDate(edD.getDate() + 1);
+        await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: targetDateStr, end: getSafeLocalDateStr(edD) });
+    }
+}
 
 function toggleStampPalette() {
     const pal = document.getElementById('stamp-palette');
