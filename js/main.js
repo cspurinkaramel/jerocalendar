@@ -369,7 +369,13 @@ function selectTaskColor(el, id) { document.querySelectorAll('#task-color-picker
 
 function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1 }; observer = new IntersectionObserver((entries) => { entries.forEach(e => { if (e.isIntersecting && !isFetching && !isAuthError) { if (e.target.id === 'bottom-trigger') { loadNextMonth(); } if (e.target.id === 'top-trigger') { loadPrevMonth(); } } }); }, options);['bottom-trigger', 'top-trigger'].forEach(id => { const el = document.getElementById(id); if (el) observer.observe(el); }); }
 document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
-function updateHeaderDisplay() { if (isAuthError) return; const wrappers = document.querySelectorAll('.month-wrapper'); wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if (rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { document.getElementById('month-display').innerText = w.querySelector('.month-title').innerText; } }); }
+function updateHeaderDisplay() { 
+    if (isAuthError) return; 
+    // ★スタンプモード中は月表示の上書きを絶対に許さない（物理ロック）
+    if (typeof currentStampMode !== 'undefined' && currentStampMode) return; 
+    const wrappers = document.querySelectorAll('.month-wrapper'); 
+    wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if (rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { const md = document.getElementById('month-display'); md.innerText = w.querySelector('.month-title').innerText; md.style.color = 'var(--txt)'; md.style.background = 'transparent'; md.style.boxShadow = 'none'; } }); 
+}
 function triggerFullReRender() { document.getElementById('calendar-wrapper').innerHTML = ''; renderedMonths = []; const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'append'); renderedMonths.push({ year: y, month: m }); renderMonthDOM(y, m + 1, dataCache[`${y}-${m + 1}`], 'append'); renderedMonths.push({ year: y, month: m + 1 }); }
 
 function isEventSpanning(eventObj, dateStr) {
@@ -1442,7 +1448,28 @@ function updateStampUI() {
     btnP.style.background = currentStampMode === 'paidleave' ? 'rgba(52, 199, 89, 0.15)' : 'var(--head-bg)';
     btnP.style.borderColor = currentStampMode === 'paidleave' ? '#34c759' : 'var(--border)';
     btnP.style.color = currentStampMode === 'paidleave' ? '#34c759' : 'var(--txt)';
-    if (currentStampMode) showToast(`スタンプON：カレンダーのマスをタップしろ`);
+    
+    // ★メインモニター（ヘッダー）の乗っ取りシステム
+    const monthDisp = document.getElementById('month-display');
+    if (currentStampMode === 'holiday') {
+        monthDisp.innerHTML = '🏖️ <span style="font-weight:900;">休みスタンプ</span> 起動中';
+        monthDisp.style.color = '#ffffff';
+        monthDisp.style.backgroundColor = '#ff3b30';
+        monthDisp.style.borderRadius = '20px';
+        monthDisp.style.boxShadow = '0 2px 8px rgba(255,59,48,0.4)';
+    } else if (currentStampMode === 'paidleave') {
+        monthDisp.innerHTML = '🌴 <span style="font-weight:900;">有休スタンプ</span> 起動中';
+        monthDisp.style.color = '#ffffff';
+        monthDisp.style.backgroundColor = '#34c759';
+        monthDisp.style.borderRadius = '20px';
+        monthDisp.style.boxShadow = '0 2px 8px rgba(52,199,89,0.4)';
+    } else {
+        // 解除時はスクロールエンジンを再起動して平和な月表示に復元する
+        monthDisp.style.color = 'var(--txt)';
+        monthDisp.style.backgroundColor = 'transparent';
+        monthDisp.style.boxShadow = 'none';
+        updateHeaderDisplay();
+    }
 }
 
 let isStampProcessing = false; // ★連打・暴走防止の物理ロック
