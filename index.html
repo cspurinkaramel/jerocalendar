@@ -688,16 +688,17 @@
             <div id="sync-queue-list" style="display:flex; flex-direction:column; gap:10px;">
             </div>
         </div>
-        <div class="action-bar">
-            <button class="btn btn-blue" onclick="processSyncQueue(); closeSyncManager();">🔄 すべて自動再送信</button>
+        <div class="action-bar" style="display:flex; gap:10px;">
+            <button class="btn btn-red" onclick="discardAllSyncItems()" style="flex:1;">🗑️ 全て破棄</button>
+            <button class="btn btn-blue" onclick="processSyncQueue(); closeSyncManager();" style="flex:1;">🔄 自動再送信</button>
         </div>
     </div>
 
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
             onclick="event.stopPropagation()"></div>
 
-    <script src="./js/main.js?v=16.3" defer></script>
-    <script src="./js/jero_core.js?v=16.3" defer></script>
+    <script src="./js/main.js?v=16.4" defer></script>
+    <script src="./js/jero_core.js?v=16.4" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

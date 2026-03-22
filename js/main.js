@@ -815,7 +815,11 @@ function refreshAllVisibleMonths() {
             if (dataCache[`${y}-${m}`]) renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace');
         }
     }
-    if (typeof selectedDateStr !== 'undefined' && selectedDateStr) openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay());
+    // ★無限増殖バグ（再帰ループ）の完全根絶：
+    // スタンプモード中は下部リストを使わないのだから、絶対に再呼び出しを許可しない。
+    if (typeof selectedDateStr !== 'undefined' && selectedDateStr && !currentStampMode) { 
+        openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); 
+    }
 }
 
 async function dispatchManualAction(action) {
@@ -1085,6 +1089,26 @@ async function openSyncManager() { document.getElementById('overlay').classList.
 function closeSyncManager() { document.getElementById('sync-manager-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active') && !document.getElementById('editor-modal').classList.contains('active') && !document.getElementById('task-editor-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } }
 async function renderSyncQueueList() { const listEl = document.getElementById('sync-queue-list'); if (!listEl) return; const queue = await getSyncQueue(); if (queue.length === 0) { listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888; font-size:13px;">未送信のデータはない。平和だ。</div>'; return; } let html = ''; queue.forEach(item => { const payload = item.payload; const isEvent = payload.type === 'event'; const method = payload.method === 'insert' ? '追加' : payload.method === 'update' ? '更新' : '削除'; const title = payload.title || '(無名)'; let dateStr = "日時不明"; if (payload.start) dateStr = payload.start.includes('T') ? new Date(payload.start).toLocaleString('ja-JP') : payload.start; else if (payload.due) dateStr = new Date(payload.due).toLocaleDateString('ja-JP'); html += `<div style="background:var(--head-bg); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; justify-content:space-between; align-items:center;"><div style="flex:1; overflow:hidden; margin-right:10px;"><div style="font-size:10px; color:var(--accent); font-weight:bold; margin-bottom:2px;">[${isEvent ? '予定' : 'タスク'} : ${method}]</div><div style="font-size:14px; font-weight:bold; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div><div style="font-size:11px; color:#888;">${dateStr}</div></div><div style="display:flex; gap:6px; flex-shrink:0;"><button class="btn-gray" style="padding:6px 10px; font-size:12px; border-radius:6px; border:none; color:white; cursor:pointer;" onclick="retrySingleSyncItem('${item.id}')">再送</button><button class="btn-red" style="padding:6px 10px; font-size:12px; border-radius:6px; border:none; color:white; cursor:pointer;" onclick="discardSingleSyncItem('${item.id}')">破棄</button></div></div>`; }); listEl.innerHTML = html; }
 async function discardSingleSyncItem(id) { if (!confirm("破棄していいか？")) return; await clearSyncQueueItem(id); await renderSyncQueueList(); await updateSyncBadge(); showToast("🚮 データを破棄した。"); const today = new Date(); showGlobalLoader("最新化中..."); await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true); hideGlobalLoader(); }
+
+// ★全データ一括破棄（緊急パージ用）
+async function discardAllSyncItems() { 
+    if (!confirm("【警告】未送信の全データを一括で破棄していいか？\n※無限増殖したバグデータなどを消去するための緊急ボタンだ。")) return; 
+    showGlobalLoader("全データを焼却中..."); 
+    try { 
+        const queue = await getSyncQueue(); 
+        for(const item of queue) { await clearSyncQueueItem(item.id); } 
+        await renderSyncQueueList(); 
+        await updateSyncBadge(); 
+        showToast("🗑️ 全ての未送信データを焼却した。"); 
+        closeSyncManager(); 
+        // 幻影（一時IDで描画されたDOM）を消し去るためリロードで浄化する
+        setTimeout(() => location.reload(), 1000);
+    } catch(e) { 
+        showToast("❌ 破棄エラー: " + e.message); 
+        hideGlobalLoader();
+    } 
+}
+
 async function retrySingleSyncItem(id) { const queue = await getSyncQueue(); const item = queue.find(q => q.id === id); if (!item) return; showGlobalLoader("送信中..."); try { await executeApiAction(item.payload); await clearSyncQueueItem(id); showToast("✅ 送信成功だ！"); await renderSyncQueueList(); await updateSyncBadge(); const today = new Date(); await fetchAndRenderMonth(today.getFullYear(), today.getMonth(), 'replace', true); } catch (e) { showToast("❌ やはり弾かれた。破棄を勧めるぞ。"); } finally { hideGlobalLoader(); } }
 // ==========================================
 // ★ ストレージ大掃除 (ガベージコレクション) エンジン
@@ -1421,10 +1445,43 @@ function updateStampUI() {
     if (currentStampMode) showToast(`スタンプON：カレンダーのマスをタップしろ`);
 }
 
+let isStampProcessing = false; // ★連打・暴走防止の物理ロック
 async function handleStampAction(dateStr) {
-    if (!currentStampMode) return;
-    const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';
-    const tagsPStr = localStorage.getItem('jero_paidleave_tags') || '有休),【有休】';
+    if (!currentStampMode || isStampProcessing) return;
+    isStampProcessing = true; // ロックをかける
+    try {
+        const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';
+        const tagsPStr = localStorage.getItem('jero_paidleave_tags') || '有休),【有休】';
+        // ハンコとして押すタグ（カンマ区切りの最初のもの）
+        const tagH = tagsHStr.split(',')[0].trim() || '休)';
+        const tagP = tagsPStr.split(',')[0].trim() || '有休)';
+        const targetTag = currentStampMode === 'holiday' ? tagH : tagP;
+        // 既存チェック用のタグ配列
+        const checkTags = currentStampMode === 'holiday' ? tagsHStr.split(',').map(t=>t.trim()).filter(t=>t) : tagsPStr.split(',').map(t=>t.trim()).filter(t=>t);
+        
+        const [y, m, d] = dateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
+        let existingItem = null;
+        if (data && data.events) {
+            existingItem = data.events.find(e => {
+                if (!e.start) return false;
+                const isTargetDay = (e.start.date === dateStr) || (e.start.dateTime && e.start.dateTime.startsWith(dateStr));
+                return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
+            });
+        }
+
+        if (existingItem) {
+            triggerHaptic('heavy');
+            await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: dateStr });
+        } else {
+            triggerHaptic('success');
+            const edD = new Date(dateStr); edD.setDate(edD.getDate() + 1);
+            await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: dateStr, end: getSafeLocalDateStr(edD) });
+        }
+    } finally {
+        // ★処理が終わるまで次のスタンプを絶対に受け付けない（0.1秒のクールタイム）
+        setTimeout(() => isStampProcessing = false, 100);
+    }
+}
     // ハンコとして押すタグ（カンマ区切りの最初のもの）
     const tagH = tagsHStr.split(',')[0].trim() || '休)';
     const tagP = tagsPStr.split(',')[0].trim() || '有休)';
