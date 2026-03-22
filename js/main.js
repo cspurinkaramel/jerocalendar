@@ -387,8 +387,8 @@ function isEventSpanning(eventObj, dateStr) {
 }
 
 function showTimePopup(el, text, colorCode) { document.querySelectorAll('.time-popup').forEach(p => p.remove()); const popup = document.createElement('div'); popup.className = 'time-popup'; popup.style.backgroundColor = colorCode; popup.innerHTML = `${text}<span style="position:absolute; bottom:-4px; left:14px; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid ${colorCode};"></span>`; const rect = el.getBoundingClientRect(); popup.style.top = (rect.top - 32) + 'px'; popup.style.left = (rect.left - 4) + 'px'; document.body.appendChild(popup); setTimeout(() => popup.classList.add('show'), 10); setTimeout(() => { popup.classList.remove('show'); setTimeout(() => popup.remove(), 200); }, 2000); }
-async function openDailyModal(dateStr, dow) {
-    triggerHaptic('light'); // ★触覚：日付タップ
+async function openDailyModal(dateStr, dow, isSilent = false) {
+    if (!isSilent) triggerHaptic('light'); // ★触覚：画面の自動更新時は静かにする
     
     selectedDateStr = dateStr; const days = ['日', '月', '火', '水', '木', '金', '土']; const [y, m, d] = dateStr.split('-'); document.querySelectorAll('.day').forEach(el => el.classList.remove('selected')); const selectedCell = document.getElementById(`cell-${dateStr}`); if (selectedCell) selectedCell.classList.add('selected'); document.getElementById('bottom-detail-date').innerHTML = `<span style="font-size:24px; font-weight:300;">${parseInt(d)}</span> <span style="font-size:12px; color:#888;">${days[dow]}</span>`;
     const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m) - 1}`; const data = dataCache[monthKey]; let hasItems = false; let modalItems = [];
@@ -817,10 +817,9 @@ function refreshAllVisibleMonths() {
             if (dataCache[`${y}-${m}`]) renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace');
         }
     }
-    // ★無限増殖バグ（再帰ループ）の完全根絶：
-    // スタンプモード中は下部リストを使わないのだから、絶対に再呼び出しを許可しない。
-    if (typeof selectedDateStr !== 'undefined' && selectedDateStr && !currentStampMode) { 
-        openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); 
+    // ★バグ根絶：削除済みの古いモード変数を参照してシステムがクラッシュするのを防ぐ
+    if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { 
+        openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay(), true); 
     }
 }
 
