@@ -1465,6 +1465,7 @@ async function handleStampAction(dateStr) {
             existingItem = data.events.find(e => {
                 if (!e.start) return false;
                 const isTargetDay = (e.start.date === dateStr) || (e.start.dateTime && e.start.dateTime.startsWith(dateStr));
+                // 接頭辞として含まれるかを判定する（右側に任意の文字が追記されていても正しく認識する）
                 return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
             });
         }
@@ -1480,33 +1481,6 @@ async function handleStampAction(dateStr) {
     } finally {
         // ★処理が終わるまで次のスタンプを絶対に受け付けない（0.1秒のクールタイム）
         setTimeout(() => isStampProcessing = false, 100);
-    }
-}
-    // ハンコとして押すタグ（カンマ区切りの最初のもの）
-    const tagH = tagsHStr.split(',')[0].trim() || '休)';
-    const tagP = tagsPStr.split(',')[0].trim() || '有休)';
-    const targetTag = currentStampMode === 'holiday' ? tagH : tagP;
-    // 既存チェック用のタグ配列
-    const checkTags = currentStampMode === 'holiday' ? tagsHStr.split(',').map(t=>t.trim()).filter(t=>t) : tagsPStr.split(',').map(t=>t.trim()).filter(t=>t);
-    
-    const [y, m, d] = dateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
-    let existingItem = null;
-    if (data && data.events) {
-        existingItem = data.events.find(e => {
-            if (!e.start) return false;
-            const isTargetDay = (e.start.date === dateStr) || (e.start.dateTime && e.start.dateTime.startsWith(dateStr));
-            // 接頭辞として含まれるかを判定する（右側に任意の文字が追記されていても正しく認識する）
-            return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
-        });
-    }
-
-    if (existingItem) {
-        triggerHaptic('heavy');
-        await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: dateStr });
-    } else {
-        triggerHaptic('success');
-        const edD = new Date(dateStr); edD.setDate(edD.getDate() + 1);
-        await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: dateStr, end: getSafeLocalDateStr(edD) });
     }
 }
 
