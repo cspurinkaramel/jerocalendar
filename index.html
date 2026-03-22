@@ -237,8 +237,9 @@
             gap: 8px !important;
             cursor: pointer;
             flex-shrink: 0 !important;
-            height: 24px !important;
-            /* 高さを極限まで低く設定 */
+            min-height: 24px !important;
+            height: auto !important;
+            /* ★バグ根絶：固定高さを破壊し、画像がある時は自然に広がるようにする */
         }
 
         .card-content {
@@ -684,8 +685,8 @@
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
             onclick="event.stopPropagation()"></div>
 
-    <script src="./js/main.js?v=15.9" defer></script>
-    <script src="./js/jero_core.js?v=15.9" defer></script>
+    <script src="./js/main.js?v=16.0" defer></script>
+    <script src="./js/jero_core.js?v=16.0" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
