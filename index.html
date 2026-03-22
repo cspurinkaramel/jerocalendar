@@ -321,8 +321,12 @@
             <button id="btn-stamp-holiday" onclick="setStampMode('holiday')" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-weight:bold; font-size:14px; cursor:pointer; transition:0.2s;">🏖️ 休</button>
             <button id="btn-stamp-paidleave" onclick="setStampMode('paidleave')" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-weight:bold; font-size:14px; cursor:pointer; transition:0.2s;">🌴 有休</button>
             <div style="width:1px; height:20px; background:var(--border); margin:0 2px;"></div>
-            <button onclick="closeStampPalette()" style="padding:8px; border-radius:50%; border:none; background:transparent; color:#ff3b30; font-weight:bold; font-size:16px; cursor:pointer;">✕</button>
+            <button onclick="cancelStampMode()" style="padding:8px; border-radius:50%; border:none; background:transparent; color:#ff3b30; font-weight:bold; font-size:16px; cursor:pointer;">✕</button>
         </div>
+    </div>
+
+    <div id="stamp-mode-pill" style="display:none; position:fixed; bottom:max(100px, env(safe-area-inset-bottom) + 80px); left:50%; transform:translateX(-50%); padding:12px 24px; border-radius:30px; font-weight:bold; font-size:15px; color:white; box-shadow:0 6px 20px rgba(0,0,0,0.3); z-index:100; cursor:pointer; white-space:nowrap; align-items:center; gap:8px;" onclick="cancelStampMode()">
+        🏖️ 休みスタンプ起動中 <span style="background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:12px; font-size:11px; margin-left:4px;">✕ 解除</span>
     </div>
 
     <div id="overlay" onclick="closeAllModals()"></div>
@@ -697,8 +701,8 @@
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
             onclick="event.stopPropagation()"></div>
 
-    <script src="./js/main.js?v=16.6" defer></script>
-    <script src="./js/jero_core.js?v=16.6" defer></script>
+    <script src="./js/main.js?v=16.7" defer></script>
+    <script src="./js/jero_core.js?v=16.7" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

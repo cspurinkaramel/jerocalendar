@@ -371,8 +371,7 @@ function setupObserver() { const options = { rootMargin: '300px', threshold: 0.1
 document.getElementById('scroll-container').addEventListener('scroll', updateHeaderDisplay);
 function updateHeaderDisplay() { 
     if (isAuthError) return; 
-    // ★スタンプモード中は月表示の上書きを絶対に許さない（物理ロック）
-    if (typeof currentStampMode !== 'undefined' && currentStampMode) return; 
+    // ★スタンプモード中でも年月は正しく表示させるため、ロックを完全撤廃
     const wrappers = document.querySelectorAll('.month-wrapper'); 
     wrappers.forEach(w => { const rect = w.getBoundingClientRect(); if (rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) { const md = document.getElementById('month-display'); md.innerText = w.querySelector('.month-title').innerText; md.style.color = 'var(--txt)'; md.style.background = 'transparent'; md.style.boxShadow = 'none'; } }); 
 }
@@ -1431,12 +1430,21 @@ function toggleStampPalette() {
 }
 
 function closeStampPalette() {
+    // パレットを隠すだけ（モードの解除は行わない）
     document.getElementById('stamp-palette').style.display = 'none';
-    currentStampMode = null; updateStampUI(); showToast('スタンプモードを解除した。');
+}
+
+function cancelStampMode() {
+    // ★完全解除トリガー
+    currentStampMode = null;
+    closeStampPalette();
+    updateStampUI();
+    showToast('スタンプモードを解除した。');
 }
 
 function setStampMode(mode) {
     if (currentStampMode === mode) { currentStampMode = null; } else { currentStampMode = mode; }
+    closeStampPalette(); // ★ハンコを選んだ瞬間、用済みの筆箱は空気を読んで消滅する
     updateStampUI();
 }
 
@@ -1449,26 +1457,19 @@ function updateStampUI() {
     btnP.style.borderColor = currentStampMode === 'paidleave' ? '#34c759' : 'var(--border)';
     btnP.style.color = currentStampMode === 'paidleave' ? '#34c759' : 'var(--txt)';
     
-    // ★メインモニター（ヘッダー）の乗っ取りシステム
-    const monthDisp = document.getElementById('month-display');
+    // ★メインモニター乗っ取りを完全廃止し、親指に寄り添うフローティング・カプセルへ移行
+    const pill = document.getElementById('stamp-mode-pill');
     if (currentStampMode === 'holiday') {
-        monthDisp.innerHTML = '🏖️ <span style="font-weight:900;">休みスタンプ</span> 起動中';
-        monthDisp.style.color = '#ffffff';
-        monthDisp.style.backgroundColor = '#ff3b30';
-        monthDisp.style.borderRadius = '20px';
-        monthDisp.style.boxShadow = '0 2px 8px rgba(255,59,48,0.4)';
+        pill.innerHTML = '🏖️ 休みスタンプ起動中 <span style="background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:12px; font-size:11px; margin-left:4px;">✕ 解除</span>';
+        pill.style.backgroundColor = '#ff3b30';
+        pill.style.display = 'flex';
     } else if (currentStampMode === 'paidleave') {
-        monthDisp.innerHTML = '🌴 <span style="font-weight:900;">有休スタンプ</span> 起動中';
-        monthDisp.style.color = '#ffffff';
-        monthDisp.style.backgroundColor = '#34c759';
-        monthDisp.style.borderRadius = '20px';
-        monthDisp.style.boxShadow = '0 2px 8px rgba(52,199,89,0.4)';
+        pill.innerHTML = '🌴 有休スタンプ起動中 <span style="background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:12px; font-size:11px; margin-left:4px;">✕ 解除</span>';
+        pill.style.backgroundColor = '#34c759';
+        pill.style.display = 'flex';
     } else {
-        // 解除時はスクロールエンジンを再起動して平和な月表示に復元する
-        monthDisp.style.color = 'var(--txt)';
-        monthDisp.style.backgroundColor = 'transparent';
-        monthDisp.style.boxShadow = 'none';
-        updateHeaderDisplay();
+        pill.style.display = 'none';
+        updateHeaderDisplay(); // 念のため月表示を再計算させておく
     }
 }
 
