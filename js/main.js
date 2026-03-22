@@ -12,6 +12,16 @@ let advancedDict = []; const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕�
 // ==========================================
 function getSafeLocalDateStr(dateObj = new Date()) { return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`; }
 
+// ★触覚フィードバック（Haptics）エンジン
+function triggerHaptic(type = 'light') {
+    if (!navigator.vibrate) return;
+    try {
+        if (type === 'light') navigator.vibrate(10); // 軽いタップ
+        else if (type === 'success') navigator.vibrate([15, 50, 15]); // 達成感（タスク完了・保存など）
+        else if (type === 'heavy') navigator.vibrate(40); // 重い操作（削除など）
+    } catch(e) {}
+}
+
 // ★画像圧縮エンジン（ペイロード爆発を防ぐ最強の盾）
 async function compressImage(file) {
     return new Promise((resolve) => {
@@ -369,6 +379,7 @@ function isEventSpanning(eventObj, dateStr) {
 
 function showTimePopup(el, text, colorCode) { document.querySelectorAll('.time-popup').forEach(p => p.remove()); const popup = document.createElement('div'); popup.className = 'time-popup'; popup.style.backgroundColor = colorCode; popup.innerHTML = `${text}<span style="position:absolute; bottom:-4px; left:14px; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid ${colorCode};"></span>`; const rect = el.getBoundingClientRect(); popup.style.top = (rect.top - 32) + 'px'; popup.style.left = (rect.left - 4) + 'px'; document.body.appendChild(popup); setTimeout(() => popup.classList.add('show'), 10); setTimeout(() => { popup.classList.remove('show'); setTimeout(() => popup.remove(), 200); }, 2000); }
 async function openDailyModal(dateStr, dow) {
+    triggerHaptic('light'); // ★触覚：日付タップ
     selectedDateStr = dateStr; const days = ['日', '月', '火', '水', '木', '金', '土']; const [y, m, d] = dateStr.split('-'); document.querySelectorAll('.day').forEach(el => el.classList.remove('selected')); const selectedCell = document.getElementById(`cell-${dateStr}`); if (selectedCell) selectedCell.classList.add('selected'); document.getElementById('bottom-detail-date').innerHTML = `<span style="font-size:24px; font-weight:300;">${parseInt(d)}</span> <span style="font-size:12px; color:#888;">${days[dow]}</span>`;
     const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m) - 1}`; const data = dataCache[monthKey]; let hasItems = false; let modalItems = [];
     if (data) { if (data.events) { const events = data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({ type: 'event', data: e })); } if (data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({ type: 'task', data: t })); } }
@@ -552,6 +563,7 @@ function toggleTimeInputs() { const isAllDay = document.getElementById('edit-all
 let isSavingLock = false; // ★通常保存・削除の連打防止ロック
 async function saveEvent() {
     if (isSavingLock) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000);
+    triggerHaptic('success'); // ★触覚：保存
     const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim(); if (!title) { showToast('タイトルを入力してくれ'); return; }
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value; if (!startVal) { showToast('開始日時が不正だ'); return; } if (!endVal) endVal = startVal;
     
@@ -573,7 +585,8 @@ async function saveEvent() {
     closeEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-async function confirmDeleteEvent() { if (isSavingLock) return; const id = document.getElementById('edit-id').value; if (!id || !confirm('この予定を完全に消し去るか？')) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const startVal = document.getElementById('edit-start').value; const action = { type: 'event', method: 'delete', id: id, start: startVal }; closeEditor(); closeAllModals(); await dispatchManualAction(action); }
+async function confirmDeleteEvent() { if (isSavingLock) return; const id = document.getElementById('edit-id').value; if (!id || !confirm('この予定を完全に消し去るか？')) return; triggerHaptic('heavy'); // ★触覚：削除
+isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const startVal = document.getElementById('edit-start').value; const action = { type: 'event', method: 'delete', id: id, start: startVal }; closeEditor(); closeAllModals(); await dispatchManualAction(action); }
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。保存を押せ。'); }
 
 function openTaskEditor(t = null) {
@@ -618,6 +631,7 @@ function openTaskEditor(t = null) {
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('task-attach-preview'); if(prev) prev.innerHTML = ''; pendingTaskAttachments = []; activeTaskAttachments = []; if (typeof resetAiEditState === 'function') resetAiEditState(); }
 
 async function toggleTaskCompletion(taskId, newStatus) { 
+    triggerHaptic(newStatus === 'completed' ? 'success' : 'light'); // ★触覚：タスク完了
     let targetTask = null; 
     for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } } 
     if (!targetTask) return; 
@@ -648,6 +662,7 @@ async function toggleTaskCompletion(taskId, newStatus) {
 
 async function saveTask() {
     if (isSavingLock) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000);
+    triggerHaptic('success'); // ★触覚：保存
     const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim(); if (!title) { showToast('タスク名を入力してくれ'); return; }
     let rawNotes = document.getElementById('task-edit-notes').value.trim(); if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
     // ★修正: 状態の保存を追加
@@ -670,7 +685,8 @@ async function saveTask() {
     closeTaskEditor(); closeAllModals(); await dispatchManualAction(action);
 }
 
-async function confirmDeleteTask() { if (isSavingLock) return; const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const dueVal = document.getElementById('task-edit-due').value; const action = { type: 'task', method: 'delete', id: id, due: dueVal }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
+async function confirmDeleteTask() { if (isSavingLock) return; const id = document.getElementById('task-edit-id').value; if (!id || !confirm('完全に消し去るか？')) return; triggerHaptic('heavy'); // ★触覚：削除
+isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const dueVal = document.getElementById('task-edit-due').value; const action = { type: 'task', method: 'delete', id: id, due: dueVal }; closeTaskEditor(); closeAllModals(); await dispatchManualAction(action); }
 
 let isConverting = false; // ★連打防止の絶対ロック
 async function executeConversion(fromType) {
@@ -1171,6 +1187,7 @@ function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
 async function handleDrop(e, targetDateStr) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
+    triggerHaptic('success'); // ★触覚：ドロップ成功
     
     const dataStr = e.dataTransfer.getData('text/plain');
     if (!dataStr) return;
@@ -1318,6 +1335,7 @@ function closeQuickMemo() {
 async function saveQuickMemo(id, type) {
     const newMemo = document.getElementById('quick-memo-text').value.trim();
     closeQuickMemo();
+    triggerHaptic('success'); // ★触覚：メモ保存
 
     let item = null;
     for (const key in dataCache) { const list = type === 'event' ? dataCache[key].events : dataCache[key].tasks; if (list) { item = list.find(x => x.id === id); if (item) break; } }
