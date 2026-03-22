@@ -315,21 +315,21 @@ function getCardHtml(type, item) {
     let memoIconHtml = '';
     const cleanMemoText = isEvent ? (item.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/, '').trim() : extractTaskData(item.notes).cleanNotes;
     if (cleanMemoText) {
-        const safeTitle = encodeURIComponent(isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)'));
-        const safeMemo = encodeURIComponent(cleanMemoText);
-        memoIconHtml = `<span style="margin-left:auto; margin-right:8px; font-size:16px; cursor:pointer; opacity:0.8;" onclick="event.stopPropagation(); showMemoAlert('${safeTitle}', '${safeMemo}')">💬</span>`;
+        memoIconHtml = `<div style="width:1px; background:var(--border); margin:0 8px; align-self:stretch;"></div><div style="font-size:16px; cursor:pointer; opacity:0.8; padding:4px; flex-shrink:0; display:flex; align-items:center;" onclick="event.stopPropagation(); openQuickMemo('${item.id}', '${type}')">💬</div>`;
     }
 
-    // ★タイトルと画像を分離する強固なレイアウト
-    return `<div class="item-card" onclick="${clickFn}" ${dragAttrs} style="${cardStyle}">
+    // ★美しいレイアウト：タイトルと画像を左に寄せ、縦線で区切って右端に💬を配置する
+    return `<div class="item-card" onclick="${clickFn}" ${dragAttrs} style="${cardStyle} align-items:stretch;">
                 <div class="card-color-bar" style="background-color: ${color};"></div>
-                <div class="card-content" style="display:flex; flex-direction:column; width:100%; padding:8px 0; overflow:hidden;">
-                    <div style="display:flex; align-items:center; width:100%; ${titleStyle}">
-                        ${timeHtml}
-                        <div class="card-title" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:bold; color:var(--txt);">${title}</div>
-                        ${memoIconHtml}
+                <div class="card-content" style="display:flex; align-items:center; width:100%; padding:6px 0; overflow:hidden;">
+                    <div style="display:flex; flex-direction:column; flex:1; overflow:hidden; justify-content:center;">
+                        <div style="display:flex; align-items:center; width:100%; ${titleStyle}">
+                            ${timeHtml}
+                            <div class="card-title" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:bold; color:var(--txt);">${title}</div>
+                        </div>
+                        ${driveThumbHtml}
                     </div>
-                    ${driveThumbHtml}
+                    ${memoIconHtml}
                 </div>
             </div>`;
 }
@@ -1228,16 +1228,69 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
     await dispatchManualAction(payload);
 }
 
-// ★スマートメモ機能：HTMLを汚さず、JSだけで生成する美しいポップアップエンジン
-function showMemoAlert(encTitle, encMemo) {
-    const title = decodeURIComponent(encTitle);
-    const memo = decodeURIComponent(encMemo);
+// ★クイックメモ機能（即時編集＆閲覧ハイブリッドエンジン）
+function openQuickMemo(id, type) {
+    let item = null;
+    for (const key in dataCache) { const list = type === 'event' ? dataCache[key].events : dataCache[key].tasks; if (list) { item = list.find(x => x.id === id); if (item) break; } }
+    if (!item) return;
+
+    const title = type === 'event' ? (item.summary || '(無名)') : (item.title || '(無名)');
+    const currentMemo = type === 'event' ? (item.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/, '').trim() : extractTaskData(item.notes).cleanNotes;
+
     const overlay = document.createElement('div');
+    overlay.id = 'quick-memo-overlay';
     overlay.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center; opacity:0; transition:opacity 0.2s;';
+    // 背景タップで静かに閉じる（保存しない）
+    overlay.onclick = (e) => { if (e.target === overlay) closeQuickMemo(); };
+
     const box = document.createElement('div');
-    box.style.cssText = 'background:var(--bg); color:var(--txt); width:80%; max-width:320px; border-radius:12px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.3); transform:scale(0.9); transition:transform 0.2s;';
-    box.innerHTML = `<div style="font-weight:bold; font-size:16px; margin-bottom:10px; border-bottom:1px solid var(--border); padding-bottom:8px;">${title}</div><div style="font-size:14px; line-height:1.5; white-space:pre-wrap; max-height:50vh; overflow-y:auto;">${memo}</div><div style="margin-top:15px; text-align:right;"><button style="background:var(--accent); color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer;" onclick="this.closest('div').parentElement.parentElement.remove()">閉じる</button></div>`;
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
+    box.style.cssText = 'background:var(--bg); color:var(--txt); width:85%; max-width:340px; border-radius:12px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.3); transform:scale(0.9); transition:transform 0.2s;';
+    
+    box.innerHTML = `
+        <div style="font-weight:bold; font-size:15px; margin-bottom:12px; color:var(--txt); border-bottom:1px solid var(--border); padding-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div>
+        <textarea id="quick-memo-text" style="width:100%; height:150px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); font-size:14px; line-height:1.5; resize:none; box-sizing:border-box;">${currentMemo}</textarea>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+            <button style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--txt); font-weight:bold; cursor:pointer;" onclick="closeQuickMemo()">閉じる</button>
+            <button style="padding:8px 20px; border-radius:8px; border:none; background:var(--accent); color:white; font-weight:bold; cursor:pointer;" onclick="saveQuickMemo('${id}', '${type}')">保存</button>
+        </div>
+    `;
+    overlay.appendChild(box); document.body.appendChild(overlay);
     setTimeout(() => { overlay.style.opacity = '1'; box.style.transform = 'scale(1)'; }, 10);
+}
+
+function closeQuickMemo() {
+    const overlay = document.getElementById('quick-memo-overlay');
+    if (overlay) { overlay.style.opacity = '0'; overlay.firstChild.style.transform = 'scale(0.9)'; setTimeout(() => overlay.remove(), 200); }
+}
+
+async function saveQuickMemo(id, type) {
+    const newMemo = document.getElementById('quick-memo-text').value.trim();
+    closeQuickMemo();
+
+    let item = null;
+    for (const key in dataCache) { const list = type === 'event' ? dataCache[key].events : dataCache[key].tasks; if (list) { item = list.find(x => x.id === id); if (item) break; } }
+    if (!item) return;
+
+    const payload = { type: type, method: 'update', id: id };
+    if (type === 'event') {
+        let oldDesc = item.description || '';
+        let attMatch = oldDesc.match(/📁 添付ファイル:[\s\S]*/);
+        // ★添付ファイルリンクを破壊せずに再結合する
+        payload.description = newMemo + (attMatch ? (newMemo ? '\n\n' : '') + attMatch[0] : '');
+        payload.title = item.summary; payload.location = item.location; payload.colorId = item.colorId;
+        payload.start = item.start.dateTime || item.start.date; payload.end = item.end.dateTime || item.end.date;
+    } else {
+        let oldNotes = item.notes || '';
+        let tData = extractTaskData(oldNotes);
+        let attMatch = oldNotes.match(/📁 添付ファイル:[\s\S]*/);
+        let finalNotes = newMemo;
+        // ★辞書タグや添付ファイルリンクを破壊せずに再結合する
+        if (tData.colorId) finalNotes += (finalNotes ? '\n' : '') + '[c:' + tData.colorId + ']';
+        if (tData.recurrence) finalNotes += (finalNotes ? '\n' : '') + '[r:' + tData.recurrence + ']';
+        if (attMatch) finalNotes += (finalNotes ? '\n\n' : '') + attMatch[0];
+        payload.description = finalNotes;
+        payload.title = item.title; payload.status = item.status; payload.due = item.due;
+    }
+    showToast('🔄 メモを更新中...');
+    await dispatchManualAction(payload);
 }
