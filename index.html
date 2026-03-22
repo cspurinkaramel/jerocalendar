@@ -315,8 +315,8 @@
 
     <div id="overlay" onclick="closeAllModals()"></div>
 
-    <button id="jero-fab" onclick="openJeroChat()"
-        style="position:fixed; bottom:max(30px, env(safe-area-inset-bottom)); right:20px; width:56px; height:56px; border-radius:28px; background:var(--txt); color:var(--bg); border:none; box-shadow:0 4px 15px rgba(0,0,0,0.3); font-size:26px; z-index:80; cursor:pointer; display:flex; justify-content:center; align-items:center; transition:transform 0.2s;">🐈</button>
+    <button id="jero-fab"
+        style="position:fixed; bottom:max(30px, env(safe-area-inset-bottom)); right:20px; width:56px; height:56px; border-radius:28px; background:var(--txt); color:var(--bg); border:none; box-shadow:0 4px 15px rgba(0,0,0,0.3); font-size:26px; z-index:80; cursor:pointer; display:flex; justify-content:center; align-items:center; transition:transform 0.2s, opacity 0.3s; touch-action:none;">🐈</button>
 
     <div id="settings-modal" class="bottom-modal" style="z-index: 104;">
         <div class="modal-drag-area" onclick="closeSettings()">
@@ -684,8 +684,8 @@
     <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
             onclick="event.stopPropagation()"></div>
 
-    <script src="./js/main.js?v=15.7" defer></script>
-    <script src="./js/jero_core.js?v=15.7" defer></script>
+    <script src="./js/main.js?v=15.8" defer></script>
+    <script src="./js/jero_core.js?v=15.8" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

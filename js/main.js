@@ -984,7 +984,59 @@ window.addEventListener('online', async () => { showToast('📶 電波回復'); 
 async function executeSilentRefresh() { if (!navigator.onLine || isAuthError || isFetching) return; const queue = await getSyncQueue(); if (queue.length > 0) return; const monthsToRefresh = [...renderedMonths]; if (monthsToRefresh.length === 0) return; let isUpdated = false; for (const m of monthsToRefresh) { try { const url = `${getGasUrl()}?year=${m.year}&month=${m.month}`; const response = await fetch(url); const data = await response.json(); if (data.success) { const monthKey = `${m.year}-${m.month}`; const oldDataStr = JSON.stringify(dataCache[monthKey]); const newDataStr = JSON.stringify({ events: data.events || [], tasks: data.tasks || [] }); if (oldDataStr !== newDataStr) { dataCache[monthKey] = { events: data.events || [], tasks: data.tasks || [] }; saveDataCacheToIDB(monthKey, dataCache[monthKey]); const existingMonth = document.getElementById(`month-${m.year}-${m.month}`); if (existingMonth) { existingMonth.remove(); renderMonthDOM(m.year, m.month, dataCache[monthKey], 'replace'); } isUpdated = true; } } } catch (e) { } } if (isUpdated && typeof selectedDateStr !== 'undefined' && selectedDateStr) { const modal = document.getElementById('daily-modal'); if (modal && modal.classList.contains('active')) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); } } }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { processSyncQueue(true); executeSilentRefresh(); } });
 document.addEventListener('DOMContentLoaded', async () => { try { await initIDB(); loadSettings(); loadDict(); initColorPicker(); initTaskColorPicker(); if (typeof initSpeech === 'function') initSpeech(); if (typeof initNotification === 'function') initNotification(); const eventActionBar = document.querySelector('#editor-modal .action-bar'); if (eventActionBar && !document.getElementById('btn-convert-task')) { const btn = document.createElement('button'); btn.id = 'btn-convert-task'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 タスクへ'; btn.onclick = () => executeConversion('event'); eventActionBar.insertBefore(btn, document.getElementById('btn-duplicate')); } const taskActionBar = document.querySelector('#task-editor-modal .action-bar'); if (taskActionBar && !document.getElementById('btn-convert-event')) { const btn = document.createElement('button'); btn.id = 'btn-convert-event'; btn.className = 'btn btn-gray'; btn.style.display = 'none'; btn.innerText = '🔄 予定へ'; btn.onclick = () => executeConversion('task'); taskActionBar.insertBefore(btn, document.getElementById('task-btn-delete')); } if (localStorage.getItem('jero_token')) { setTimeout(() => { if (!isCalendarInited) { document.getElementById('offline-badge').innerText = '⚡️ 完全自律モード (キャッシュ起動)'; document.getElementById('offline-badge').classList.add('active'); initCalendar(); } }, 1500); } } catch (err) {} });
-function startApp() { document.getElementById('auth-btn').style.display = 'none'; initWeekdays(); setupObserver(); initCalendar(); setTimeout(() => { processSyncQueue(true); executeSilentBackup(); }, 1000); }
+// ★自律型AIアイコン（ドラッグ記憶＆ステルスモード）
+function initDraggableFAB() {
+    const fab = document.getElementById('jero-fab'); if (!fab) return;
+    const savedPos = localStorage.getItem('jero_fab_pos');
+    if (savedPos) { const pos = JSON.parse(savedPos); fab.style.right = 'auto'; fab.style.bottom = 'auto'; fab.style.left = pos.x + 'px'; fab.style.top = pos.y + 'px'; }
+
+    let isDragging = false, hasDragged = false;
+    let startX, startY, initialX, initialY;
+
+    const startDrag = (e) => {
+        const evt = e.type.includes('touch') ? e.touches[0] : e;
+        startX = evt.clientX; startY = evt.clientY;
+        const rect = fab.getBoundingClientRect();
+        initialX = rect.left; initialY = rect.top;
+        isDragging = true; hasDragged = false;
+        fab.style.transition = 'none'; fab.style.opacity = '1';
+    };
+
+    const doDrag = (e) => {
+        if (!isDragging) return;
+        const evt = e.type.includes('touch') ? e.touches[0] : e;
+        const dx = evt.clientX - startX; const dy = evt.clientY - startY;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged = true;
+        if (hasDragged) {
+            e.preventDefault();
+            let newX = Math.max(0, Math.min(initialX + dx, window.innerWidth - fab.offsetWidth));
+            let newY = Math.max(0, Math.min(initialY + dy, window.innerHeight - fab.offsetHeight));
+            fab.style.right = 'auto'; fab.style.bottom = 'auto';
+            fab.style.left = newX + 'px'; fab.style.top = newY + 'px';
+        }
+    };
+
+    const endDrag = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        fab.style.transition = 'transform 0.2s, opacity 0.3s';
+        if (hasDragged) { localStorage.setItem('jero_fab_pos', JSON.stringify({ x: parseInt(fab.style.left), y: parseInt(fab.style.top) })); } 
+        else { openJeroChat(); }
+        resetFabStealth();
+    };
+
+    fab.addEventListener('mousedown', startDrag); document.addEventListener('mousemove', doDrag, { passive: false }); document.addEventListener('mouseup', endDrag);
+    fab.addEventListener('touchstart', startDrag, { passive: true }); document.addEventListener('touchmove', doDrag, { passive: false }); document.addEventListener('touchend', endDrag);
+
+    let stealthTimer;
+    const resetFabStealth = () => {
+        clearTimeout(stealthTimer); fab.style.opacity = '1';
+        stealthTimer = setTimeout(() => { if (!isDragging && !document.getElementById('jero-chat-modal').classList.contains('active')) fab.style.opacity = '0.4'; }, 3000);
+    };
+    resetFabStealth(); document.addEventListener('scroll', resetFabStealth, { passive: true });
+}
+
+function startApp() { document.getElementById('auth-btn').style.display = 'none'; initWeekdays(); setupObserver(); initCalendar(); initDraggableFAB(); setTimeout(() => { processSyncQueue(true); executeSilentBackup(); }, 1000); }
 document.addEventListener('DOMContentLoaded', () => { setTimeout(startApp, 500); });
 document.addEventListener('DOMContentLoaded', () => { const resizer = document.getElementById('resizer'); const bottomView = document.getElementById('bottom-detail-view'); let startY = 0; let startHeight = 0; if (resizer && bottomView) { resizer.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; startHeight = bottomView.getBoundingClientRect().height; document.body.style.userSelect = 'none'; }, { passive: true }); document.addEventListener('touchmove', (e) => { if (startY === 0) return; const deltaY = startY - e.touches[0].clientY; let newHeight = startHeight + deltaY; const minH = window.innerHeight * 0.1; const maxH = window.innerHeight * 0.7; if (newHeight < minH) newHeight = minH; if (newHeight > maxH) newHeight = maxH; bottomView.style.height = `${newHeight}px`; }, { passive: true }); document.addEventListener('touchend', () => { startY = 0; document.body.style.userSelect = ''; }); } });
 
