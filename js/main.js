@@ -314,9 +314,13 @@ function getCardHtml(type, item) {
 
     let titleStyle = (!isEvent && item.status === 'completed') ? 'text-decoration: line-through; opacity: 0.6;' : '';
     let cardStyle = '';
-    if (isPendingInsert) cardStyle = 'border: 2px dashed #0a84ff; opacity: 0.9;';
-    if (isPendingUpdate) cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; 
-    if (isPendingDelete) { titleStyle = 'text-decoration: line-through;'; cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; }
+    
+    // ★歴史の沈殿：完了済みのタスクは、カード全体を少し色褪せさせて背景に溶け込ませる
+    if (!isEvent && item.status === 'completed') { cardStyle += 'opacity: 0.65; filter: grayscale(20%);'; }
+    
+    if (isPendingInsert) cardStyle += 'border: 2px dashed #0a84ff; opacity: 0.9;';
+    if (isPendingUpdate) cardStyle += 'border: 2px dotted #ff9500; opacity: 0.9;'; 
+    if (isPendingDelete) { titleStyle = 'text-decoration: line-through;'; cardStyle += 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; }
 
     // ★究極の自律化3：未送信データでもD&D移動を許可する（削除待機中のみロック）
     const dragAttrs = isPendingDelete ? "" : `draggable="true" data-type="${type}" data-id="${item.id}" ondragstart="handleDragStart(event)"`;
@@ -384,7 +388,21 @@ async function openDailyModal(dateStr, dow) {
     const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m) - 1}`; const data = dataCache[monthKey]; let hasItems = false; let modalItems = [];
     if (data) { if (data.events) { const events = data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({ type: 'event', data: e })); } if (data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({ type: 'task', data: t })); } }
     modalItems.sort((a, b) => { const aIsCompleted = a.type === 'task' && a.data.status === 'completed' ? 1 : 0; const bIsCompleted = b.type === 'task' && b.data.status === 'completed' ? 1 : 0; return aIsCompleted - bIsCompleted; });
-    if (modalItems.length > 0) { hasItems = true; modalItems.forEach(item => { list.innerHTML += getCardHtml(item.type, item.data); }); }
+    
+    if (modalItems.length > 0) { 
+        hasItems = true; 
+        let drawnCompletedDivider = false;
+        
+        modalItems.forEach(item => { 
+            // ★境界線の描画：最初の完了タスクが現れた瞬間に、美しい区切り線を引く
+            const isCompletedTask = item.type === 'task' && item.data.status === 'completed';
+            if (isCompletedTask && !drawnCompletedDivider) {
+                list.innerHTML += `<div style="text-align:center; font-size:11px; color:#888; margin: 16px 0 8px 0; display:flex; align-items:center;"><div style="flex:1; height:1px; background:var(--border);"></div><div style="padding:0 12px; font-weight:bold; letter-spacing:1px;">完了した歴史</div><div style="flex:1; height:1px; background:var(--border);"></div></div>`;
+                drawnCompletedDivider = true;
+            }
+            list.innerHTML += getCardHtml(item.type, item.data); 
+        }); 
+    }
     if (!hasItems) list.innerHTML = `<div style="text-align:center; color:#888; padding: 30px; font-weight: 500;">予定はありません</div>`;
 }
 
