@@ -384,6 +384,10 @@ function isEventSpanning(eventObj, dateStr) {
 function showTimePopup(el, text, colorCode) { document.querySelectorAll('.time-popup').forEach(p => p.remove()); const popup = document.createElement('div'); popup.className = 'time-popup'; popup.style.backgroundColor = colorCode; popup.innerHTML = `${text}<span style="position:absolute; bottom:-4px; left:14px; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid ${colorCode};"></span>`; const rect = el.getBoundingClientRect(); popup.style.top = (rect.top - 32) + 'px'; popup.style.left = (rect.left - 4) + 'px'; document.body.appendChild(popup); setTimeout(() => popup.classList.add('show'), 10); setTimeout(() => { popup.classList.remove('show'); setTimeout(() => popup.remove(), 200); }, 2000); }
 async function openDailyModal(dateStr, dow) {
     triggerHaptic('light'); // ★触覚：日付タップ
+    
+    // ★スタンプモード迎撃：ハンコを持っている時はモーダルを開かず、直で予定を刻む
+    if (typeof currentStampMode !== 'undefined' && currentStampMode) { await handleStampAction(dateStr); return; }
+
     selectedDateStr = dateStr; const days = ['日', '月', '火', '水', '木', '金', '土']; const [y, m, d] = dateStr.split('-'); document.querySelectorAll('.day').forEach(el => el.classList.remove('selected')); const selectedCell = document.getElementById(`cell-${dateStr}`); if (selectedCell) selectedCell.classList.add('selected'); document.getElementById('bottom-detail-date').innerHTML = `<span style="font-size:24px; font-weight:300;">${parseInt(d)}</span> <span style="font-size:12px; color:#888;">${days[dow]}</span>`;
     const list = document.getElementById('bottom-detail-list'); list.innerHTML = ''; const monthKey = `${y}-${parseInt(m) - 1}`; const data = dataCache[monthKey]; let hasItems = false; let modalItems = [];
     if (data) { if (data.events) { const events = data.events.filter(e => { if (!e.start) return false; const td = e.start.date || e.start.dateTime; return (td && td.includes(dateStr)) || (isEventSpanning(e, dateStr) !== 'single'); }); events.forEach(e => modalItems.push({ type: 'event', data: e })); } if (data.tasks) { const tasks = data.tasks.filter(t => t.due && t.due.includes(dateStr)); tasks.forEach(t => modalItems.push({ type: 'task', data: t })); } }
@@ -1381,4 +1385,94 @@ async function saveQuickMemo(id, type) {
     }
     showToast('🔄 メモを更新中...');
     await dispatchManualAction(payload);
+}
+
+// ==========================================
+// ★ ハンコ（スタンプ）モード ＆ ドラッグパレット・エンジン
+// ==========================================
+let currentStampMode = null; // 'holiday' | 'paidleave' | null
+
+function toggleStampPalette() {
+    const pal = document.getElementById('stamp-palette');
+    if (pal.style.display === 'none' || pal.style.display === '') {
+        pal.style.display = 'flex';
+        initStampDraggable();
+    } else { closeStampPalette(); }
+}
+
+function closeStampPalette() {
+    document.getElementById('stamp-palette').style.display = 'none';
+    currentStampMode = null; updateStampUI(); showToast('スタンプモードを解除した。');
+}
+
+function setStampMode(mode) {
+    if (currentStampMode === mode) { currentStampMode = null; } else { currentStampMode = mode; }
+    updateStampUI();
+}
+
+function updateStampUI() {
+    const btnH = document.getElementById('btn-stamp-holiday'); const btnP = document.getElementById('btn-stamp-paidleave');
+    btnH.style.background = currentStampMode === 'holiday' ? 'rgba(255, 59, 48, 0.15)' : 'var(--head-bg)';
+    btnH.style.borderColor = currentStampMode === 'holiday' ? '#ff3b30' : 'var(--border)';
+    btnH.style.color = currentStampMode === 'holiday' ? '#ff3b30' : 'var(--txt)';
+    btnP.style.background = currentStampMode === 'paidleave' ? 'rgba(52, 199, 89, 0.15)' : 'var(--head-bg)';
+    btnP.style.borderColor = currentStampMode === 'paidleave' ? '#34c759' : 'var(--border)';
+    btnP.style.color = currentStampMode === 'paidleave' ? '#34c759' : 'var(--txt)';
+    if (currentStampMode) showToast(`スタンプON：カレンダーのマスをタップしろ`);
+}
+
+async function handleStampAction(dateStr) {
+    if (!currentStampMode) return;
+    const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';
+    const tagsPStr = localStorage.getItem('jero_paidleave_tags') || '有休),【有休】';
+    // ハンコとして押すタグ（カンマ区切りの最初のもの）
+    const tagH = tagsHStr.split(',')[0].trim() || '休)';
+    const tagP = tagsPStr.split(',')[0].trim() || '有休)';
+    const targetTag = currentStampMode === 'holiday' ? tagH : tagP;
+    // 既存チェック用のタグ配列
+    const checkTags = currentStampMode === 'holiday' ? tagsHStr.split(',').map(t=>t.trim()).filter(t=>t) : tagsPStr.split(',').map(t=>t.trim()).filter(t=>t);
+    
+    const [y, m, d] = dateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
+    let existingItem = null;
+    if (data && data.events) {
+        existingItem = data.events.find(e => {
+            if (!e.start) return false;
+            const isTargetDay = (e.start.date === dateStr) || (e.start.dateTime && e.start.dateTime.startsWith(dateStr));
+            // 接頭辞として含まれるかを判定する（右側に任意の文字が追記されていても正しく認識する）
+            return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
+        });
+    }
+
+    if (existingItem) {
+        triggerHaptic('heavy');
+        await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: dateStr });
+    } else {
+        triggerHaptic('success');
+        const edD = new Date(dateStr); edD.setDate(edD.getDate() + 1);
+        await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: dateStr, end: getSafeLocalDateStr(edD) });
+    }
+}
+
+function initStampDraggable() {
+    const pal = document.getElementById('stamp-palette'); const handle = document.getElementById('stamp-drag-handle');
+    if (!pal || !handle) return;
+    let isDragging = false; let startX, startY, initialLeft, initialTop;
+    const startDrag = (e) => {
+        if (e.target.tagName.toLowerCase() === 'button') return;
+        const evt = e.type.includes('touch') ? e.touches[0] : e;
+        startX = evt.clientX; startY = evt.clientY;
+        const rect = pal.getBoundingClientRect(); initialLeft = rect.left; initialTop = rect.top;
+        isDragging = true;
+        pal.style.transform = 'none'; pal.style.left = initialLeft + 'px'; pal.style.top = initialTop + 'px'; pal.style.transition = 'none';
+    };
+    const doDrag = (e) => {
+        if (!isDragging) return; e.preventDefault();
+        const evt = e.type.includes('touch') ? e.touches[0] : e;
+        const dx = evt.clientX - startX; const dy = evt.clientY - startY;
+        pal.style.left = Math.max(0, Math.min(initialLeft + dx, window.innerWidth - pal.offsetWidth)) + 'px';
+        pal.style.top = Math.max(0, Math.min(initialTop + dy, window.innerHeight - pal.offsetHeight)) + 'px';
+    };
+    const endDrag = () => { isDragging = false; };
+    handle.addEventListener('mousedown', startDrag); document.addEventListener('mousemove', doDrag, { passive: false }); document.addEventListener('mouseup', endDrag);
+    handle.addEventListener('touchstart', startDrag, { passive: true }); document.addEventListener('touchmove', doDrag, { passive: false }); document.addEventListener('touchend', endDrag);
 }
