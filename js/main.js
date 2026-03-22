@@ -290,7 +290,8 @@ function getCardHtml(type, item) {
 
     const safeData = encodeURIComponent(JSON.stringify(item));
     const isPending = isPendingInsert || isPendingUpdate || isPendingDelete;
-    const clickFn = isPending ? `event.stopPropagation(); showToast('⚠️ 裏側で通信中のデータだ。確定するまで数秒待て。')` : (isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`);
+    // ★究極の自律化2：未送信(insert/update)でもタップして編集可能にする
+    const clickFn = isPendingDelete ? `event.stopPropagation(); showToast('⚠️ 削除処理中の亡霊だ。触るな。')` : (isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`);
     let timeHtml = "";
     if (isEvent) {
         if (item.start && item.start.dateTime) {
@@ -307,8 +308,17 @@ function getCardHtml(type, item) {
     if (isPendingUpdate) cardStyle = 'border: 2px dotted #ff9500; opacity: 0.9;'; 
     if (isPendingDelete) { titleStyle = 'text-decoration: line-through;'; cardStyle = 'opacity: 0.3; filter: grayscale(100%); pointer-events: none;'; }
 
-    // ★D&Dの神経接続（ドラッグ属性とIDの付与）
-    const dragAttrs = isPending ? "" : `draggable="true" data-type="${type}" data-id="${item.id}" ondragstart="handleDragStart(event)"`;
+    // ★究極の自律化3：未送信データでもD&D移動を許可する（削除待機中のみロック）
+    const dragAttrs = isPendingDelete ? "" : `draggable="true" data-type="${type}" data-id="${item.id}" ondragstart="handleDragStart(event)"`;
+
+    // ★スマートメモ機能：メモがあれば💬アイコンを表示する
+    let memoIconHtml = '';
+    const cleanMemoText = isEvent ? (item.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/, '').trim() : extractTaskData(item.notes).cleanNotes;
+    if (cleanMemoText) {
+        const safeTitle = encodeURIComponent(isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)'));
+        const safeMemo = encodeURIComponent(cleanMemoText);
+        memoIconHtml = `<span style="margin-left:auto; margin-right:8px; font-size:16px; cursor:pointer; opacity:0.8;" onclick="event.stopPropagation(); showMemoAlert('${safeTitle}', '${safeMemo}')">💬</span>`;
+    }
 
     // ★タイトルと画像を分離する強固なレイアウト
     return `<div class="item-card" onclick="${clickFn}" ${dragAttrs} style="${cardStyle}">
@@ -317,6 +327,7 @@ function getCardHtml(type, item) {
                     <div style="display:flex; align-items:center; width:100%; ${titleStyle}">
                         ${timeHtml}
                         <div class="card-title" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:bold; color:var(--txt);">${title}</div>
+                        ${memoIconHtml}
                     </div>
                     ${driveThumbHtml}
                 </div>
@@ -610,7 +621,8 @@ async function toggleTaskCompletion(taskId, newStatus) {
     let targetTask = null; 
     for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } } 
     if (!targetTask) return; 
-    if (targetTask._localId) { showToast('🔄 未同期タスクの完了はできない。'); return; } 
+    // ★究極の自律化1：未同期のタスクでも完了・未完了を自由に切り替えさせる
+    // if (targetTask._localId) { showToast('🔄 未同期タスクの完了はできない。'); return; } 
     
     targetTask.status = newStatus; 
     const td = targetTask.due ? new Date(targetTask.due) : new Date(); 
@@ -1154,7 +1166,8 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
         }
     }
 
-    if (item._localId) { showToast('⚠️ 通信中のデータは動かせない。少し待て。'); return; }
+    // ★究極の自律化4：内部ロジックでも未送信データのD&D移動を許可する
+    // if (item._localId) { showToast('⚠️ 通信中のデータは動かせない。少し待て。'); return; }
 
     const payload = { type: type, method: 'update', id: id };
     
@@ -1213,4 +1226,18 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
     showToast('🔄 日付を移動中...');
     // 司令塔に投げ込み、野戦倉庫とオプティミスティックUIを自動発動させる
     await dispatchManualAction(payload);
+}
+
+// ★スマートメモ機能：HTMLを汚さず、JSだけで生成する美しいポップアップエンジン
+function showMemoAlert(encTitle, encMemo) {
+    const title = decodeURIComponent(encTitle);
+    const memo = decodeURIComponent(encMemo);
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center; opacity:0; transition:opacity 0.2s;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg); color:var(--txt); width:80%; max-width:320px; border-radius:12px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.3); transform:scale(0.9); transition:transform 0.2s;';
+    box.innerHTML = `<div style="font-weight:bold; font-size:16px; margin-bottom:10px; border-bottom:1px solid var(--border); padding-bottom:8px;">${title}</div><div style="font-size:14px; line-height:1.5; white-space:pre-wrap; max-height:50vh; overflow-y:auto;">${memo}</div><div style="margin-top:15px; text-align:right;"><button style="background:var(--accent); color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer;" onclick="this.closest('div').parentElement.parentElement.remove()">閉じる</button></div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    setTimeout(() => { overlay.style.opacity = '1'; box.style.transform = 'scale(1)'; }, 10);
 }
