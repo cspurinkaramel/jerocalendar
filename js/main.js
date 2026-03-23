@@ -177,7 +177,9 @@ const UI_THEME_COLORS = {
     green: { rgb: '52, 199, 89', hex: '#34c759' },
     orange: { rgb: '255, 149, 0', hex: '#ff9500' },
     purple: { rgb: '175, 82, 222', hex: '#af52de' },
-    yellow: { rgb: '255, 204, 0', hex: '#ffcc00' }
+    yellow: { rgb: '255, 204, 0', hex: '#ffcc00' },
+    darkgray: { rgb: '68, 68, 68', hex: '#444444' },
+    black: { rgb: '0, 0, 0', hex: '#000000' }
 };
 
 // ★役割分離：DOM(画面)への反映だけを専門に行う純粋な関数
@@ -190,8 +192,13 @@ function applyAppConfig(config) {
     document.documentElement.style.setProperty('--sel-rgb', sel.rgb);
     document.documentElement.style.setProperty('--sel-hex', sel.hex);
     
-    const today = UI_THEME_COLORS[config.todayColor] || UI_THEME_COLORS['orange'];
+    // ★本日と休日の色をCSS変数に注入する
+    const today = UI_THEME_COLORS[config.todayColor] || UI_THEME_COLORS['red'];
     document.documentElement.style.setProperty('--today-rgb', today.rgb);
+    document.documentElement.style.setProperty('--today-hex', today.hex);
+
+    const holiday = UI_THEME_COLORS[config.holidayColor] || UI_THEME_COLORS['darkgray'];
+    document.documentElement.style.setProperty('--holiday-hex', holiday.hex);
     
     const fsVal = document.getElementById('fs-val'); if(fsVal) fsVal.innerText = config.fs;
     const alphaVal = document.getElementById('alpha-val'); if(alphaVal) alphaVal.innerText = config.alpha;
@@ -203,7 +210,8 @@ function loadSettings() {
         theme: localStorage.getItem('jero_theme') || 'light',
         fs: localStorage.getItem('jero_fs') || '10',
         selColor: localStorage.getItem('jero_sel_color') || 'red',
-        todayColor: localStorage.getItem('jero_today_color') || 'orange',
+        todayColor: localStorage.getItem('jero_today_color') || 'red', // 初期値を赤に
+        holidayColor: localStorage.getItem('jero_holiday_color') || 'darkgray', // 新設：休日の色
         alpha: localStorage.getItem('jero_bg_alpha') || '25'
     };
     
@@ -211,6 +219,7 @@ function loadSettings() {
     const elFs = document.getElementById('st-fs'); if(elFs) elFs.value = config.fs;
     const elSel = document.getElementById('st-sel-color'); if(elSel) elSel.value = config.selColor;
     const elToday = document.getElementById('st-today-color'); if(elToday) elToday.value = config.todayColor;
+    const elHoliday = document.getElementById('st-holiday-color'); if(elHoliday) elHoliday.value = config.holidayColor;
     const elAlpha = document.getElementById('st-alpha'); if(elAlpha) elAlpha.value = config.alpha;
     
     applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
@@ -241,7 +250,8 @@ function saveAndApplySettings() {
         theme: document.getElementById('st-theme') ? document.getElementById('st-theme').value : 'light',
         fs: document.getElementById('st-fs') ? document.getElementById('st-fs').value : '10',
         selColor: document.getElementById('st-sel-color') ? document.getElementById('st-sel-color').value : 'red',
-        todayColor: document.getElementById('st-today-color') ? document.getElementById('st-today-color').value : 'orange',
+        todayColor: document.getElementById('st-today-color') ? document.getElementById('st-today-color').value : 'red',
+        holidayColor: document.getElementById('st-holiday-color') ? document.getElementById('st-holiday-color').value : 'darkgray',
         alpha: document.getElementById('st-alpha') ? document.getElementById('st-alpha').value : '25'
     };
     
@@ -249,6 +259,7 @@ function saveAndApplySettings() {
     localStorage.setItem('jero_fs', config.fs);
     localStorage.setItem('jero_sel_color', config.selColor);
     localStorage.setItem('jero_today_color', config.todayColor);
+    localStorage.setItem('jero_holiday_color', config.holidayColor);
     localStorage.setItem('jero_bg_alpha', config.alpha);
     
     applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
@@ -544,15 +555,8 @@ async function openDailyModal(dateStr, dow, isSilent = false) {
     
     if (modalItems.length > 0) { 
         hasItems = true; 
-        let drawnCompletedDivider = false;
-        
         modalItems.forEach(item => { 
-            // ★境界線の描画：最初の完了タスクが現れた瞬間に、美しい区切り線を引く
-            const isCompletedTask = item.type === 'task' && item.data.status === 'completed';
-            if (isCompletedTask && !drawnCompletedDivider) {
-                list.innerHTML += `<div style="text-align:center; font-size:11px; color:#888; margin: 16px 0 8px 0; display:flex; align-items:center;"><div style="flex:1; height:1px; background:var(--border);"></div><div style="padding:0 12px; font-weight:bold; letter-spacing:1px;">完了した歴史</div><div style="flex:1; height:1px; background:var(--border);"></div></div>`;
-                drawnCompletedDivider = true;
-            }
+            // ★UI最適化：無駄な行を消費する区切り線を廃止し、純粋にカードだけを並べる
             list.innerHTML += getCardHtml(item.type, item.data); 
         }); 
     }
@@ -566,12 +570,26 @@ function renderMonthDOM(year, month, data, position) {
     wrapper.innerHTML = `<div class="month-title">${year}年${eraStr} ${month + 1}月</div><div class="calendar-grid"></div>`; 
     const grid = wrapper.querySelector('.calendar-grid'); const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); for (let i = 0; i < firstDay; i++) { const empty = document.createElement('div'); empty.className = 'day empty'; empty.style.backgroundColor = 'var(--head-bg)'; empty.innerHTML = `<div class="day-header"></div>`; grid.appendChild(empty); }
     const getEventDuration = (e) => { if (!e || !e.start || !e.end) return 0; if (e.start.date && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); } if (e.start.dateTime && e.end.dateTime) { return new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime(); } return 0; };
-    const sortedEvents = [...data.events].sort((a, b) => { const durA = getEventDuration(a); const durB = getEventDuration(b); if (durA !== durB) return durB - durA; const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0; if (aAllDay !== bAllDay) return bAllDay - aAllDay; const tA = a.start && (a.start.dateTime || a.start.date) ? new Date(a.start.dateTime || a.start.date).getTime() : 0; const tB = b.start && (b.start.dateTime || b.start.date) ? new Date(b.start.dateTime || b.start.date).getTime() : 0; if (tA !== tB) return tA - tB; return (a.id || "").localeCompare(b.id || ""); });
+    const sortedEvents = [...data.events].sort((a, b) => { 
+        // ★UI最適化：接頭辞「休)」または「休）」を持つ予定を無条件で配列の先頭へ押し上げる
+        const isHolA = (a.summary || '').match(/^休[)）]/) ? 1 : 0;
+        const isHolB = (b.summary || '').match(/^休[)）]/) ? 1 : 0;
+        if (isHolA !== isHolB) return isHolB - isHolA;
+        
+        const durA = getEventDuration(a); const durB = getEventDuration(b); if (durA !== durB) return durB - durA; const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0; if (aAllDay !== bAllDay) return bAllDay - aAllDay; const tA = a.start && (a.start.dateTime || a.start.date) ? new Date(a.start.dateTime || a.start.date).getTime() : 0; const tB = b.start && (b.start.dateTime || b.start.date) ? new Date(b.start.dateTime || b.start.date).getTime() : 0; if (tA !== tB) return tA - tB; return (a.id || "").localeCompare(b.id || ""); 
+    });
     const today = new Date(); const slotMap = {}; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; }
     sortedEvents.forEach(e => { if (!e.start) return; const occupiedDates = []; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; let isTargetDay = false; if (e.start.date) { isTargetDay = e.start.date === dateStr; } else if (e.start.dateTime) { const stD = new Date(e.start.dateTime); const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`; isTargetDay = stStr === dateStr; } if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } } if (occupiedDates.length === 0) return; let slotIndex = 0; while (true) { let isFree = true; for (const d of occupiedDates) { if (slotMap[d][slotIndex]) { isFree = false; break; } } if (isFree) break; slotIndex++; } for (const d of occupiedDates) { while (slotMap[d].length <= slotIndex) slotMap[d].push(null); slotMap[d][slotIndex] = e; } });
     for (let i = 1; i <= daysInMonth; i++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today'; dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); dayEl.innerHTML = `<div class="day-header"><span class="day-num">${i}</span></div>`;
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; 
+        
         const slots = slotMap[dateStr] || [];
+        // ★UI最適化：その日に「休)」から始まる予定が存在するかをチェックし、セル自体にフラグ(クラス)を立てる
+        const hasHoliday = slots.some(e => e && (e.summary || '').match(/^休[)）]/));
+        if (hasHoliday) className += ' holiday-cell';
+        if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today'; 
+        
+        dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); dayEl.innerHTML = `<div class="day-header"><span class="day-num">${i}</span></div>`;
         slots.forEach(e => {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }

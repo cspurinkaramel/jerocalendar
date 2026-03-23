@@ -349,13 +349,25 @@
                     <option value="orange">オレンジ (活力)</option>
                     <option value="purple">パープル (高貴)</option>
                 </select></div>
-            <div class="setting-row"><label>本日の色 (点滅)</label><select id="st-today-color" onchange="saveAndApplySettings()">
-                    <option value="orange">オレンジ (初期値)</option>
+            <div class="setting-row"><label>本日の色 (セル背景)</label><select id="st-today-color" onchange="saveAndApplySettings()">
+                    <option value="red">レッド (初期値)</option>
+                    <option value="blue">ブルー (冷静)</option>
+                    <option value="green">グリーン (調和)</option>
+                    <option value="orange">オレンジ (活力)</option>
+                    <option value="purple">パープル (高貴)</option>
+                    <option value="yellow">イエロー (活発)</option>
+                    <option value="darkgray">ダークグレー (静寂)</option>
+                    <option value="black">ブラック (漆黒)</option>
+                </select></div>
+            <div class="setting-row"><label>休日の色 (セル背景)</label><select id="st-holiday-color" onchange="saveAndApplySettings()">
+                    <option value="darkgray">ダークグレー (初期値)</option>
                     <option value="red">レッド (情熱)</option>
                     <option value="blue">ブルー (冷静)</option>
                     <option value="green">グリーン (調和)</option>
+                    <option value="orange">オレンジ (活力)</option>
                     <option value="purple">パープル (高貴)</option>
                     <option value="yellow">イエロー (活発)</option>
+                    <option value="black">ブラック (漆黒)</option>
                 </select></div>
             <div class="setting-row"><label>背景の濃さ: <span id="alpha-val">25</span>%</label><input type="range" id="st-alpha"
                     min="5" max="80" value="25" step="5" oninput="saveAndApplySettings()"></div>
@@ -698,8 +710,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.25" defer></script>
-    <script src="./js/jero_core.js?v=16.25" defer></script>
+    <script src="./js/main.js?v=16.27" defer></script>
+    <script src="./js/jero_core.js?v=16.27" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

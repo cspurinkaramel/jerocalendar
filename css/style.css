@@ -41,7 +41,16 @@ input, textarea { -webkit-user-select: auto; user-select: auto; -webkit-touch-ca
 .day { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; padding-top: 20px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; transition: border-color 0.3s, background 0.3s;}
 .day:active { background: rgba(128,128,128,0.15); }
 .day-num { position: absolute; top: 4px; left: 4px; font-weight: 600; font-size: 11px; z-index: 1; color: var(--txt); transition: color 0.3s;}
-.today .day-num { background: #ff3b30; color: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; line-height: 18px; top: 2px; left: 2px; }
+
+/* ★本日の印字（赤丸を廃止し、セルの背景色化に伴い文字色のみ白にする） */
+.today .day-num { color: #ffffff !important; background: transparent !important; }
+/* ★休日セルの印字（文字色を白にして視認性を確保） */
+.holiday-cell .day-num { color: #ffffff !important; }
+
+/* ★本日の背景色（セル全体を指定色で塗りつぶす） */
+.day.today { background-color: var(--today-hex, #ff3b30) !important; }
+/* ★休日指定セルの背景色 */
+.day.holiday-cell { background-color: var(--holiday-hex, #444444) !important; }
 .event, .task { height: 18px; line-height: 14px; font-size: var(--fs); border-radius: 4px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; margin: 0 2px; color: #fff; font-weight: 600; box-sizing: border-box; width: calc(100% - 4px); box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; }
 .event { background-color: var(--accent); } .task { background-color: #34c759; } 
 .task.completed { text-decoration: line-through; opacity: 0.5; filter: grayscale(50%); }
