@@ -170,27 +170,89 @@ function resetViewerZoom() {
 
 function getContrastYIQ(hexcolor) { if (!hexcolor) return '#ffffff'; hexcolor = hexcolor.replace("#", ""); if (hexcolor.length === 3) hexcolor = hexcolor.split('').map(c => c + c).join(''); var r = parseInt(hexcolor.substr(0, 2), 16); var g = parseInt(hexcolor.substr(2, 2), 16); var b = parseInt(hexcolor.substr(4, 2), 16); var yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#000000' : '#ffffff'; }
 function initWeekdays() { const days = ['日', '月', '火', '水', '木', '金', '土']; const c = document.getElementById('weekdays'); if (c) c.innerHTML = days.map(d => `<div class="wd">${d}</div>`).join(''); }
-function applySelectColor(colorName) {
-    let rgb = '255, 59, 48'; let hex = '#ff3b30'; // red
-    if (colorName === 'blue') { rgb = '0, 122, 255'; hex = '#007aff'; }
-    else if (colorName === 'green') { rgb = '52, 199, 89'; hex = '#34c759'; }
-    else if (colorName === 'orange') { rgb = '255, 149, 0'; hex = '#ff9500'; }
-    else if (colorName === 'purple') { rgb = '175, 82, 222'; hex = '#af52de'; }
-    document.documentElement.style.setProperty('--sel-rgb', rgb);
-    document.documentElement.style.setProperty('--sel-hex', hex);
+// ★設定の一元管理辞書（共通化による拡張性の確保）
+const UI_THEME_COLORS = {
+    red: { rgb: '255, 59, 48', hex: '#ff3b30' },
+    blue: { rgb: '0, 122, 255', hex: '#007aff' },
+    green: { rgb: '52, 199, 89', hex: '#34c759' },
+    orange: { rgb: '255, 149, 0', hex: '#ff9500' },
+    purple: { rgb: '175, 82, 222', hex: '#af52de' },
+    yellow: { rgb: '255, 204, 0', hex: '#ffcc00' }
+};
+
+// ★役割分離：DOM(画面)への反映だけを専門に行う純粋な関数
+function applyAppConfig(config) {
+    document.body.setAttribute('data-theme', config.theme);
+    document.documentElement.style.setProperty('--fs', config.fs + 'px');
+    document.documentElement.style.setProperty('--bg-alpha', (parseInt(config.alpha) / 100).toString());
+    
+    const sel = UI_THEME_COLORS[config.selColor] || UI_THEME_COLORS['red'];
+    document.documentElement.style.setProperty('--sel-rgb', sel.rgb);
+    document.documentElement.style.setProperty('--sel-hex', sel.hex);
+    
+    const today = UI_THEME_COLORS[config.todayColor] || UI_THEME_COLORS['orange'];
+    document.documentElement.style.setProperty('--today-rgb', today.rgb);
+    
+    const fsVal = document.getElementById('fs-val'); if(fsVal) fsVal.innerText = config.fs;
+    const alphaVal = document.getElementById('alpha-val'); if(alphaVal) alphaVal.innerText = config.alpha;
 }
-function applyTodayColor(colorName) {
-    let rgb = '255, 149, 0'; // orange
-    if (colorName === 'red') { rgb = '255, 59, 48'; }
-    else if (colorName === 'blue') { rgb = '0, 122, 255'; }
-    else if (colorName === 'green') { rgb = '52, 199, 89'; }
-    else if (colorName === 'purple') { rgb = '175, 82, 222'; }
-    else if (colorName === 'yellow') { rgb = '255, 204, 0'; }
-    document.documentElement.style.setProperty('--today-rgb', rgb);
+
+function loadSettings() { 
+    // ★設定の読み込みをオブジェクトとして構造化
+    const config = {
+        theme: localStorage.getItem('jero_theme') || 'light',
+        fs: localStorage.getItem('jero_fs') || '10',
+        selColor: localStorage.getItem('jero_sel_color') || 'red',
+        todayColor: localStorage.getItem('jero_today_color') || 'orange',
+        alpha: localStorage.getItem('jero_bg_alpha') || '25'
+    };
+    
+    const elTheme = document.getElementById('st-theme'); if(elTheme) elTheme.value = config.theme;
+    const elFs = document.getElementById('st-fs'); if(elFs) elFs.value = config.fs;
+    const elSel = document.getElementById('st-sel-color'); if(elSel) elSel.value = config.selColor;
+    const elToday = document.getElementById('st-today-color'); if(elToday) elToday.value = config.todayColor;
+    const elAlpha = document.getElementById('st-alpha'); if(elAlpha) elAlpha.value = config.alpha;
+    
+    applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
+    
+    // その他外部連携設定
+    const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; 
+    const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; 
+    if (typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; 
+    
+    const gasUrl = localStorage.getItem('jero_gas_url') || ''; 
+    const gasUrlInput = document.getElementById('st-gas-url'); if (gasUrlInput) gasUrlInput.value = gasUrl; 
+    
+    const accInfo = document.getElementById('account-info'); 
+    if (accInfo) { if (gasUrl) { accInfo.innerText = "連携サーバー(GAS) 接続済"; accInfo.style.color = '#34c759'; } else { accInfo.innerText = "連携サーバー 未設定"; accInfo.style.color = '#ff3b30'; } } 
+    
+    const gKey = localStorage.getItem('jero_gemini_key') || ''; 
+    const gKeyInput = document.getElementById('st-gemini-key'); if (gKeyInput) gKeyInput.value = gKey; 
+    
+    const gPrompt = localStorage.getItem('jero_gemini_prompt') || (typeof DEFAULT_SYSTEM_PROMPT !== 'undefined' ? DEFAULT_SYSTEM_PROMPT : ''); 
+    const gPromptInput = document.getElementById('st-gemini-prompt'); if (gPromptInput) gPromptInput.value = gPrompt; 
 }
-function loadSettings() { const th = localStorage.getItem('jero_theme') || 'light'; const fs = localStorage.getItem('jero_fs') || '10'; document.getElementById('st-theme').value = th; document.getElementById('st-fs').value = fs; document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; const selColor = localStorage.getItem('jero_sel_color') || 'red'; const selColorEl = document.getElementById('st-sel-color'); if (selColorEl) selColorEl.value = selColor; applySelectColor(selColor); const todayColor = localStorage.getItem('jero_today_color') || 'orange'; const todayColorEl = document.getElementById('st-today-color'); if (todayColorEl) todayColorEl.value = todayColor; applyTodayColor(todayColor); const alpha = localStorage.getItem('jero_bg_alpha') || '25'; const alphaEl = document.getElementById('st-alpha'); if (alphaEl) alphaEl.value = alpha; document.documentElement.style.setProperty('--bg-alpha', (parseInt(alpha) / 100).toString()); const alphaValEl = document.getElementById('alpha-val'); if (alphaValEl) alphaValEl.innerText = alpha; const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; if (typeof isVoiceEnabled !== 'undefined') isVoiceEnabled = voiceEnabled; const gasUrl = localStorage.getItem('jero_gas_url') || ''; const gasUrlInput = document.getElementById('st-gas-url'); if (gasUrlInput) gasUrlInput.value = gasUrl; const accInfo = document.getElementById('account-info'); if (accInfo) { if (gasUrl) { accInfo.innerText = "連携サーバー(GAS) 接続済"; accInfo.style.color = '#34c759'; } else { accInfo.innerText = "連携サーバー 未設定"; accInfo.style.color = '#ff3b30'; } } const gKey = localStorage.getItem('jero_gemini_key') || ''; const gKeyInput = document.getElementById('st-gemini-key'); if (gKeyInput) gKeyInput.value = gKey; const gPrompt = localStorage.getItem('jero_gemini_prompt') || (typeof DEFAULT_SYSTEM_PROMPT !== 'undefined' ? DEFAULT_SYSTEM_PROMPT : ''); const gPromptInput = document.getElementById('st-gemini-prompt'); if (gPromptInput) gPromptInput.value = gPrompt; }
+
 function saveGasUrl() { localStorage.setItem('jero_gas_url', document.getElementById('st-gas-url').value.trim()); showToast('✅ サーバー接続キーを保存した。'); triggerFullReRender(); }
-function saveAndApplySettings() { const th = document.getElementById('st-theme').value; const fs = document.getElementById('st-fs').value; const selColorEl = document.getElementById('st-sel-color'); const selColor = selColorEl ? selColorEl.value : 'red'; const todayColorEl = document.getElementById('st-today-color'); const todayColor = todayColorEl ? todayColorEl.value : 'orange'; const alphaEl = document.getElementById('st-alpha'); const alpha = alphaEl ? alphaEl.value : '25'; localStorage.setItem('jero_theme', th); localStorage.setItem('jero_fs', fs); localStorage.setItem('jero_sel_color', selColor); localStorage.setItem('jero_today_color', todayColor); localStorage.setItem('jero_bg_alpha', alpha); document.body.setAttribute('data-theme', th); document.documentElement.style.setProperty('--fs', fs + 'px'); document.getElementById('fs-val').innerText = fs; applySelectColor(selColor); applyTodayColor(todayColor); document.documentElement.style.setProperty('--bg-alpha', (parseInt(alpha) / 100).toString()); const alphaValEl = document.getElementById('alpha-val'); if (alphaValEl) alphaValEl.innerText = alpha; }
+
+function saveAndApplySettings() { 
+    // ★設定の保存をオブジェクトとして構造化
+    const config = {
+        theme: document.getElementById('st-theme') ? document.getElementById('st-theme').value : 'light',
+        fs: document.getElementById('st-fs') ? document.getElementById('st-fs').value : '10',
+        selColor: document.getElementById('st-sel-color') ? document.getElementById('st-sel-color').value : 'red',
+        todayColor: document.getElementById('st-today-color') ? document.getElementById('st-today-color').value : 'orange',
+        alpha: document.getElementById('st-alpha') ? document.getElementById('st-alpha').value : '25'
+    };
+    
+    localStorage.setItem('jero_theme', config.theme);
+    localStorage.setItem('jero_fs', config.fs);
+    localStorage.setItem('jero_sel_color', config.selColor);
+    localStorage.setItem('jero_today_color', config.todayColor);
+    localStorage.setItem('jero_bg_alpha', config.alpha);
+    
+    applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
+}
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if (pb) { pb.style.width = p + '%'; if (p >= 100) setTimeout(() => pb.style.width = '0%', 500); } }
 function scrollToToday() { const todayStr = getSafeLocalDateStr(); const todayCell = document.getElementById(`cell-${todayStr}`); if (todayCell) { todayCell.scrollIntoView({ behavior: 'smooth', block: 'center' }); todayCell.click(); showToast('今日に移動したぞ。'); } else { const t = new Date(); fetchAndRenderMonth(t.getFullYear(), t.getMonth(), 'replace', false).then(() => { const retryCell = document.getElementById(`cell-${todayStr}`); if (retryCell) { retryCell.scrollIntoView({ behavior: 'smooth', block: 'center' }); retryCell.click(); showToast('今日に移動したぞ。'); } }); } }
 function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }

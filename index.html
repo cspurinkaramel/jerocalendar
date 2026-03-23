@@ -396,23 +396,27 @@
                         onclick="openDictEditor()">＋ 新規追加</button></div>
                 <div class="dict-container" id="dict-list"></div>
             </div>
-            <div class="setting-row"><label>システム拡張</label>
-                <div style="display:flex; gap:10px;"><button class="btn btn-gray"
-                        style="font-size: 12px; padding: 10px;" onclick="exportSettings()">データ書出</button><button
-                        class="btn btn-gray" style="font-size: 12px; padding: 10px;"
-                        onclick="importSettings()">データ読込</button></div>
-                
-                <div style="display:flex; gap:10px; margin-top: 10px;">
-                    <button class="btn btn-blue" style="font-size: 14px; flex: 1; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="forceHardReload()">🔄 最新アプリ強制取得</button>
+            <div class="setting-row">
+                <label style="color: var(--txt);">バックアップと復元</label>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="exportSettings()">📦 データ書出</button>
+                    <button class="btn btn-gray" style="font-size: 12px; padding: 10px;" onclick="importSettings()">📂 データ読込</button>
                 </div>
-                
-                <button class="btn"
-                    style="margin-top: 10px; font-size: 14px; background: #ff9500; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;" onclick="openStorageCleaner()">🧹 ストレージ大掃除 (孤立ファイル診断)</button>
+            </div>
 
-                <button class="btn btn-red"
-                    style="margin-top: 10px; font-size: 14px;" onclick="executeEmergencyReset()">🚨 ローカルデータ完全消去</button>
-                <button class="btn"
-                    style="margin-top: 10px; font-size: 14px; background: #af52de; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;" onclick="openTimeMachine()">⏱️ タイムマシン (過去データ復元)</button>
+            <div class="setting-row">
+                <label style="color: var(--txt);">システム・メンテナンス</label>
+                <button class="btn btn-blue" style="font-size: 14px; display:flex; justify-content:center; align-items:center; gap:8px; padding: 10px;" onclick="forceHardReload()">🔄 最新アプリ強制取得</button>
+                <button class="btn" style="margin-top: 10px; font-size: 14px; background: #ff9500; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;" onclick="openStorageCleaner()">🧹 孤立ファイル診断 (大掃除)</button>
+            </div>
+
+            <div class="setting-row" style="background: rgba(255,59,48,0.05); border-top: 2px solid rgba(255,59,48,0.3); padding-top: 20px; padding-bottom: 25px;">
+                <label style="color: #ff3b30; font-weight: bold; display: flex; align-items: center; gap: 6px;">⚠️ 危険エリア (Danger Zone)</label>
+                <div style="font-size: 11px; color: #888; margin-bottom: 15px; line-height: 1.4;">
+                    ※以下の操作は現在の状態を破壊、または過去へ不可逆の巻き戻しを行う。取扱注意だ。
+                </div>
+                <button class="btn" style="font-size: 14px; background: #af52de; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 12px rgba(175,82,222,0.3);" onclick="openTimeMachine()">⏱️ タイムマシン (過去へ巻き戻し)</button>
+                <button class="btn btn-red" style="margin-top: 15px; font-size: 14px; box-shadow: 0 4px 12px rgba(255,59,48,0.3);" onclick="executeEmergencyReset()">🚨 ローカルデータ完全消去 (初期化)</button>
             </div>
         </div>
         <div class="action-bar" style="padding: 15px 20px;"><button class="btn btn-blue" onclick="closeSettings()">完了
@@ -694,8 +698,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.22" defer></script>
-    <script src="./js/jero_core.js?v=16.22" defer></script>
+    <script src="./js/main.js?v=16.24" defer></script>
+    <script src="./js/jero_core.js?v=16.24" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
