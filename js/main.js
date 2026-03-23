@@ -66,23 +66,105 @@ function parseTaskAttachments(text) {
     return { cleanText, files };
 }
 
-// ★プレビュー表示エンジン（野戦倉庫連携・非同期対応）
+// ★プレビュー表示・ピンチズーム統合エンジン
+let currentViewerFileId = null;
+let viewerZoom = { scale: 1, x: 0, y: 0 };
+
 async function openImageViewer(fileId) {
-    const viewer = document.getElementById('img-viewer'); const img = document.getElementById('img-viewer-src');
-    if (viewer && img) {
-        if (fileId.startsWith('dummy_')) {
-            const realUid = parseInt(fileId.replace('dummy_', ''));
-            const queue = await getSyncQueue();
-            let foundBase64 = null; let foundMime = 'image/jpeg';
-            for (const q of queue) { if (q.payload.attachments) { const match = q.payload.attachments.find(a => a.uid === realUid); if (match && match.base64) { foundBase64 = match.base64; foundMime = match.mimeType; break; } } }
-            if (foundBase64) {
-                if (!foundMime.startsWith('image/')) { showToast('⚠️ 画像以外のファイルは送信完了後にDriveで開けるぞ。'); return; }
-                img.src = `data:${foundMime};base64,${foundBase64}`; img.onclick = null; viewer.classList.add('active'); showToast('🔄 送信待機中のプレビューだ'); return;
+    const viewer = document.getElementById('img-viewer'); const img = document.getElementById('img-viewer-src'); const driveBtn = document.getElementById('img-viewer-drive-btn');
+    if (!viewer || !img) return;
+    
+    currentViewerFileId = fileId;
+    img.src = ''; 
+    if (driveBtn) driveBtn.style.display = 'none'; 
+    resetViewerZoom(); // ★状態の記憶喪失防止：必ず1倍サイズ・中央にリセット
+    
+    if (fileId.startsWith('dummy_')) {
+        const realUid = parseInt(fileId.replace('dummy_', ''));
+        const queue = await getSyncQueue();
+        let foundBase64 = null; let foundMime = 'image/jpeg';
+        for (const q of queue) { if (q.payload.attachments) { const match = q.payload.attachments.find(a => a.uid === realUid); if (match && match.base64) { foundBase64 = match.base64; foundMime = match.mimeType; break; } } }
+        if (foundBase64) {
+            if (!foundMime.startsWith('image/')) { showToast('⚠️ 画像以外のファイルは送信完了後にDriveで開けるぞ。'); return; }
+            img.src = `data:${foundMime};base64,${foundBase64}`; 
+            viewer.classList.add('active'); 
+            showToast('🔄 送信待機中だ。指で拡大できるぞ'); 
+            return; 
+        }
+    }
+    
+    showGlobalLoader('画像を読み込み中...');
+    img.onload = () => { hideGlobalLoader(); if (driveBtn) driveBtn.style.display = 'block'; };
+    img.onerror = () => { hideGlobalLoader(); showToast('❌ 読み込み失敗'); };
+    img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`; 
+    viewer.classList.add('active');
+}
+
+function closeImageViewer() {
+    const viewer = document.getElementById('img-viewer');
+    if (viewer) { viewer.classList.remove('active'); resetViewerZoom(); }
+}
+
+function openOriginalInDrive() {
+    if (currentViewerFileId && !currentViewerFileId.startsWith('dummy_')) {
+        window.open(`https://drive.google.com/file/d/${currentViewerFileId}/view`, '_blank');
+        closeImageViewer(); 
+    }
+}
+
+// ★ピンチズーム・パンニング計算隔離エンジン（裏側への干渉を完全遮断）
+function initImageViewerZoom() {
+    const container = document.getElementById('img-viewer-zoom-container');
+    if (!container) return;
+
+    let startTouches = []; let initialScale = 1; let startX = 0, startY = 0; let isPanning = false;
+    const getDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+    container.addEventListener('touchstart', (e) => {
+        if (e.touches.length >= 1) {
+            startTouches = Array.from(e.touches);
+            initialScale = viewerZoom.scale;
+            if (e.touches.length === 1) {
+                startX = e.touches[0].clientX - viewerZoom.x; startY = e.touches[0].clientY - viewerZoom.y;
+                isPanning = viewerZoom.scale > 1; 
             }
         }
-        img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`; viewer.classList.add('active');
-        img.onclick = () => { window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank'); };
-        showToast('画像をタップするとオリジナルファイルを開けるぞ');
+    }, { passive: false });
+
+    container.addEventListener('touchmove', (e) => {
+        e.preventDefault(); // ★絶対防壁：指の動きをここで完全に殺し、カレンダー側へのスクロール暴発を防ぐ
+        if (e.touches.length === 2 && startTouches.length === 2) {
+            const scaleChange = getDistance(e.touches) / getDistance(startTouches);
+            viewerZoom.scale = Math.max(1, Math.min(initialScale * scaleChange, 4)); 
+            applyZoomTransform();
+        } else if (e.touches.length === 1 && isPanning) {
+            viewerZoom.x = e.touches[0].clientX - startX; viewerZoom.y = e.touches[0].clientY - startY;
+            applyZoomTransform();
+        }
+    }, { passive: false });
+
+    container.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) startTouches = [];
+        if (e.touches.length === 0) {
+            isPanning = false;
+            if (viewerZoom.scale < 1) resetViewerZoom();
+            else applyZoomTransform();
+        }
+    });
+}
+
+function applyZoomTransform() {
+    const img = document.getElementById('img-viewer-src');
+    if (img) img.style.transform = `translate(${viewerZoom.x}px, ${viewerZoom.y}px) scale(${viewerZoom.scale})`;
+}
+
+function resetViewerZoom() {
+    viewerZoom = { scale: 1, x: 0, y: 0 };
+    const img = document.getElementById('img-viewer-src');
+    if (img) {
+        img.style.transition = 'transform 0.2s ease-out';
+        applyZoomTransform();
+        setTimeout(() => img.style.transition = 'none', 200); 
     }
 }
 
@@ -1111,7 +1193,7 @@ function initDraggableFAB() {
     resetFabStealth(); document.addEventListener('scroll', resetFabStealth, { passive: true });
 }
 
-function startApp() { document.getElementById('auth-btn').style.display = 'none'; initWeekdays(); setupObserver(); initCalendar(); initDraggableFAB(); setTimeout(() => { processSyncQueue(true); executeSilentBackup(); }, 1000); }
+function startApp() { document.getElementById('auth-btn').style.display = 'none'; initWeekdays(); setupObserver(); initCalendar(); initDraggableFAB(); initImageViewerZoom(); /* ★ズームエンジン起動 */ setTimeout(() => { processSyncQueue(true); executeSilentBackup(); }, 1000); }
 document.addEventListener('DOMContentLoaded', () => { setTimeout(startApp, 500); });
 document.addEventListener('DOMContentLoaded', () => { const resizer = document.getElementById('resizer'); const bottomView = document.getElementById('bottom-detail-view'); let startY = 0; let startHeight = 0; if (resizer && bottomView) { resizer.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; startHeight = bottomView.getBoundingClientRect().height; document.body.style.userSelect = 'none'; }, { passive: true }); document.addEventListener('touchmove', (e) => { if (startY === 0) return; const deltaY = startY - e.touches[0].clientY; let newHeight = startHeight + deltaY; const minH = window.innerHeight * 0.1; const maxH = window.innerHeight * 0.7; if (newHeight < minH) newHeight = minH; if (newHeight > maxH) newHeight = maxH; bottomView.style.height = `${newHeight}px`; }, { passive: true }); document.addEventListener('touchend', () => { startY = 0; document.body.style.userSelect = ''; }); } });
 

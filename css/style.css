@@ -116,9 +116,12 @@ input:checked + .slider:before { transform: translateX(20px); }
 .jero-msg.user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
 .jero-msg.ai { align-self: flex-start; background: var(--head-bg); color: var(--txt); border-bottom-left-radius: 4px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 .pulse-think { animation: pulse 1s infinite alternate; opacity: 0.7; }
-#img-viewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
+/* ★ズーム対応のCSS設計 */
+#img-viewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; flex-direction: column; opacity: 0; transition: opacity 0.2s ease-out; touch-action: none; }
 #img-viewer.active { display: flex; opacity: 1; }
-#img-viewer img { max-width: 95%; max-height: 90%; border-radius: 8px; }
+#img-viewer-zoom-container { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; }
+#img-viewer img { max-width: 95%; max-height: 85%; border-radius: 8px; object-fit: contain; box-shadow: 0 10px 30px rgba(0,0,0,0.6); transform-origin: center center; will-change: transform; }
+#img-viewer-controls { display: flex; gap: 15px; z-index: 10000; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); width: 100%; justify-content: center; box-sizing: border-box; flex-shrink: 0; }
 .chat-attach-box { display: flex; align-items: center; gap: 8px; padding: 5px 15px; font-size: 12px; color: var(--accent); background: var(--head-bg); border-top: 1px solid var(--border); }
 .chat-file-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--txt); padding: 0; display: flex; align-items: center; justify-content: center; transition: color 0.3s; }
 .mic-active { color: #ff3b30 !important; animation: pulse 1s infinite alternate; }

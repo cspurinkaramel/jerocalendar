@@ -684,11 +684,18 @@
         </div>
     </div>
 
-    <div id="img-viewer" onclick="this.classList.remove('active')"><img id="img-viewer-src" src=""
-            onclick="event.stopPropagation()"></div>
+    <div id="img-viewer" onclick="closeImageViewer()">
+        <div id="img-viewer-zoom-container" onclick="event.stopPropagation()">
+            <img id="img-viewer-src" src="">
+        </div>
+        <div id="img-viewer-controls" onclick="event.stopPropagation()">
+            <button class="btn btn-gray" onclick="closeImageViewer()" style="padding: 10px 20px; font-weight: bold; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">✕ 閉じる</button>
+            <button id="img-viewer-drive-btn" class="btn btn-blue" onclick="openOriginalInDrive()" style="padding: 10px 20px; font-weight: bold; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">🌐 Driveで開く</button>
+        </div>
+    </div>
 
-    <script src="./js/main.js?v=16.17" defer></script>
-    <script src="./js/jero_core.js?v=16.17" defer></script>
+    <script src="./js/main.js?v=16.19" defer></script>
+    <script src="./js/jero_core.js?v=16.18" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
