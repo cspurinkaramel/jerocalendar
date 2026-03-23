@@ -131,19 +131,13 @@
             margin: 0 auto !important;
         }
 
-        /* ★本日の赤丸印も綺麗に中央配置する */
+        /* ★本日の印字（赤丸を完全に廃止し、セルの背景色化に伴い文字色のみ白にする） */
         .today .day-num {
-            background: #ff3b30 !important;
-            color: white !important;
-            border-radius: 50% !important;
-            width: 16px !important;
-            height: 16px !important;
-            line-height: 16px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            position: static !important;
-            margin: 0 auto !important;
+            color: #ffffff !important;
+        }
+        /* ★休日セルの印字（文字色を白にして視認性を確保） */
+        .holiday-cell .day-num {
+            color: #ffffff !important;
         }
 
         /* ★項目間の隙間（極限圧縮と連続線の復活） */
@@ -180,14 +174,15 @@
             z-index: 20;
         }
 
-        /* ★本日の背景をおしゃれに点滅（設定スライダー連動のアルファ値） */
-        @keyframes pulse-today-bg {
-            0% { background-color: rgba(var(--today-rgb, 255, 149, 0), calc(var(--bg-alpha, 0.25) * 0.32)); }
-            50% { background-color: rgba(var(--today-rgb, 255, 149, 0), calc(var(--bg-alpha, 0.25) * 1.4)); }
-            100% { background-color: rgba(var(--today-rgb, 255, 149, 0), calc(var(--bg-alpha, 0.25) * 0.32)); }
-        }
+        /* ★本日の背景色（セル全体を指定色で塗りつぶす。下のリストには干渉しない） */
         .day.today {
-            animation: pulse-today-bg 3s infinite ease-in-out !important;
+            background-color: var(--today-hex, #ff3b30) !important;
+            animation: none !important; /* 古い点滅アニメーションを廃止 */
+        }
+        
+        /* ★休日指定セルの背景色（休の予定があるマスを指定色で塗りつぶす） */
+        .day.holiday-cell {
+            background-color: var(--holiday-hex, #444444) !important;
         }
 
         /* ★呼吸する枠線（設定スライダー連動のアルファ値） */
@@ -710,8 +705,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.27" defer></script>
-    <script src="./js/jero_core.js?v=16.27" defer></script>
+    <script src="./js/main.js?v=16.29" defer></script>
+    <script src="./js/jero_core.js?v=16.29" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
