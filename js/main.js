@@ -1326,6 +1326,16 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function handleDragStart(e) {
+    // ★統合エンジン分岐1：スタンプ（新規作成パレット）を掴んだ場合
+    const templateType = e.currentTarget.getAttribute('data-template');
+    if (templateType) {
+        e.dataTransfer.setData('text/plain', JSON.stringify({ isTemplate: true, templateType: templateType }));
+        e.dataTransfer.effectAllowed = 'move';
+        triggerHaptic('light');
+        return;
+    }
+
+    // ★統合エンジン分岐2：カレンダー上の既存予定・タスクを掴んだ場合
     if (!e.currentTarget.getAttribute('data-id')) { e.preventDefault(); return; }
     
     // ★真の起点記憶：カレンダー上から掴んだ場合はそのセル、下のリストから掴んだ場合は「現在選択中の日付(selectedDateStr)」を起点とする
@@ -1340,7 +1350,7 @@ function handleDragStart(e) {
         sourceDate: sourceDateStr
     }));
     e.dataTransfer.effectAllowed = 'move';
-    if (navigator.vibrate) navigator.vibrate(50); // 触覚フィードバック
+    triggerHaptic('light'); // ★古い個別バイブ記述(navigator.vibrate)を、共通の触覚エンジンへ統一
 }
 
 function handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
@@ -1544,14 +1554,7 @@ async function saveQuickMemo(id, type) {
 // ==========================================
 // ★ 究極の最適解：D&D式 休日スタンプエンジン
 // ==========================================
-function handleTemplateDrag(e) {
-    const templateType = e.currentTarget.getAttribute('data-template');
-    e.dataTransfer.setData('text/plain', JSON.stringify({ isTemplate: true, templateType: templateType }));
-    // ★異常精査：カレンダー側の dropEffect = 'move' と一致させるため 'copy' から 'move' へ修正。
-    // これがズレていると、ブラウザが「契約不一致」としてドロップを握り潰すすっぽ抜けが発生する。
-    e.dataTransfer.effectAllowed = 'move'; 
-    triggerHaptic('light');
-}
+// ※スタンプのドラッグ処理(handleTemplateDrag)は、完全統合エンジン(handleDragStart)に吸収・浄化された。
 
 async function applyTemplateStamp(templateType, targetDateStr) {
     const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';

@@ -39,8 +39,8 @@
         <div style="display: flex; justify-content: center; align-items: center; height: 36px; border-top: 1px solid var(--border); background: var(--bg); gap: 20px; width: 100%; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
             <span style="font-size: 11px; font-weight: bold; color: #888;">休暇スタンプ:</span>
             <div style="display: flex; gap: 10px;">
-                <div draggable="true" data-template="holiday" ondragstart="handleTemplateDrag(event)" style="font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:rgba(255,59,48,0.1); border:1px solid rgba(255,59,48,0.3); touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">🏖️ 休</div>
-                <div draggable="true" data-template="paidleave" ondragstart="handleTemplateDrag(event)" style="font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:rgba(52,199,89,0.1); border:1px solid rgba(52,199,89,0.3); touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">🌴 有休</div>
+                <div draggable="true" data-template="holiday" ondragstart="handleDragStart(event)" style="font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:rgba(255,59,48,0.1); border:1px solid rgba(255,59,48,0.3); touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">🏖️ 休</div>
+                <div draggable="true" data-template="paidleave" ondragstart="handleDragStart(event)" style="font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:rgba(52,199,89,0.1); border:1px solid rgba(52,199,89,0.3); touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">🌴 有休</div>
             </div>
         </div>
         <div id="progress-bar"></div>
@@ -694,8 +694,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.20" defer></script>
-    <script src="./js/jero_core.js?v=16.20" defer></script>
+    <script src="./js/main.js?v=16.21" defer></script>
+    <script src="./js/jero_core.js?v=16.21" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
