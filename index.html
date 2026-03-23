@@ -364,6 +364,11 @@
                     <option value="yellow">イエロー (活発)</option>
                     <option value="black">ブラック (漆黒)</option>
                 </select></div>
+            <div class="setting-row">
+                <label>法定休日 / 追加キーワード</label>
+                <div style="font-size: 11px; color: #888; margin-bottom: 5px;">※「休」で始まり「)」で終わる予定は自動で休日色になる。春分の日など、他の文字で休日色にしたい場合はカンマ区切りで入れろ。</div>
+                <input type="text" id="st-holiday-words" placeholder="例: 春分の日, 祝日, 振替休日" onchange="saveAndApplySettings()" style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px);">
+            </div>
             <div class="setting-row"><label>背景の濃さ: <span id="alpha-val">25</span>%</label><input type="range" id="st-alpha"
                     min="5" max="80" value="25" step="5" oninput="saveAndApplySettings()"></div>
             <div class="setting-row">
@@ -705,8 +710,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.29" defer></script>
-    <script src="./js/jero_core.js?v=16.29" defer></script>
+    <script src="./js/main.js?v=16.31" defer></script>
+    <script src="./js/jero_core.js?v=16.31" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
