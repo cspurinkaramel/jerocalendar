@@ -18,7 +18,8 @@ input, textarea { -webkit-user-select: auto; user-select: auto; -webkit-touch-ca
 
 /* ★JSからCSSへの権限委譲：各コンポーネントの位置計算をCSSに集約 */
 #weekdays { position: relative; width: 100%; z-index: 20; height: var(--wd-h); min-height: var(--wd-h); flex-shrink: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--head-bg); border-bottom: 1px solid var(--border); align-items: center; transition: background 0.3s, border-color 0.3s; }
-#scroll-container { position: relative; width: 100%; z-index: 1; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+/* ★絶対防壁：overscroll-behavior-y でゴムバンド現象を殺し、overflow-anchor でブラウザの勝手なスクロール補正を無効化する */
+#scroll-container { position: relative; width: 100%; z-index: 1; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; overflow-anchor: none; }
 #offline-badge { display: none; position: fixed; top: calc(var(--top-bar-h) + env(safe-area-inset-top)); width: 100%; background: #ff9500; color: #fff; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 0; z-index: 45; }
 
 .nav-group { display: flex; gap: 12px; align-items: center; }

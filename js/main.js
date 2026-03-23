@@ -624,8 +624,53 @@ function renderMonthDOM(year, month, data, position) {
 }
 
 async function initCalendar() { if (isCalendarInited) return; isCalendarInited = true; setProgress(10); try { await loadDataCacheFromIDB(); await rehydrateSyncQueue(); const today = new Date(); const y = today.getFullYear(); const m = today.getMonth(); await fetchAndRenderMonth(y, m, 'append', false); await fetchAndRenderMonth(y, m + 1, 'append', false); scrollToToday(); if (navigator.onLine && !isAuthError) { fetchAndRenderMonth(y, m, 'replace', true); fetchAndRenderMonth(y, m + 1, 'replace', true); } await updateSyncBadge(); } finally { setProgress(100); } }
-async function loadNextMonth() { if (renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('bottom-trigger').classList.remove('hidden'); try { const last = renderedMonths[renderedMonths.length - 1]; let nextY = last.year; let nextM = last.month + 1; if (nextM > 11) { nextM = 0; nextY++; } await fetchAndRenderMonth(nextY, nextM, 'append'); } finally { isFetching = false; document.getElementById('bottom-trigger').classList.add('hidden'); } }
-async function loadPrevMonth() { if (renderedMonths.length === 0 || isFetching || isAuthError) return; isFetching = true; document.getElementById('top-trigger').classList.remove('hidden'); try { const container = document.getElementById('scroll-container'); const oldHeight = container.scrollHeight; const first = renderedMonths[0]; let prevY = first.year; let prevM = first.month - 1; if (prevM < 0) { prevM = 11; prevY--; } await fetchAndRenderMonth(prevY, prevM, 'prepend'); container.scrollTop += (container.scrollHeight - oldHeight); } finally { isFetching = false; document.getElementById('top-trigger').classList.add('hidden'); } }
+async function loadNextMonth() { 
+    if (renderedMonths.length === 0 || isFetching || isAuthError) return; 
+    isFetching = true; 
+    document.getElementById('bottom-trigger').classList.remove('hidden'); 
+    try { 
+        const last = renderedMonths[renderedMonths.length - 1]; 
+        let nextY = last.year; let nextM = last.month + 1; 
+        if (nextM > 11) { nextM = 0; nextY++; } 
+        await fetchAndRenderMonth(nextY, nextM, 'append'); 
+    } finally { 
+        document.getElementById('bottom-trigger').classList.add('hidden'); 
+        setTimeout(() => { isFetching = false; }, 100); // ★連打防止クールタイム
+    } 
+}
+
+async function loadPrevMonth() { 
+    if (renderedMonths.length === 0 || isFetching || isAuthError) return; 
+    isFetching = true; 
+    const container = document.getElementById('scroll-container'); 
+    const topTrigger = document.getElementById('top-trigger'); 
+    
+    // ★絶対座標(GPS)トラッキング：現在の先頭月（アンカー）の物理位置を記憶する
+    const firstMonthEl = document.getElementById(`month-${renderedMonths[0].year}-${renderedMonths[0].month}`);
+    const anchorOffset = firstMonthEl ? firstMonthEl.offsetTop : 0;
+    const currentScroll = Math.max(0, container.scrollTop); // iOSのマイナスバウンスを0に補正
+    const relativeScroll = currentScroll - anchorOffset; 
+    
+    topTrigger.classList.remove('hidden'); 
+    try { 
+        const first = renderedMonths[0]; 
+        let prevY = first.year; let prevM = first.month - 1; 
+        if (prevM < 0) { prevM = 11; prevY--; } 
+        await fetchAndRenderMonth(prevY, prevM, 'prepend'); 
+    } finally { 
+        topTrigger.classList.add('hidden'); 
+        // ★DOMの描画確定を待つ
+        await new Promise(r => requestAnimationFrame(r));
+        
+        // ★記憶したアンカーの新しい位置にスクロールを完璧に追従させる（ワープの完全消滅）
+        if (firstMonthEl) {
+            container.scrollTop = firstMonthEl.offsetTop + relativeScroll;
+        }
+        
+        // ★無限ループ（ワープ）防止のクールタイム
+        setTimeout(() => { isFetching = false; }, 100);
+    } 
+}
 function notifyAuthError() { isAuthError = true; localStorage.removeItem('jero_token'); localStorage.removeItem('jero_token_time'); document.getElementById('auth-btn').style.display = 'block'; document.getElementById('auth-btn').classList.add('auth-pulse'); const monthDisp = document.getElementById('month-display'); monthDisp.innerText = '⚠️右上の🔑をタップ'; monthDisp.style.color = '#ff3b30'; }
 
 async function fetchAndRenderMonth(year, month, position = 'append', forceFetch = false) {
