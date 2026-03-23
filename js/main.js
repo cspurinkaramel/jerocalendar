@@ -185,61 +185,64 @@ async function processSyncQueue(isSilent = false) {
     if (isSyncProcessing) return; // 既に裏で通信中なら弾く（多重送信バグの根絶）
     isSyncProcessing = true;
     try {
-        if (!navigator.onLine) return; const queue = await getSyncQueue(); if (queue.length === 0) { await updateSyncBadge(); return; }
-    
-    // ★修正: 画面を塞ぐ巨大ローダーを完全排除し、下部のトーストで控えめに通知する
-    if (!isSilent) showToast(`🔄 裏で未送信データ(${queue.length}件)を同期中...`);
-    
-    let successCount = 0; let needsRefresh = false; let authErrorOccurred = false;
-    for (let item of queue) {
-        if (authErrorOccurred) break; 
-        let retries = 3; let itemSuccess = false;
-        while (retries > 0 && !itemSuccess && !authErrorOccurred) {
-            try {
-                await executeApiAction(item.payload, true); await clearSyncQueueItem(item.id); successCount++; itemSuccess = true; needsRefresh = true;
-                const action = item.payload; let safeToday = getSafeLocalDateStr();
-                if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
-                if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
-                const tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
-                const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
-                if (dataCache[monthKey]) {
-                    if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) { if (action.type === 'event') existing.colorId = action.colorId; delete existing._pendingUpdate; } } 
-                    else if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
-                    else if (action.method === 'insert') { 
-                        // ★修正: 野戦倉庫からの復帰時も、再取得が終わるまでロックを維持する
+        let authErrorOccurred = false; let needsRefresh = false; let totalSuccessCount = 0;
+        
+        // ★ループ化：キューが完全に空になるまで、何度でも荷物を運び続ける
+        while (navigator.onLine && !authErrorOccurred) {
+            const queue = await getSyncQueue(); 
+            if (queue.length === 0) break;
+            
+            if (!isSilent) showToast(`🔄 裏で未送信データ(${queue.length}件)を同期中...`);
+            
+            let batchSuccess = false;
+            for (let item of queue) {
+                if (authErrorOccurred) break; 
+                let retries = 3; let itemSuccess = false;
+                while (retries > 0 && !itemSuccess && !authErrorOccurred) {
+                    try {
+                        await executeApiAction(item.payload, true); await clearSyncQueueItem(item.id); totalSuccessCount++; itemSuccess = true; needsRefresh = true; batchSuccess = true;
+                        const action = item.payload; let safeToday = getSafeLocalDateStr();
+                        if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; }
+                        if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
+                        const tdStr = action.start || action.due; let td = new Date(); if (tdStr && typeof tdStr === 'string') { if (tdStr.includes('T')) { td = new Date(tdStr); } else { const p = tdStr.split('-'); td = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); } }
+                        const monthKey = `${td.getFullYear()}-${td.getMonth()}`;
+                        if (dataCache[monthKey]) {
+                            if (action.method === 'update') { let targetList = action.type === 'event' ? dataCache[monthKey].events : dataCache[monthKey].tasks; let existing = targetList.find(e => e.id === action.id); if (existing) { if (action.type === 'event') existing.colorId = action.colorId; delete existing._pendingUpdate; } } 
+                            else if (action.method === 'delete') { if (action.type === 'event') dataCache[monthKey].events = dataCache[monthKey].events.filter(e => e.id !== action.id); if (action.type === 'task') dataCache[monthKey].tasks = dataCache[monthKey].tasks.filter(t => t.id !== action.id); } 
+                        }
+                        await sleep(500);
+                    } catch (error) {
+                        const code = error.status || (error.result && error.result.error && error.result.error.code);
+                        const msg = error.message || "";
+                        if (code === 401 || code === 403) { authErrorOccurred = true; hideGlobalLoader(); showToast('⚠️ サーバー側で認証エラーが起きた。'); await updateSyncBadge(); } 
+                        else if (code === 400 || code === 404 || code === 410 || code === 413) { console.error(`❌ Google拒絶(Code:${code})。不正データ破棄。`); await clearSyncQueueItem(item.id); itemSuccess = true; needsRefresh = true; batchSuccess = true; } 
+                        else if (code === 429) { authErrorOccurred = true; showToast('⚠️ Google通信制限(429)。一時中断。'); } 
+                        else { 
+                            if (msg) showToast(`⚠️ 裏側通信エラー: ${msg}`);
+                            retries--; 
+                            if (retries > 0) { const backoff = (4 - retries) * 2000; await sleep(backoff); } 
+                        }
                     }
                 }
-                await sleep(500);
-            } catch (error) {
-                const code = error.status || (error.result && error.result.error && error.result.error.code);
-                const msg = error.message || "";
-                if (code === 401 || code === 403) { authErrorOccurred = true; hideGlobalLoader(); showToast('⚠️ サーバー側で認証エラーが起きた。'); await updateSyncBadge(); } 
-                else if (code === 400 || code === 404 || code === 410 || code === 413) { console.error(`❌ Google拒絶(Code:${code})。不正データ破棄。`); await clearSyncQueueItem(item.id); itemSuccess = true; needsRefresh = true; } 
-                else if (code === 429) { authErrorOccurred = true; showToast('⚠️ Google通信制限(429)。一時中断。'); } 
-                else { 
-                    if (msg) showToast(`⚠️ 裏側通信エラー: ${msg}`);
-                    retries--; 
-                    if (retries > 0) { const backoff = (4 - retries) * 2000; await sleep(backoff); } 
-                }
             }
+            // もしエラーで1つも進まなかったら、無限ループを防ぐため抜ける
+            if (!batchSuccess) break;
         }
-    }
-    
-    // ★修正: ローダー解除を削除し、成功時のトーストだけを残す
-    if (successCount > 0 && !isSilent) showToast(`✅ ${successCount}件の裏側同期が完了した。`); 
-    await updateSyncBadge(); 
-    if (needsRefresh) {
-        const wrappers = document.querySelectorAll('.month-wrapper');
-        for (const wrapper of wrappers) { const parts = wrapper.id.split('-'); if (parts.length === 3) { const y = parseInt(parts[1]); const m = parseInt(parts[2]); const existingMonth = document.getElementById(`month-${y}-${m}`); if (existingMonth && dataCache[`${y}-${m}`]) { existingMonth.remove(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace'); } } }
-        if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); }
-    }
-    if (needsRefresh && !authErrorOccurred) {
-        setTimeout(async () => {
+        
+        if (totalSuccessCount > 0 && !isSilent) showToast(`✅ ${totalSuccessCount}件の裏側同期が完了した。`); 
+        await updateSyncBadge(); 
+        if (needsRefresh) {
             const wrappers = document.querySelectorAll('.month-wrapper');
-            for (const wrapper of wrappers) { const parts = wrapper.id.split('-'); if (parts.length === 3) { await fetchAndRenderMonth(parseInt(parts[1]), parseInt(parts[2]), 'replace', true); } }
-            if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay()); }
-        }, 2000);
-    }
+            for (const wrapper of wrappers) { const parts = wrapper.id.split('-'); if (parts.length === 3) { const y = parseInt(parts[1]); const m = parseInt(parts[2]); const existingMonth = document.getElementById(`month-${y}-${m}`); if (existingMonth && dataCache[`${y}-${m}`]) { existingMonth.remove(); renderMonthDOM(y, m, dataCache[`${y}-${m}`], 'replace'); } } }
+            if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay(), true); }
+        }
+        if (needsRefresh && !authErrorOccurred) {
+            setTimeout(async () => {
+                const wrappers = document.querySelectorAll('.month-wrapper');
+                for (const wrapper of wrappers) { const parts = wrapper.id.split('-'); if (parts.length === 3) { await fetchAndRenderMonth(parseInt(parts[1]), parseInt(parts[2]), 'replace', true); } }
+                if (typeof selectedDateStr !== 'undefined' && selectedDateStr) { openDailyModal(selectedDateStr, new Date(selectedDateStr).getDay(), true); }
+            }, 2000);
+        }
     } finally {
         isSyncProcessing = false; // ★究極防壁2：処理やエラーが終われば確実にロックを解除
     }
@@ -429,8 +432,10 @@ function renderMonthDOM(year, month, data, position) {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             let spanType = isEventSpanning(e, dateStr); 
-            // ★究極のハック：月を跨いだ「1日」のマスは、強制的に「スタートマス」として振る舞わせることで、文字を表示させつつ線を完璧に繋ぐ
-            if (dateStr.endsWith('-01') && (spanType === 'span-mid' || spanType === 'span-end')) { spanType = 'span-start'; }
+            // ★究極のハック：月を跨いだ「1日」のマスは、強制的に「スタートマス」として振る舞わせる
+            // ※異常精査による修正：span-end（1日で終わる予定）まで右に延長してしまう視覚バグを防ぐため、span-mid（まだ続く予定）の時だけ右に繋ぐ
+            if (dateStr.endsWith('-01') && spanType === 'span-mid') { spanType = 'span-start'; }
+            else if (dateStr.endsWith('-01') && spanType === 'span-end') { spanType = 'single'; } // 1日で終わるなら、はみ出さずに単発の見た目に落ち着かせる
             
             const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
             
@@ -489,7 +494,13 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
             events = (data.events || []).filter(e => !deletedIds.has(e.id)); 
             tasks = (data.tasks || []).filter(t => !deletedIds.has(t.id)); 
         } else { throw new Error(data.error || '不明なサーバーエラー'); } } catch (e) { console.error("GASデータ取得エラー:", e); showToast('通信エラーが発生した。'); return; }
-        dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); needsRender = true;
+        dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); 
+        
+        // ★最強の防壁：サーバーのデータで上書きした直後、未送信キュー（野戦倉庫）にいる仮アイテムを再合成して点線を保護する
+        const queue = await getSyncQueue();
+        if (queue.length > 0) { queue.forEach(item => updateLocalCacheForOptimisticUI(item.payload, item.id)); }
+        
+        needsRender = true;
     } else { if (!document.getElementById(`month-${year}-${month}`)) needsRender = true; }
     if (needsRender) { const existing = document.getElementById(`month-${year}-${month}`); if (existing) existing.remove(); renderMonthDOM(year, month, dataCache[monthKey], position); if (!existing) { if (position === 'append') renderedMonths.push({ year, month }); else if (position === 'prepend') renderedMonths.unshift({ year, month }); } updateHeaderDisplay(); }
 }
@@ -509,6 +520,19 @@ function openEditor(e = null) {
     document.getElementById('edit-id').value = e ? e.id : ''; document.getElementById('edit-title').value = e ? e.summary || '' : ''; document.getElementById('edit-loc').value = e ? e.location || '' : '';
     document.getElementById('edit-desc').value = e ? (e.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/, '').trim() : '';
     
+    // ★予定の死角保護1：既存の繰り返しルール(RRULE)を隠しフィールドに退避し、保存時の消失（単発化）を防ぐ
+    const recRuleInput = document.getElementById('edit-recurrence-rule');
+    const recDisplay = document.getElementById('edit-recurrence-display');
+    if (recRuleInput && recDisplay) {
+        if (e && e.recurrence) {
+            recRuleInput.value = JSON.stringify(e.recurrence);
+            recDisplay.innerText = '設定あり(保護中)';
+        } else {
+            recRuleInput.value = '';
+            recDisplay.innerText = 'なし';
+        }
+    }
+
     activeEventAttachments = []; pendingEventAttachments = [];
     const previewContainer = document.getElementById('edit-attach-preview');
     if (previewContainer) {
@@ -591,7 +615,16 @@ async function saveEvent() {
     const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim(); if (!title) { showToast('タイトルを入力してくれ'); return; }
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value; if (!startVal) { showToast('開始日時が不正だ'); return; } if (!endVal) endVal = startVal;
     
+    // ★予定の死角保護2：終了時間が開始時間より前になる「時間逆転バグ」を強制補正する
+    if (!isAllDay && new Date(startVal) > new Date(endVal)) endVal = startVal;
+
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
+    
+    // ★予定の死角保護3：退避しておいた繰り返しルールをパケットに乗せ、Google側での消失を防ぐ
+    const recRuleInput = document.getElementById('edit-recurrence-rule');
+    if (recRuleInput && recRuleInput.value) {
+        try { action.recurrence = JSON.parse(recRuleInput.value); } catch(e) {}
+    }
     
     // ★完全結合ルール：変更の有無に関わらず、既存の添付ファイルがあるなら必ずフラグを立てて再結合させる
     const isAttachmentsChanged = (pendingEventAttachments.length > 0) || (JSON.stringify(activeEventAttachments) !== initialEventAttachments);
@@ -619,7 +652,12 @@ function openTaskEditor(t = null) {
     
     activeTaskAttachments = []; pendingTaskAttachments = [];
     const parsed = parseTaskAttachments(t ? t.notes || '' : '');
-    document.getElementById('task-edit-notes').value = extractTaskData(parsed.cleanText).cleanNotes;
+    const extractedData = extractTaskData(parsed.cleanText);
+    document.getElementById('task-edit-notes').value = extractedData.cleanNotes;
+    
+    // ★新設：すっぽ抜けていた「繰り返し設定」の記憶復元
+    const recSelect = document.getElementById('task-edit-recurrence');
+    if (recSelect) recSelect.value = t ? extractedData.recurrence : '';
     
     // ★修正: 状態の読み込み
     const statusCheckbox = document.getElementById('task-edit-status');
@@ -659,29 +697,18 @@ async function toggleTaskCompletion(taskId, newStatus) {
     let targetTask = null; 
     for (const key in dataCache) { if (dataCache[key].tasks) { targetTask = dataCache[key].tasks.find(t => t.id === taskId); if (targetTask) break; } } 
     if (!targetTask) return; 
-    // ★究極の自律化1：未同期のタスクでも完了・未完了を自由に切り替えさせる
-    // if (targetTask._localId) { showToast('🔄 未同期タスクの完了はできない。'); return; } 
     
-    targetTask.status = newStatus; 
-    const td = targetTask.due ? new Date(targetTask.due) : new Date(); 
-    await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
-    if (selectedDateStr) { const dow = new Date(selectedDateStr).getDay(); openDailyModal(selectedDateStr, dow); } 
+    // ★異常精査による浄化：司令塔(dispatchManualAction)が完璧にUIを自動更新するため、ここでの重複した画面書き換え（5重レンダリングのCPUスパイク）を完全に削ぎ落とす
     
-    // ★修正：ステータス変更時も全データをパケットに積むことで(無名)バグを完全に封殺
-    const payload = { type: 'task', method: 'update', id: taskId, title: targetTask.title, description: targetTask.notes, due: targetTask.due, status: newStatus }; 
-    try { 
-        if (navigator.onLine) { 
-            await executeApiAction(payload); 
-        } else { 
-            showToast('圏外では操作不可だ。'); 
-            targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed'; 
-            await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
-        } 
-    } catch (e) { 
-        showToast('通信エラーで状態を戻した。'); 
-        targetTask.status = newStatus === 'completed' ? 'needsAction' : 'completed'; 
-        await fetchAndRenderMonth(td.getFullYear(), td.getMonth(), 'replace', false); 
-    } 
+    // ★大手術：古い直接通信を破壊し、最強の司令塔へ丸投げする
+    const payload = { type: 'task', method: 'update', id: taskId, title: targetTask.title, description: targetTask.notes || '', due: targetTask.due, status: newStatus }; 
+    // ★絶対防壁：完了操作時に添付ファイルが消し飛ぶバグを防ぐため、引継ぎフラグを強制付与
+    if (targetTask.attachments && targetTask.attachments.length > 0) {
+        payload.keptAttachments = targetTask.attachments;
+        payload.attachmentsModified = true;
+    }
+    
+    await dispatchManualAction(payload); // 野戦倉庫・UI更新・裏側通信のすべてを自動化
 }
 
 async function saveTask() {
@@ -689,6 +716,11 @@ async function saveTask() {
     triggerHaptic('success'); // ★触覚：保存
     const id = document.getElementById('task-edit-id').value; const title = document.getElementById('task-edit-title').value.trim(); if (!title) { showToast('タスク名を入力してくれ'); return; }
     let rawNotes = document.getElementById('task-edit-notes').value.trim(); if (selectedTaskColorId) { rawNotes += (rawNotes ? '\n' : '') + `[c:${selectedTaskColorId}]`; }
+    
+    // ★新設：すっぽ抜けていた「繰り返し設定」の永続化
+    const recSelect = document.getElementById('task-edit-recurrence');
+    if (recSelect && recSelect.value) { rawNotes += (rawNotes ? '\n' : '') + `[r:${recSelect.value}]`; }
+    
     // ★修正: 状態の保存を追加
     const isCompleted = document.getElementById('task-edit-status') ? document.getElementById('task-edit-status').checked : false;
     const action = { type: 'task', method: id ? 'update' : 'insert', id: id, title: title, description: rawNotes, status: isCompleted ? 'completed' : 'needsAction' };
@@ -891,7 +923,7 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
     // ★アーキテクチャの共通化：アイテムを整形する専用のビルダ関数を定義し、予定とタスクの生成ロジックを統合する
     const buildCommonItem = (baseId) => {
         if (action.type === 'event') {
-            return { id: baseId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments };
+            return { id: baseId, summary: action.title, location: action.location, description: action.description, start: action.start.includes('T') ? { dateTime: action.start } : { date: action.start }, end: action.end ? (action.end.includes('T') ? { dateTime: action.end } : { date: action.end }) : null, colorId: action.colorId, attachments: tempAttachments, recurrence: action.recurrence };
         } else {
             return { id: baseId, title: action.title, notes: action.attachmentsModified ? taskNotesWithAtt : action.description, due: action.due, status: action.status || 'needsAction', attachments: action.attachmentsModified ? tempAttachments : undefined };
         }
@@ -1312,6 +1344,9 @@ async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
 
     if (type === 'event') {
         payload.title = item.summary; payload.description = item.description; payload.location = item.location; payload.colorId = item.colorId;
+        // ★予定の死角保護4：D&Dで移動した時に、既存の繰り返し設定が吹き飛んで単発になるのを防ぐ
+        if (item.recurrence) payload.recurrence = item.recurrence;
+        
         const isAllDay = item.start && item.start.date;
         if (isAllDay) {
             // 終日予定：本来の開始・終了日にオフセット日数をそのまま加算する（間隔を完全に維持）
@@ -1404,6 +1439,8 @@ async function saveQuickMemo(id, type) {
         payload.description = newMemo + (attMatch ? (newMemo ? '\n\n' : '') + attMatch[0] : '');
         payload.title = item.summary; payload.location = item.location; payload.colorId = item.colorId;
         payload.start = item.start.dateTime || item.start.date; payload.end = item.end.dateTime || item.end.date;
+        // ★予定の死角保護5：メモだけ更新した時に、既存の繰り返し設定が吹き飛んで単発になるのを防ぐ
+        if (item.recurrence) payload.recurrence = item.recurrence;
     } else {
         let oldNotes = item.notes || '';
         let tData = extractTaskData(oldNotes);
