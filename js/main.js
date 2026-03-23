@@ -1239,6 +1239,9 @@ async function handleDrop(e, targetDateStr) {
     const dataStr = e.dataTransfer.getData('text/plain');
     if (!dataStr) return;
     
+    // ★UIスレッドの解放：激しいDOM再構築に突入する前に、ブラウザに「緑の枠を消す」描画の隙間(20ms)を与える
+    await new Promise(resolve => setTimeout(resolve, 20));
+    
     try {
         const data = JSON.parse(dataStr);
         if (data.isTemplate) {
