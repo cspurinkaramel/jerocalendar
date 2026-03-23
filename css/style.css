@@ -6,7 +6,10 @@
     --wd-h: 24px;      /* ★曜日ヘッダーの高さ */
 }
 [data-theme="dark"] { --bg: #000; --txt: #fff; --border: #333; --head-bg: #1c1c1e; --today: #333300; --sat: #00152b; --sun: #2b0000; --card-bg: #1c1c1e; --card-shadow: rgba(0,0,0,0.5); }
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s, color 0.3s; }
+/* ★文字選択の呪いを完全封殺：システム全体でOSのテキスト選択と長押しメニューを禁止する */
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s, color 0.3s; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* ★絶対防壁の例外：文字入力が必要な場所（テキストボックス）だけは文字選択を許可する */
+input, textarea { -webkit-user-select: auto; user-select: auto; -webkit-touch-callout: default; }
 
 /* ★案Aの実現：トップバーを縦並び対応にする */
 #top-bar { position: fixed; top: 0; width: 100%; z-index: 50; padding-top: env(safe-area-inset-top); background: rgba(255,255,255,0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: var(--txt); display: flex; flex-direction: column; box-sizing: border-box; height: calc(var(--top-bar-h) + env(safe-area-inset-top)); border-bottom: 1px solid var(--border); transition: background 0.3s, color 0.3s; }
