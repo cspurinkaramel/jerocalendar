@@ -1314,7 +1314,9 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         if (typeof MobileDragDrop !== 'undefined') {
             MobileDragDrop.polyfill({
-                holdToDrag: 250, // 0.25秒長押しでドラッグ開始（スクロールと区別）
+                // ★操作性の極限最適化：250msだとスタンプを「サッと掴む」操作ですっぽ抜けるため、
+                // スクロール誤爆しないギリギリのラインである 150ms に短縮し、ネイティブアプリの吸い付きを再現する。
+                holdToDrag: 150, 
                 dragImageTranslateOverride: MobileDragDrop.scrollBehaviourDragImageTranslateOverride
             });
             // iOS Safariのスクロールバグ回避
@@ -1545,7 +1547,9 @@ async function saveQuickMemo(id, type) {
 function handleTemplateDrag(e) {
     const templateType = e.currentTarget.getAttribute('data-template');
     e.dataTransfer.setData('text/plain', JSON.stringify({ isTemplate: true, templateType: templateType }));
-    e.dataTransfer.effectAllowed = 'copy';
+    // ★異常精査：カレンダー側の dropEffect = 'move' と一致させるため 'copy' から 'move' へ修正。
+    // これがズレていると、ブラウザが「契約不一致」としてドロップを握り潰すすっぽ抜けが発生する。
+    e.dataTransfer.effectAllowed = 'move'; 
     triggerHaptic('light');
 }
 
