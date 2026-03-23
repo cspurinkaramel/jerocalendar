@@ -1239,19 +1239,19 @@ async function handleDrop(e, targetDateStr) {
     const dataStr = e.dataTransfer.getData('text/plain');
     if (!dataStr) return;
     
-    // ★UIスレッドの解放：激しいDOM再構築に突入する前に、ブラウザに「緑の枠を消す」描画の隙間(20ms)を与える
-    await new Promise(resolve => setTimeout(resolve, 20));
-    
-    try {
-        const data = JSON.parse(dataStr);
-        if (data.isTemplate) {
-            // ★最強の解決策：上からアイコンを落とした場合は「新規スタンプ」として発動
-            await applyTemplateStamp(data.templateType, targetDateStr);
-        } else {
-            // 既存の移動
-            await moveItemToDate(data.type, data.id, targetDateStr, data.sourceDate);
-        }
-    } catch(err) { console.error("Drop Error:", err); }
+    // ★UIスレッドの【完全】解放：
+    // await で待つのではなく、setTimeoutで別スレッドの未来に処理を丸投げする。
+    // これにより、ブラウザは「点線枠を消す」などの描画を即座に100%完了させることができる。
+    setTimeout(async () => {
+        try {
+            const data = JSON.parse(dataStr);
+            if (data.isTemplate) {
+                await applyTemplateStamp(data.templateType, targetDateStr);
+            } else {
+                await moveItemToDate(data.type, data.id, targetDateStr, data.sourceDate);
+            }
+        } catch(err) { console.error("Drop Error:", err); }
+    }, 10); // わずか10msの隙間で描画の詰まり（フリーズ）は完全に消滅する
 }
 
 async function moveItemToDate(type, id, targetDateStr, sourceDateStr) {
