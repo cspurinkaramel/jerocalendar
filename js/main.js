@@ -610,21 +610,25 @@ function renderMonthDOM(year, month, data, position) {
         const hasHoliday = slots.some(e => e && isHolidayEvent(e.summary));
         const isToday = (year === today.getFullYear() && month === today.getMonth() && i === today.getDate());
         let numStyle = '';
+        let headerStyle = ''; // ★新設：上の1マス（ヘッダー部分）専用のスタイル
         
-        // ★絶対防壁：CSSの競合を完全に無視し、JSからセル全体の色を強制的に塗りつぶす
+        // ★完全理解：セル全体（dayEl）の誤った塗りを剥がし、上の1マス（day-header）だけに色を流し込む
         if (hasHoliday) { 
             className += ' holiday-cell'; 
-            dayEl.style.setProperty('background-color', 'var(--holiday-hex)', 'important'); 
+            headerStyle = 'background-color: var(--holiday-hex) !important; border-bottom: none;'; 
             numStyle = 'color: #ffffff !important;'; 
+            dayEl.style.removeProperty('background-color'); 
         }
         if (isToday) { 
             className += ' today'; 
-            dayEl.style.setProperty('background-color', 'var(--today-hex)', 'important'); 
+            headerStyle = 'background-color: var(--today-hex) !important; border-bottom: none;'; 
             numStyle = 'color: #ffffff !important;'; 
+            dayEl.style.removeProperty('background-color'); 
         }
         
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); 
-        dayEl.innerHTML = `<div class="day-header"><span class="day-num" style="${numStyle}">${i}</span></div>`;
+        // ★上の1マス（day-header）のスタイルに headerStyle を適用する
+        dayEl.innerHTML = `<div class="day-header" style="${headerStyle}"><span class="day-num" style="${numStyle}">${i}</span></div>`;
         slots.forEach(e => {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }

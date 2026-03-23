@@ -174,15 +174,15 @@
             z-index: 20;
         }
 
-        /* ★本日の背景色（セル全体を指定色で塗りつぶす。下のリストには干渉しない） */
+        /* ★本日の背景色（セル全体ではなく、上の1マスに色を譲るため透明化する） */
         .day.today {
-            background-color: var(--today-hex, #ff3b30) !important;
-            animation: none !important; /* 古い点滅アニメーションを廃止 */
+            background-color: transparent !important;
+            animation: none !important; 
         }
         
-        /* ★休日指定セルの背景色（休の予定があるマスを指定色で塗りつぶす） */
+        /* ★休日指定セルの背景色（全体は透明化する） */
         .day.holiday-cell {
-            background-color: var(--holiday-hex, #444444) !important;
+            background-color: transparent !important;
         }
 
         /* ★呼吸する枠線（設定スライダー連動のアルファ値） */
@@ -710,8 +710,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.32" defer></script>
-    <script src="./js/jero_core.js?v=16.32" defer></script>
+    <script src="./js/main.js?v=16.33" defer></script>
+    <script src="./js/jero_core.js?v=16.33" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
