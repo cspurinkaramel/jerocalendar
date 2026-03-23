@@ -15,9 +15,9 @@ function getSafeLocalDateStr(dateObj = new Date()) { return `${dateObj.getFullYe
 // ★休日・法定休日の最強判定エンジン
 function isHolidayEvent(summary) {
     if (!summary) return false;
-    // 1. ユーザー要望の完全網羅：「休」から始まり、後ろに「)」か「）」があるものを全て捉える
-    if (summary.match(/^休.*[)）]/)) return true;
-    // 2. 法定休日対応：設定画面で指定したキーワード（例: "春分の日, 祝日" など）に合致するか
+    // 1. ユーザー要望の完全網羅：最初に出現する「)」または「）」の前に「休」の文字が含まれていれば検知する
+    if (summary.match(/^[^)）]*休[^)）]*[)）]/)) return true;
+    // 2. 法定休日対応：設定画面で指定したカンマ区切りのキーワードに合致するか
     const wordsStr = localStorage.getItem('jero_holiday_words') || '';
     if (wordsStr) {
         const words = wordsStr.split(',').map(w => w.trim()).filter(w => w);
@@ -602,15 +602,29 @@ function renderMonthDOM(year, month, data, position) {
     sortedEvents.forEach(e => { if (!e.start) return; const occupiedDates = []; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; let isTargetDay = false; if (e.start.date) { isTargetDay = e.start.date === dateStr; } else if (e.start.dateTime) { const stD = new Date(e.start.dateTime); const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`; isTargetDay = stStr === dateStr; } if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } } if (occupiedDates.length === 0) return; let slotIndex = 0; while (true) { let isFree = true; for (const d of occupiedDates) { if (slotMap[d][slotIndex]) { isFree = false; break; } } if (isFree) break; slotIndex++; } for (const d of occupiedDates) { while (slotMap[d].length <= slotIndex) slotMap[d].push(null); slotMap[d][slotIndex] = e; } });
     
     for (let i = 1; i <= daysInMonth; i++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; 
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); 
+        if (dow === 0) dayEl.style.backgroundColor = 'var(--sun)'; 
+        if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; 
         
         const slots = slotMap[dateStr] || [];
-        // ★UI最適化：その日に休日判定される予定が存在するかをチェックし、セル全体を塗りつぶすフラグを立てる
         const hasHoliday = slots.some(e => e && isHolidayEvent(e.summary));
-        if (hasHoliday) className += ' holiday-cell';
-        if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) className += ' today'; 
+        const isToday = (year === today.getFullYear() && month === today.getMonth() && i === today.getDate());
+        let numStyle = '';
         
-        dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); dayEl.innerHTML = `<div class="day-header"><span class="day-num">${i}</span></div>`;
+        // ★絶対防壁：CSSの競合を完全に無視し、JSからセル全体の色を強制的に塗りつぶす
+        if (hasHoliday) { 
+            className += ' holiday-cell'; 
+            dayEl.style.setProperty('background-color', 'var(--holiday-hex)', 'important'); 
+            numStyle = 'color: #ffffff !important;'; 
+        }
+        if (isToday) { 
+            className += ' today'; 
+            dayEl.style.setProperty('background-color', 'var(--today-hex)', 'important'); 
+            numStyle = 'color: #ffffff !important;'; 
+        }
+        
+        dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); 
+        dayEl.innerHTML = `<div class="day-header"><span class="day-num" style="${numStyle}">${i}</span></div>`;
         slots.forEach(e => {
             if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
