@@ -764,6 +764,7 @@ let pendingEventAttachments = []; let pendingTaskAttachments = [];
 let initialEventAttachments = ""; let initialTaskAttachments = ""; // ★幻影検知: 変更差分を検知するための記憶領域
 
 function openEditor(e = null) {
+    if (e && (e._localId || e._pendingUpdate || e._pendingDelete || (e.id && String(e.id).startsWith('dummy_')))) { showToast('⏳ サーバーと通信中のデータだ。完了するまで少し待て。'); return; }
     document.getElementById('overlay').classList.add('active'); document.getElementById('editor-modal').classList.add('active');
     document.getElementById('edit-id').value = e ? e.id : ''; document.getElementById('edit-title').value = e ? e.summary || '' : ''; document.getElementById('edit-loc').value = e ? e.location || '' : '';
     document.getElementById('edit-desc').value = e ? (e.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/, '').trim() : '';
@@ -895,6 +896,7 @@ isSavingLock = true; setTimeout(() => isSavingLock = false, 1000); const startVa
 function duplicateEvent() { document.getElementById('edit-id').value = ''; document.getElementById('editor-title').innerText = '新規予定 (複製)'; document.getElementById('btn-delete').style.display = 'none'; document.getElementById('btn-duplicate').style.display = 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = 'none'; showToast('複製モードだ。保存を押せ。'); }
 
 function openTaskEditor(t = null) {
+    if (t && (t._localId || t._pendingUpdate || t._pendingDelete || (t.id && String(t.id).startsWith('dummy_')))) { showToast('⏳ サーバーと通信中のデータだ。完了するまで少し待て。'); return; }
     document.getElementById('overlay').classList.add('active'); document.getElementById('task-editor-modal').classList.add('active');
     document.getElementById('task-edit-id').value = t ? t.id : ''; document.getElementById('task-edit-title').value = t ? t.title || '' : '';
     
