@@ -6,6 +6,7 @@ let isCalendarInited = false;
 let deletedIds = new Set(); // ★幻影迎撃用ブラックリスト（Googleの同期遅延によるデータの復活を防ぐ） 
 const GOOGLE_COLORS = { "1": "#7986cb", "2": "#33b679", "3": "#8e24aa", "4": "#e67c73", "5": "#f6bf26", "6": "#f4511e", "7": "#039be5", "8": "#616161", "9": "#3f51b5", "10": "#0b8043", "11": "#d50000" };
 let advancedDict = []; const DEFAULT_ADV_DICT = [{ keys: ["誕生日", "【誕】"], icon: "🎂", bg: "#ff2d55", txt: "#ffffff" }, { keys: ["会議", "【会】"], icon: "👥", bg: "#5856d6", txt: "#ffffff" }, { keys: ["休日", "【休】"], icon: "🏖️", bg: "#ff3b30", txt: "#ffffff" }];
+const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
 
 // ==========================================
 // 1. ユーティリティ & UI操作群
@@ -501,13 +502,13 @@ if (fileItems.length > 0) {
         // ★修正: 横スクロール可能にし、画像のみをスタイリッシュに並べる
         driveThumbHtml = '<div style="display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px; margin-top:6px; padding-bottom:4px; padding-left:2px; -webkit-overflow-scrolling:touch;">';
         // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const safePdfIcon = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
+        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
         fileItems.forEach(f => {
             // 画像でない場合は安全なPDFアイコンをセットする
-            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : safePdfIcon);
+            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : SAFE_PDF_ICON);
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
-                    <img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
+                    <img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
                 </div>`;
         });
         driveThumbHtml += '</div>';
@@ -857,7 +858,7 @@ function openEditor(e = null) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         
         // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const safePdfIcon = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
+        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
 
         if (e && e.attachments && e.attachments.length > 0) {
             e.attachments.forEach(att => {
@@ -868,8 +869,8 @@ function openEditor(e = null) {
                     if (!mType || mType === 'application/octet-stream') { mType = (att.title && att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg'; }
                     activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: mType, fileId: fileId });
                     let isImg = mType.startsWith('image/');
-                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : safePdfIcon);
-                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : SAFE_PDF_ICON);
+                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
         }
@@ -879,8 +880,8 @@ function openEditor(e = null) {
                 let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
                 let mType = isImg ? 'image/jpeg' : 'application/pdf';
                 activeEventAttachments.push({ fileUrl: f.fileUrl, title: f.title, mimeType: mType, fileId: f.fileId });
-                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : safePdfIcon;
-                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : SAFE_PDF_ICON;
+                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
             }
         });
     }
@@ -927,7 +928,7 @@ function addDriveLinkPrompt(type) {
     const thumbSrc = `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150`;
     
     // onerror でPDFアイコンにフォールバック。クリック時の削除処理も既存ファイルの解除関数に委譲する
-    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)' viewBox='0 0 24 24' fill='%23ff3b30'%3E%3Cpath d='M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z'/%3E%3C/svg%3E'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); ${removeFunc}(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src=SAFE_PDF_ICON" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); ${removeFunc}(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
     
     previewContainer.appendChild(imgDiv);
     showToast('✅ Driveリンクを抽出し、添付チップとして追加したぞ。');
@@ -959,15 +960,15 @@ async function handleImageUpload(event, previewId) {
         const imgDiv = document.createElement('div'); imgDiv.className = 'preview-item'; imgDiv.style.cssText = "position:relative; display:inline-block;";
         
         // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const safePdfIcon = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
-        const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : safePdfIcon;
+        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
+        const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : SAFE_PDF_ICON;
 
         if (previewId === 'edit-attach-preview') {
             pendingEventAttachments.push(attachmentData);
-            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments = pendingEventAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments = pendingEventAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
         } else {
             pendingTaskAttachments.push(attachmentData);
-            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments = pendingTaskAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments = pendingTaskAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
         }
         previewContainer.appendChild(imgDiv);
     }
@@ -1043,16 +1044,16 @@ function openTaskEditor(t = null) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
         
         // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const safePdfIcon = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
+        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
 
         parsed.files.forEach(f => {
             let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
             let currentMime = isImg ? 'image/jpeg' : 'application/pdf';
-            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : safePdfIcon;
-            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = safePdfIcon; } }
+            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : SAFE_PDF_ICON;
+            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = SAFE_PDF_ICON; } }
             // ★真の記憶継承：MIMEタイプを欠落させずに変換器へ引き渡す
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId, mimeType: currentMime });
-            previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+            previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
     }
     selectTaskColor(null, t ? extractTaskData(t.notes).colorId : '');
@@ -1552,7 +1553,7 @@ async function runStorageScan() {
         } else {
             let html = `<div style="color:#ff3b30; font-weight:bold; margin-bottom: 5px;">⚠️ ${orphanFilesCache.length}件の孤立ファイルを発見した。</div>`;
             orphanFilesCache.forEach(f => {
-                const thumbSrc = f.mimeType.startsWith('image/') ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w100-h100` : 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)' viewBox='0 0 24 24' fill='%23ff3b30'%3E%3Cpath d='M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z'/%3E%3C/svg%3E';
+                const thumbSrc = f.mimeType.startsWith('image/') ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w100-h100` : SAFE_PDF_ICON;
                 html += `
                 <div style="background:var(--head-bg); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px;">
                     <img src="${thumbSrc}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; background:#f0f0f0;">
