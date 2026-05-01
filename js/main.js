@@ -476,8 +476,10 @@ function getCardHtml(type, item) {
 
     const safeData = encodeURIComponent(JSON.stringify(item));
     const isPending = isPendingInsert || isPendingUpdate || isPendingDelete;
-    // ★究極の自律化2：未送信(insert/update)でもタップして編集可能にする
-    const clickFn = isPendingDelete ? `event.stopPropagation(); showToast('⚠️ 削除処理中の亡霊だ。触るな。')` : (isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`);
+    // ★究極の自律化2（修正版）：未送信データ(dummy_)の連続編集による二重登録・通信エラーの連鎖を物理的に防ぐ止血処理
+    const clickFn = isPendingDelete ? `event.stopPropagation(); showToast('⚠️ 削除処理中の亡霊だ。触るな。')` : 
+                    isPendingInsert ? `event.stopPropagation(); showToast('⏳ サーバーへ送信中だ。完了するまで少し待て。')` :
+                    (isEvent ? `openEditor(JSON.parse(decodeURIComponent('${safeData}')))` : `openTaskEditor(JSON.parse(decodeURIComponent('${safeData}')))`);
     let timeHtml = "";
     if (isEvent) {
         if (item.start && item.start.dateTime) {
