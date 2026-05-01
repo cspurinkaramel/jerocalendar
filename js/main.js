@@ -211,35 +211,37 @@ function applyAppConfig(config) {
     document.documentElement.style.setProperty('--today-rgb', today.rgb);
     document.documentElement.style.setProperty('--today-hex', today.hex);
 
-    const holiday = UI_THEME_COLORS[config.holidayColor] || UI_THEME_COLORS['darkgray'];
-    document.documentElement.style.setProperty('--holiday-hex', holiday.hex);
-    
-    const fsVal = document.getElementById('fs-val'); if(fsVal) fsVal.innerText = config.fs;
-    const alphaVal = document.getElementById('alpha-val'); if(alphaVal) alphaVal.innerText = config.alpha;
-}
+const holiday = UI_THEME_COLORS[config.holidayColor] || UI_THEME_COLORS['darkgray'];
+        document.documentElement.style.setProperty('--holiday-hex', holiday.hex);
+        
+        const fsVal = document.getElementById('fs-val'); if(fsVal) fsVal.innerText = config.fs;
+        const alphaVal = document.getElementById('alpha-val'); if(alphaVal) alphaVal.innerText = config.alpha;
+        const maxDispVal = document.getElementById('max-disp-val'); if(maxDispVal) maxDispVal.innerText = config.maxDisp;
+    }
 
-function loadSettings() { 
-    // ★設定の読み込みをオブジェクトとして構造化
-    const config = {
-        theme: localStorage.getItem('jero_theme') || 'light',
-        fs: localStorage.getItem('jero_fs') || '10',
-        selColor: localStorage.getItem('jero_sel_color') || 'red',
-        todayColor: localStorage.getItem('jero_today_color') || 'red', // 初期値を赤に
-        holidayColor: localStorage.getItem('jero_holiday_color') || 'darkgray', // 新設：休日の色
-        holidayWords: localStorage.getItem('jero_holiday_words') || '',
-        alpha: localStorage.getItem('jero_bg_alpha') || '25'
-    };
-    
-    const elTheme = document.getElementById('st-theme'); if(elTheme) elTheme.value = config.theme;
-    const elFs = document.getElementById('st-fs'); if(elFs) elFs.value = config.fs;
-    const elSel = document.getElementById('st-sel-color'); if(elSel) elSel.value = config.selColor;
-    const elToday = document.getElementById('st-today-color'); if(elToday) elToday.value = config.todayColor;
-    const elHoliday = document.getElementById('st-holiday-color'); if(elHoliday) elHoliday.value = config.holidayColor;
-    const elHWords = document.getElementById('st-holiday-words'); if(elHWords) elHWords.value = config.holidayWords;
-    const elAlpha = document.getElementById('st-alpha'); if(elAlpha) elAlpha.value = config.alpha;
-    
-    applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
-    
+    function loadSettings() { 
+        // ★設定の読み込みをオブジェクトとして構造化
+        const config = {
+            theme: localStorage.getItem('jero_theme') || 'light',
+            fs: localStorage.getItem('jero_fs') || '10',
+            selColor: localStorage.getItem('jero_sel_color') || 'red',
+            todayColor: localStorage.getItem('jero_today_color') || 'red',
+            holidayColor: localStorage.getItem('jero_holiday_color') || 'darkgray',
+            holidayWords: localStorage.getItem('jero_holiday_words') || '',
+            alpha: localStorage.getItem('jero_bg_alpha') || '25',
+            maxDisp: localStorage.getItem('jero_max_disp') || '6'
+        };
+        
+        const elTheme = document.getElementById('st-theme'); if(elTheme) elTheme.value = config.theme;
+        const elFs = document.getElementById('st-fs'); if(elFs) elFs.value = config.fs;
+        const elSel = document.getElementById('st-sel-color'); if(elSel) elSel.value = config.selColor;
+        const elToday = document.getElementById('st-today-color'); if(elToday) elToday.value = config.todayColor;
+        const elHoliday = document.getElementById('st-holiday-color'); if(elHoliday) elHoliday.value = config.holidayColor;
+        const elHWords = document.getElementById('st-holiday-words'); if(elHWords) elHWords.value = config.holidayWords;
+        const elAlpha = document.getElementById('st-alpha'); if(elAlpha) elAlpha.value = config.alpha;
+        const elMaxDisp = document.getElementById('st-max-disp'); if(elMaxDisp) elMaxDisp.value = config.maxDisp;
+        
+        applyAppConfig(config); // 画面への適用は専門関数へ丸投げ    
     // その他外部連携設定
     const voiceEnabled = localStorage.getItem('jero_voice_enabled') === 'true'; 
     const stVoice = document.getElementById('st-voice'); if (stVoice) stVoice.checked = voiceEnabled; 
@@ -261,27 +263,30 @@ function loadSettings() {
 function saveGasUrl() { localStorage.setItem('jero_gas_url', document.getElementById('st-gas-url').value.trim()); showToast('✅ サーバー接続キーを保存した。'); triggerFullReRender(); }
 
 function saveAndApplySettings() { 
-    // ★設定の保存をオブジェクトとして構造化
-    const config = {
-        theme: document.getElementById('st-theme') ? document.getElementById('st-theme').value : 'light',
-        fs: document.getElementById('st-fs') ? document.getElementById('st-fs').value : '10',
-        selColor: document.getElementById('st-sel-color') ? document.getElementById('st-sel-color').value : 'red',
-        todayColor: document.getElementById('st-today-color') ? document.getElementById('st-today-color').value : 'red',
-        holidayColor: document.getElementById('st-holiday-color') ? document.getElementById('st-holiday-color').value : 'darkgray',
-        holidayWords: document.getElementById('st-holiday-words') ? document.getElementById('st-holiday-words').value : '',
-        alpha: document.getElementById('st-alpha') ? document.getElementById('st-alpha').value : '25'
-    };
-    
-    localStorage.setItem('jero_theme', config.theme);
-    localStorage.setItem('jero_fs', config.fs);
-    localStorage.setItem('jero_sel_color', config.selColor);
-    localStorage.setItem('jero_today_color', config.todayColor);
-    localStorage.setItem('jero_holiday_color', config.holidayColor);
-    localStorage.setItem('jero_holiday_words', config.holidayWords);
-    localStorage.setItem('jero_bg_alpha', config.alpha);
-    
-    applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
-}
+        // ★設定の保存をオブジェクトとして構造化
+        const config = {
+            theme: document.getElementById('st-theme') ? document.getElementById('st-theme').value : 'light',
+            fs: document.getElementById('st-fs') ? document.getElementById('st-fs').value : '10',
+            selColor: document.getElementById('st-sel-color') ? document.getElementById('st-sel-color').value : 'red',
+            todayColor: document.getElementById('st-today-color') ? document.getElementById('st-today-color').value : 'red',
+            holidayColor: document.getElementById('st-holiday-color') ? document.getElementById('st-holiday-color').value : 'darkgray',
+            holidayWords: document.getElementById('st-holiday-words') ? document.getElementById('st-holiday-words').value : '',
+            alpha: document.getElementById('st-alpha') ? document.getElementById('st-alpha').value : '25',
+            maxDisp: document.getElementById('st-max-disp') ? document.getElementById('st-max-disp').value : '6'
+        };
+        
+        localStorage.setItem('jero_theme', config.theme);
+        localStorage.setItem('jero_fs', config.fs);
+        localStorage.setItem('jero_sel_color', config.selColor);
+        localStorage.setItem('jero_today_color', config.todayColor);
+        localStorage.setItem('jero_holiday_color', config.holidayColor);
+        localStorage.setItem('jero_holiday_words', config.holidayWords);
+        localStorage.setItem('jero_bg_alpha', config.alpha);
+        localStorage.setItem('jero_max_disp', config.maxDisp);
+        
+        applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
+        triggerFullReRender(); // ★Phase 1: 表示上限を変えた瞬間にカレンダーを再描画する
+    }
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if (pb) { pb.style.width = p + '%'; if (p >= 100) setTimeout(() => pb.style.width = '0%', 500); } }
 function scrollToToday() { const todayStr = getSafeLocalDateStr(); const todayCell = document.getElementById(`cell-${todayStr}`); if (todayCell) { todayCell.scrollIntoView({ behavior: 'smooth', block: 'center' }); todayCell.click(); showToast('今日に移動したぞ。'); } else { const t = new Date(); fetchAndRenderMonth(t.getFullYear(), t.getMonth(), 'replace', false).then(() => { const retryCell = document.getElementById(`cell-${todayStr}`); if (retryCell) { retryCell.scrollIntoView({ behavior: 'smooth', block: 'center' }); retryCell.click(); showToast('今日に移動したぞ。'); } }); } }
 function closeAllModals() { document.querySelectorAll('.bottom-modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }
@@ -592,14 +597,27 @@ function renderMonthDOM(year, month, data, position) {
     
     const getEventDuration = (e) => { if (!e || !e.start || !e.end) return 0; if (e.start.date && e.end.date) { return new Date(e.end.date).getTime() - new Date(e.start.date).getTime(); } if (e.start.dateTime && e.end.dateTime) { return new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime(); } return 0; };
     
-    // ★大手術復旧：破壊されていたソートロジックを完全復活させ、最強の休日判定エンジンに接続
+// ★Phase 1改善（項目4）：連続する予定（2日以上）を最優先で上に固め、千切れを防ぐ最強のソート
     const sortedEvents = [...data.events].sort((a, b) => { 
+        const durA = getEventDuration(a); const durB = getEventDuration(b);
+        const isMultiA = durA > 86400000 ? 1 : 0; // 24時間(1日)より長いか
+        const isMultiB = durB > 86400000 ? 1 : 0;
+        if (isMultiA !== isMultiB) return isMultiB - isMultiA; // 連続予定を絶対的最優先
+        
         const isHolA = isHolidayEvent(a.summary) ? 1 : 0;
         const isHolB = isHolidayEvent(b.summary) ? 1 : 0;
-        if (isHolA !== isHolB) return isHolB - isHolA;
-        const durA = getEventDuration(a); const durB = getEventDuration(b); if (durA !== durB) return durB - durA; const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0; if (aAllDay !== bAllDay) return bAllDay - aAllDay; const tA = a.start && (a.start.dateTime || a.start.date) ? new Date(a.start.dateTime || a.start.date).getTime() : 0; const tB = b.start && (b.start.dateTime || b.start.date) ? new Date(b.start.dateTime || b.start.date).getTime() : 0; if (tA !== tB) return tA - tB; return (a.id || "").localeCompare(b.id || ""); 
+        if (isHolA !== isHolB) return isHolB - isHolA; // 次に休日スタンプ
+        
+        if (durA !== durB) return durB - durA; // 同じ属性なら期間が長い順
+        
+        const aAllDay = a.start && a.start.date ? 1 : 0; const bAllDay = b.start && b.start.date ? 1 : 0; 
+        if (aAllDay !== bAllDay) return bAllDay - aAllDay; 
+        
+        const tA = a.start && (a.start.dateTime || a.start.date) ? new Date(a.start.dateTime || a.start.date).getTime() : 0; 
+        const tB = b.start && (b.start.dateTime || b.start.date) ? new Date(b.start.dateTime || b.start.date).getTime() : 0; 
+        if (tA !== tB) return tA - tB; 
+        return (a.id || "").localeCompare(b.id || ""); 
     });
-
     const today = new Date(); const slotMap = {}; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; }
     sortedEvents.forEach(e => { if (!e.start) return; const occupiedDates = []; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; let isTargetDay = false; if (e.start.date) { isTargetDay = e.start.date === dateStr; } else if (e.start.dateTime) { const stD = new Date(e.start.dateTime); const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`; isTargetDay = stStr === dateStr; } if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } } if (occupiedDates.length === 0) return; let slotIndex = 0; while (true) { let isFree = true; for (const d of occupiedDates) { if (slotMap[d][slotIndex]) { isFree = false; break; } } if (isFree) break; slotIndex++; } for (const d of occupiedDates) { while (slotMap[d].length <= slotIndex) slotMap[d].push(null); slotMap[d][slotIndex] = e; } });
     
@@ -629,16 +647,21 @@ function renderMonthDOM(year, month, data, position) {
         }
         
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); 
-        // ★上の1マス（day-header）のスタイルに headerStyle を適用する
+// ★上の1マス（day-header）のスタイルに headerStyle を適用する
         dayEl.innerHTML = `<div class="day-header" style="${headerStyle}"><span class="day-num" style="${numStyle}">${i}</span></div>`;
+        
+        // ★Phase 1改善（項目7）：一日のセル表示制限
+        const MAX_DISPLAY = parseInt(localStorage.getItem('jero_max_disp') || '6');
+        let currentSlotIdx = 0; let hiddenCount = 0;
+
         slots.forEach(e => {
-            if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); return; }
+            if (currentSlotIdx >= MAX_DISPLAY) { if (e) hiddenCount++; currentSlotIdx++; return; } // 上限を超えたらカウントだけして描画スキップ
+            
+            if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); currentSlotIdx++; return; }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             let spanType = isEventSpanning(e, dateStr); 
-            // ★究極のハック：月を跨いだ「1日」のマスは、強制的に「スタートマス」として振る舞わせる
-            // ※異常精査による修正：span-end（1日で終わる予定）まで右に延長してしまう視覚バグを防ぐため、span-mid（まだ続く予定）の時だけ右に繋ぐ
             if (dateStr.endsWith('-01') && spanType === 'span-mid') { spanType = 'span-start'; }
-            else if (dateStr.endsWith('-01') && spanType === 'span-end') { spanType = 'single'; } // 1日で終わるなら、はみ出さずに単発の見た目に落ち着かせる
+            else if (dateStr.endsWith('-01') && spanType === 'span-end') { spanType = 'single'; } 
             
             const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
             
@@ -651,34 +674,41 @@ function renderMonthDOM(year, month, data, position) {
             
             if (spanType !== 'single') { 
                 div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; 
-                if (spanType === 'span-start') { 
-                    div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; 
-                } else if (spanType === 'span-mid') { 
-                    div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent';
-                } else if (spanType === 'span-end') { 
-                    div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent';
-                } 
+                if (spanType === 'span-start') { div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; } 
+                else if (spanType === 'span-mid') { div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent'; } 
+                else if (spanType === 'span-end') { div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent'; } 
             } else { 
                 div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; 
             }
-            if (isPendingInsert || isPendingUpdate) { div.style.border = `1px dashed ${txtColor}`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.3'; div.style.filter = 'grayscale(100%)'; } dayEl.appendChild(div);
-        });
-        if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
-            const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; const isPendingInsert = t._localId ? true : false; const isPendingDelete = t._pendingDelete ? true : false; const insertIcon = isPendingInsert ? '➕🔄 ' : ''; const deleteIcon = isPendingDelete ? '🗑️ ' : '';
+            if (isPendingInsert || isPendingUpdate) { div.style.border = `1px dashed ${txtColor}`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.3'; div.style.filter = 'grayscale(100%)'; } 
             
-            // ★修正: 上画面のタスク📎もクリック不可（表示のみ）にし、誤爆を防ぐ
-            let taskAttachIcon = '';
-            const parsedNotes = parseTaskAttachments(t.notes || '');
-            if (parsedNotes.files && parsedNotes.files.length > 0) {
-                taskAttachIcon = `<span style="margin-left:3px; opacity:0.8;">📎</span>`;
-            }
+            dayEl.appendChild(div);
+            currentSlotIdx++;
+        });
+
+        if (data.tasks) data.tasks.filter(t => t.due && t.due.includes(dateStr)).forEach(t => {
+            if (currentSlotIdx >= MAX_DISPLAY) { hiddenCount++; currentSlotIdx++; return; } // タスクも上限検知
+            
+            const div = document.createElement('div'); div.className = `task ${t.status === 'completed' ? 'completed' : ''}`; const tData = extractTaskData(t.notes); const pData = processSemanticText(t.title); const recurIcon = tData.recurrence ? '🔁 ' : ''; const isPendingInsert = t._localId ? true : false; const isPendingDelete = t._pendingDelete ? true : false; const insertIcon = isPendingInsert ? '➕🔄 ' : ''; const deleteIcon = isPendingDelete ? '🗑️ ' : '';
+            let taskAttachIcon = ''; const parsedNotes = parseTaskAttachments(t.notes || ''); if (parsedNotes.files && parsedNotes.files.length > 0) { taskAttachIcon = `<span style="margin-left:3px; opacity:0.8;">📎</span>`; }
             div.innerHTML = `<span style="opacity:0.8; pointer-events:none;">☑</span> <span style="pointer-events:none;">${deleteIcon}${insertIcon}${recurIcon}${pData.text}</span>${taskAttachIcon}`; 
             
             if (pData.style) { div.style.background = pData.style.bg; div.style.color = pData.style.txt; } else if (tData.colorId && GOOGLE_COLORS[tData.colorId]) { div.style.background = GOOGLE_COLORS[tData.colorId]; div.style.color = getContrastYIQ(GOOGLE_COLORS[tData.colorId]); }
-            div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; div.style.borderRadius = '3px'; div.style.fontSize = '10px'; div.style.boxSizing = 'border-box'; if (isPendingInsert) { div.style.border = `1px dashed var(--txt)`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.4'; div.style.filter = 'grayscale(100%)'; } dayEl.appendChild(div);
+            div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; div.style.borderRadius = '3px'; div.style.fontSize = '10px'; div.style.boxSizing = 'border-box'; if (isPendingInsert) { div.style.border = `1px dashed var(--txt)`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.4'; div.style.filter = 'grayscale(100%)'; } 
+            
+            dayEl.appendChild(div);
+            currentSlotIdx++;
         });
-        grid.appendChild(dayEl);
-    }
+
+        // ★隠れた予定がある場合「+N件」バッジを追加
+        if (hiddenCount > 0) {
+            const moreBadge = document.createElement('div');
+            moreBadge.innerHTML = `+${hiddenCount}件`;
+            moreBadge.style.cssText = 'font-size: 9px; font-weight: bold; color: #888; text-align: center; margin-top: 1px; padding: 1px 0; background: rgba(0,0,0,0.03); border-radius: 4px; pointer-events: none;';
+            dayEl.appendChild(moreBadge);
+        }
+
+        grid.appendChild(dayEl);    }
     const container = document.getElementById('calendar-wrapper'); if (position === 'append') container.appendChild(wrapper); else if (position === 'prepend') container.insertBefore(wrapper, container.firstChild); else if (position === 'replace') { const children = Array.from(container.children); const insertIndex = children.findIndex(c => { const [_, y, m] = c.id.split('-'); return parseInt(y) > year || (parseInt(y) === year && parseInt(m) > month); }); if (insertIndex === -1) container.appendChild(wrapper); else container.insertBefore(wrapper, children[insertIndex]); }
 }
 
