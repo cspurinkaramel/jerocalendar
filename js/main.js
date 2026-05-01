@@ -844,8 +844,38 @@ function openEditor(e = null) {
 function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); activeEventAttachments = activeEventAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
 function removeExistingTaskAttachment(el, fileId) { el.parentElement.remove(); activeTaskAttachments = activeTaskAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
 function closeEditor() { document.getElementById('editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('edit-attach-preview'); if(prev) prev.innerHTML = ''; pendingEventAttachments = []; activeEventAttachments = []; if (typeof resetAiEditState === 'function') resetAiEditState(); }
-function addUrlPrompt() { const url = prompt("追加するリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('edit-desc'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
-function addTaskUrlPrompt() { const url = prompt("追加するリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('task-edit-notes'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
+function addUrlPrompt() { const url = prompt("追加する一般のリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('edit-desc'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
+function addTaskUrlPrompt() { const url = prompt("追加する一般のリンク(URL)を入力してくれ:"); if (url) { const desc = document.getElementById('task-edit-notes'); desc.value = desc.value + (desc.value ? '\n' : '') + url; } }
+
+// ★Phase 2改善（項目2・3）：Driveリンクを自動解析し、サムネイル付き添付ファイルに変換するエンジン
+function addDriveLinkPrompt(type) {
+    const url = prompt("Google Driveの共有リンク(URL)を貼り付けてくれ:");
+    if (!url) return;
+    
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+    if (!match) { showToast('⚠️ DriveのIDが抽出できない。通常の「リンク」から追加してくれ。'); return; }
+    
+    const fileId = match[1];
+    const uid = Date.now() + Math.floor(Math.random()*1000);
+    const attachmentData = { mimeType: 'application/octet-stream', title: 'Driveファイル', fileUrl: url, fileId: fileId, uid: uid };
+    
+    const previewContainer = document.getElementById(type === 'event' ? 'edit-attach-preview' : 'task-attach-preview');
+    if (previewContainer) previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
+    
+    const imgDiv = document.createElement('div'); 
+    imgDiv.className = 'preview-item'; 
+    imgDiv.style.cssText = "position:relative; display:inline-block;";
+    
+    const targetArray = type === 'event' ? 'pendingEventAttachments' : 'pendingTaskAttachments';
+    if (type === 'event') pendingEventAttachments.push(attachmentData);
+    else pendingTaskAttachments.push(attachmentData);
+    
+    const thumbSrc = `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150`;
+    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); ${targetArray} = ${targetArray}.filter(a => a.uid !== ${uid}); showToast('🗑️ Driveリンクをキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+    
+    previewContainer.appendChild(imgDiv);
+    showToast('✅ Driveリンクを抽出し、添付チップとして追加したぞ。');
+}
 
 // ★複数ファイルを圧縮しながら安全にループ処理する
 async function handleImageUpload(event, previewId) {
