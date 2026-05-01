@@ -856,9 +856,7 @@ function openEditor(e = null) {
     const previewContainer = document.getElementById('edit-attach-preview');
     if (previewContainer) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
-        
-        // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
+        const safePdfIcon = SAFE_PDF_ICON;
 
         if (e && e.attachments && e.attachments.length > 0) {
             e.attachments.forEach(att => {
@@ -869,8 +867,8 @@ function openEditor(e = null) {
                     if (!mType || mType === 'application/octet-stream') { mType = (att.title && att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg'; }
                     activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: mType, fileId: fileId });
                     let isImg = mType.startsWith('image/');
-                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : SAFE_PDF_ICON);
-                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : safePdfIcon);
+                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
         }
@@ -880,19 +878,11 @@ function openEditor(e = null) {
                 let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
                 let mType = isImg ? 'image/jpeg' : 'application/pdf';
                 activeEventAttachments.push({ fileUrl: f.fileUrl, title: f.title, mimeType: mType, fileId: f.fileId });
-                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : SAFE_PDF_ICON;
-                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : safePdfIcon;
+                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
             }
         });
     }
-    selectColor(null, e && e.colorId ? e.colorId : ''); const isAllDay = e && e.start && e.start.date; document.getElementById('edit-allday').checked = !!isAllDay;
-    const startInput = document.getElementById('edit-start'); const endInput = document.getElementById('edit-end'); let st = new Date(); let ed = new Date(st.getTime() + 60 * 60 * 1000); if (selectedDateStr && !e) { st = new Date(selectedDateStr + 'T12:00'); ed = new Date(selectedDateStr + 'T13:00'); } if (e && e.start) { st = new Date(e.start.dateTime || e.start.date); ed = new Date(e.end.dateTime || e.end.date); if (isAllDay) ed.setDate(ed.getDate() - 1); }
-    startInput.type = isAllDay ? 'date' : 'datetime-local'; endInput.type = isAllDay ? 'date' : 'datetime-local';
-    if (isAllDay) { startInput.value = getSafeLocalDateStr(st); endInput.value = getSafeLocalDateStr(ed); } else { const tzOffset = st.getTimezoneOffset() * 60000; startInput.value = new Date(st.getTime() - tzOffset).toISOString().slice(0, 16); endInput.value = new Date(ed.getTime() - tzOffset).toISOString().slice(0, 16); }
-    document.getElementById('editor-title').innerText = e ? '予定の編集' : '新規予定'; document.getElementById('btn-delete').style.display = e ? 'block' : 'none'; document.getElementById('btn-duplicate').style.display = e ? 'block' : 'none'; const convertBtn = document.getElementById('btn-convert-task'); if (convertBtn) convertBtn.style.display = e ? 'block' : 'none'; renderIconPalette('event-icon-palette', 'edit-title');
-    
-    // ★既存添付ファイルの状態を記憶
-    initialEventAttachments = JSON.stringify(activeEventAttachments);
 }
 
 function removeExistingEventAttachment(el, fileId) { el.parentElement.remove(); activeEventAttachments = activeEventAttachments.filter(a => a.fileId !== fileId); showToast('🗑️ 添付を外したぞ（※保存で確定/Driveには残る）'); }
@@ -959,16 +949,15 @@ async function handleImageUpload(event, previewId) {
         const attachmentData = { mimeType: fileBlob.type || file.type || inferredMime, name: file.name, base64: base64Data, fileBlob: fileBlob, uid: uid };
         const imgDiv = document.createElement('div'); imgDiv.className = 'preview-item'; imgDiv.style.cssText = "position:relative; display:inline-block;";
         
-        // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
-        const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : SAFE_PDF_ICON;
+        const safePdfIcon = SAFE_PDF_ICON;
+        const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : safePdfIcon;
 
         if (previewId === 'edit-attach-preview') {
             pendingEventAttachments.push(attachmentData);
-            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments = pendingEventAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingEventAttachments = pendingEventAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
         } else {
             pendingTaskAttachments.push(attachmentData);
-            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments = pendingTaskAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+            imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); pendingTaskAttachments = pendingTaskAttachments.filter(a => a.uid !== ${uid}); showToast('🗑️ 追加予定の画像をキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
         }
         previewContainer.appendChild(imgDiv);
     }
@@ -1042,27 +1031,18 @@ function openTaskEditor(t = null) {
     const previewContainer = document.getElementById('task-attach-preview');
     if (previewContainer) {
         previewContainer.innerHTML = ''; previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
-        
-        // ★完全エスケープ済みの安全なPDFアイコンSVG（文法破壊を防止）
-        const SAFE_PDF_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ff3b30%22%3E%3Cpath d=%22M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z%22/%3E%3C/svg%3E";
+        const safePdfIcon = SAFE_PDF_ICON;
 
         parsed.files.forEach(f => {
             let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
             let currentMime = isImg ? 'image/jpeg' : 'application/pdf';
-            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : SAFE_PDF_ICON;
-            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = SAFE_PDF_ICON; } }
+            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : safePdfIcon;
+            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = safePdfIcon; } }
             // ★真の記憶継承：MIMEタイプを欠落させずに変換器へ引き渡す
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId, mimeType: currentMime });
-            previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+            previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${safePdfIcon}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
     }
-    selectTaskColor(null, t ? extractTaskData(t.notes).colorId : '');
-    const dueInput = document.getElementById('task-edit-due'); if (t && t.due) { dueInput.value = getSafeLocalDateStr(new Date(t.due)); } else { dueInput.value = selectedDateStr || getSafeLocalDateStr(); }
-    document.getElementById('task-editor-title').innerText = t ? 'タスクの編集' : '新規タスク'; document.getElementById('task-btn-delete').style.display = t ? 'block' : 'none'; const convertBtn = document.getElementById('btn-convert-event'); if (convertBtn) convertBtn.style.display = t ? 'block' : 'none'; renderIconPalette('task-icon-palette', 'task-edit-title');
-    
-    // ★既存添付ファイルの状態を記憶（修正4の補完）
-    initialTaskAttachments = JSON.stringify(activeTaskAttachments);
-}
 
 function closeTaskEditor() { document.getElementById('task-editor-modal').classList.remove('active'); if (!document.getElementById('daily-modal').classList.contains('active')) { document.getElementById('overlay').classList.remove('active'); } const prev = document.getElementById('task-attach-preview'); if(prev) prev.innerHTML = ''; pendingTaskAttachments = []; activeTaskAttachments = []; if (typeof resetAiEditState === 'function') resetAiEditState(); }
 
