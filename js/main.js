@@ -441,18 +441,20 @@ function getCardHtml(type, item) {
     let driveThumbHtml = '';
     let fileItems = [];
     
-    if (isEvent && item.attachments && item.attachments.length > 0) {
-        item.attachments.forEach(att => {
-            // ★URLが崩れていても、直接IDを持っている場合はそちらを優先する絶対防壁
-            let fileId = att.fileId || null;
-            if (!fileId && att.fileUrl) {
-                const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/);
-                if (match) fileId = match[1];
-            }
-            if (fileId) {
-                let isImg = att.mimeType && att.mimeType.startsWith('image/');
-                if (!isImg && att.title) { isImg = !att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i); }
-                fileItems.push({ id: fileId, title: att.title || 'ファイル', isImg: isImg, base64: att.base64, mimeType: att.mimeType });
+    if (isEvent) {
+        if (item.attachments && item.attachments.length > 0) {
+            item.attachments.forEach(att => {
+                let fileId = att.fileId || null;
+                if (!fileId && att.fileUrl) { const match = att.fileUrl.match(/d\/([a-zA-Z0-9_-]+)/) || att.fileUrl.match(/id=([a-zA-Z0-9_-]+)/); if (match) fileId = match[1]; }
+                if (fileId) { let isImg = att.mimeType && att.mimeType.startsWith('image/'); if (!isImg && att.title) { isImg = !att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i); } fileItems.push({ id: fileId, title: att.title || 'ファイル', isImg: isImg, base64: att.base64, mimeType: att.mimeType }); }
+            });
+        }
+        // ★Googleに弾かれたDriveリンクも、メモ欄からサルベージして強制的にチップ化する
+        const parsedEventNotes = parseTaskAttachments(item.description || '');
+        parsedEventNotes.files.forEach(f => {
+            if (!fileItems.some(existing => existing.id === f.fileId)) {
+                let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
+                fileItems.push({ id: f.fileId, title: f.title, isImg: isImg, base64: null, mimeType: isImg ? 'image/jpeg' : 'application/pdf' });
             }
         });
     } else if (!isEvent) {
@@ -797,7 +799,10 @@ function openEditor(e = null) {
     if (e && (e._localId || e._pendingUpdate || e._pendingDelete || (e.id && String(e.id).startsWith('dummy_')))) { showToast('⏳ サーバーと通信中のデータだ。完了するまで少し待て。'); return; }
     document.getElementById('overlay').classList.add('active'); document.getElementById('editor-modal').classList.add('active');
     document.getElementById('edit-id').value = e ? e.id : ''; document.getElementById('edit-title').value = e ? e.summary || '' : ''; document.getElementById('edit-loc').value = e ? e.location || '' : '';
-    document.getElementById('edit-desc').value = e ? (e.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/, '').trim() : '';
+    
+    // ★タスクの解析器を流用し、メモ欄のURLをクリーンに分離する
+    const parsedDesc = parseTaskAttachments(e ? e.description || '' : '');
+    document.getElementById('edit-desc').value = parsedDesc.cleanText;
     
     // ★予定の死角保護1：既存の繰り返しルール(RRULE)を隠しフィールドに退避し、保存時の消失（単発化）を防ぐ
     const recRuleInput = document.getElementById('edit-recurrence-rule');
@@ -826,10 +831,20 @@ function openEditor(e = null) {
                     activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: mType, fileId: fileId });
                     let isImg = mType.startsWith('image/');
                     const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
-                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
         }
+        // ★メモ欄からサルベージしたDriveリンクも同じくUIに復元する
+        parsedDesc.files.forEach(f => {
+            if (!activeEventAttachments.some(a => a.fileId === f.fileId)) {
+                let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
+                let mType = isImg ? 'image/jpeg' : 'application/pdf';
+                activeEventAttachments.push({ fileUrl: f.fileUrl, title: f.title, mimeType: mType, fileId: f.fileId });
+                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
+                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+            }
+        });
     }
     selectColor(null, e && e.colorId ? e.colorId : ''); const isAllDay = e && e.start && e.start.date; document.getElementById('edit-allday').checked = !!isAllDay;
     const startInput = document.getElementById('edit-start'); const endInput = document.getElementById('edit-end'); let st = new Date(); let ed = new Date(st.getTime() + 60 * 60 * 1000); if (selectedDateStr && !e) { st = new Date(selectedDateStr + 'T12:00'); ed = new Date(selectedDateStr + 'T13:00'); } if (e && e.start) { st = new Date(e.start.dateTime || e.start.date); ed = new Date(e.end.dateTime || e.end.date); if (isAllDay) ed.setDate(ed.getDate() - 1); }
@@ -1342,13 +1357,12 @@ async function executeApiAction(action, isRetry = false) {
         if (typeof setProgress === 'function') setProgress(100);
     }
 
-    // ★ネットワーク層の最終変換（タスク専用）：GASへ送る直前に、確実にURLをテキストに再結合する
-    if (payload.type === 'task') {
-        payload.description = (payload.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim();
-        if (payload.keptAttachments && payload.keptAttachments.length > 0) {
-            const fileLinks = payload.keptAttachments.map(a => `📁 [${a.title || 'ファイル'}] ${a.fileUrl}`).join('\n');
-            payload.description += (payload.description ? '\n\n' : '') + '📁 添付ファイル:\n' + fileLinks;
-        }
+    // ★ネットワーク層の最終変換：GASへ送る直前に、確実にURLをテキストに再結合する（予定・タスク共通）
+    // Google APIが無言でDriveリンクを弾く現象を完全に防ぐため、必ずメモ欄(description)にも刻み込む
+    payload.description = (payload.description || '').replace(/\[写真添付あり\]/g, '').replace(/📁 添付ファイル:[\s\S]*/g, '').trim();
+    if (payload.keptAttachments && payload.keptAttachments.length > 0) {
+        const fileLinks = payload.keptAttachments.map(a => `📁 [${a.title || 'ファイル'}] ${a.fileUrl}`).join('\n');
+        payload.description += (payload.description ? '\n\n' : '') + '📁 添付ファイル:\n' + fileLinks;
     }
 
     try {
