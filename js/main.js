@@ -505,7 +505,7 @@ function getCardHtml(type, item) {
             const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : SAFE_PDF_ICON);
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
-                    <img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
+                    <img src="${thumbSrc}" onerror="this.onerror=null; this.src=SAFE_PDF_ICON" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
                 </div>`;
         });
         driveThumbHtml += '</div>';
