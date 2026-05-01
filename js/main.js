@@ -510,8 +510,6 @@ if (fileItems.length > 0) {
                 </div>`;
         });
         driveThumbHtml += '</div>';
-    });
-        driveThumbHtml += '</div>';
     }
 
     const safeData = encodeURIComponent(JSON.stringify(item));
