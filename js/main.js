@@ -856,22 +856,25 @@ function addDriveLinkPrompt(type) {
     if (!match) { showToast('⚠️ DriveのIDが抽出できない。通常の「リンク」から追加してくれ。'); return; }
     
     const fileId = match[1];
-    const uid = Date.now() + Math.floor(Math.random()*1000);
-    const attachmentData = { mimeType: 'application/octet-stream', title: 'Driveファイル', fileUrl: url, fileId: fileId, uid: uid };
+    // ★バグ修正: 新規アップロード待ち(pending)ではなく、既存ファイル(active)として扱うことで保存時の消失を防ぐ
+    const attachmentData = { mimeType: 'application/pdf', title: 'Driveファイル', fileUrl: url, fileId: fileId };
     
     const previewContainer = document.getElementById(type === 'event' ? 'edit-attach-preview' : 'task-attach-preview');
     if (previewContainer) previewContainer.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;";
     
     const imgDiv = document.createElement('div'); 
     imgDiv.className = 'preview-item'; 
-    imgDiv.style.cssText = "position:relative; display:inline-block;";
+    imgDiv.style.cssText = "position:relative; display:inline-block; cursor:pointer;";
+    imgDiv.setAttribute('onclick', `openImageViewer('${fileId}')`);
     
-    const targetArray = type === 'event' ? 'pendingEventAttachments' : 'pendingTaskAttachments';
-    if (type === 'event') pendingEventAttachments.push(attachmentData);
-    else pendingTaskAttachments.push(attachmentData);
+    if (type === 'event') activeEventAttachments.push(attachmentData);
+    else activeTaskAttachments.push(attachmentData);
     
+    const removeFunc = type === 'event' ? 'removeExistingEventAttachment' : 'removeExistingTaskAttachment';
     const thumbSrc = `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150`;
-    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="this.parentElement.remove(); ${targetArray} = ${targetArray}.filter(a => a.uid !== ${uid}); showToast('🗑️ Driveリンクをキャンセルした。');" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+    
+    // onerror でPDFアイコンにフォールバック。クリック時の削除処理も既存ファイルの解除関数に委譲する
+    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); ${removeFunc}(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
     
     previewContainer.appendChild(imgDiv);
     showToast('✅ Driveリンクを抽出し、添付チップとして追加したぞ。');
