@@ -85,6 +85,35 @@ let currentViewerFileId = null;
 let viewerZoom = { scale: 1, x: 0, y: 0 };
 
 async function openImageViewer(fileId) {
+    // ★大手術：PDFなどの「画像じゃないファイル」を引いた場合は、ビューアーの黒画面を開かずに直接Driveへ飛ばす
+    let isImg = true; let foundAtt = null;
+    if (typeof activeEventAttachments !== 'undefined') foundAtt = activeEventAttachments.find(a => a.fileId === fileId) || foundAtt;
+    if (typeof activeTaskAttachments !== 'undefined') foundAtt = activeTaskAttachments.find(a => a.fileId === fileId) || foundAtt;
+    if (!foundAtt) {
+        for (const key in dataCache) {
+            const evs = dataCache[key].events || [];
+            for (const e of evs) {
+                if (e.attachments) { const m = e.attachments.find(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId))); if (m) { foundAtt = m; break; } }
+                const p = parseTaskAttachments(e.description || ''); const m = p.files.find(f => f.fileId === fileId); if (m) { foundAtt = { title: m.title, mimeType: m.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg' }; break; }
+            }
+            if (foundAtt) break;
+            const tks = dataCache[key].tasks || [];
+            for (const t of tks) { const p = parseTaskAttachments(t.notes || ''); const m = p.files.find(f => f.fileId === fileId); if (m) { foundAtt = { title: m.title, mimeType: m.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg' }; break; } }
+            if (foundAtt) break;
+        }
+    }
+    if (foundAtt) {
+        if (foundAtt.mimeType && !foundAtt.mimeType.startsWith('image/')) isImg = false;
+        else if (foundAtt.title && foundAtt.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) isImg = false;
+        else if (foundAtt.isImg === false) isImg = false;
+    }
+    
+    // 画像以外なら別タブでDriveを開いて、ビューアー処理はここで打ち切る
+    if (!isImg && !fileId.startsWith('dummy_')) {
+        window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank');
+        return;
+    }
+
     const viewer = document.getElementById('img-viewer'); const img = document.getElementById('img-viewer-src'); const driveBtn = document.getElementById('img-viewer-drive-btn');
     if (!viewer || !img) return;
     
@@ -472,7 +501,7 @@ function getCardHtml(type, item) {
         // ★修正: 横スクロール可能にし、画像のみをスタイリッシュに並べる
         driveThumbHtml = '<div style="display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px; margin-top:6px; padding-bottom:4px; padding-left:2px; -webkit-overflow-scrolling:touch;">';
         fileItems.forEach(f => {
-            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
+            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png');
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
                     <img src="${thumbSrc}" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
@@ -830,8 +859,8 @@ function openEditor(e = null) {
                     if (!mType || mType === 'application/octet-stream') { mType = (att.title && att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg'; }
                     activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: mType, fileId: fileId });
                     let isImg = mType.startsWith('image/');
-                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg');
-                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png');
+                    previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
         }
@@ -841,8 +870,8 @@ function openEditor(e = null) {
                 let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
                 let mType = isImg ? 'image/jpeg' : 'application/pdf';
                 activeEventAttachments.push({ fileUrl: f.fileUrl, title: f.title, mimeType: mType, fileId: f.fileId });
-                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
-                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
+                const thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png';
+                previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
             }
         });
     }
@@ -889,7 +918,7 @@ function addDriveLinkPrompt(type) {
     const thumbSrc = `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150`;
     
     // onerror でPDFアイコンにフォールバック。クリック時の削除処理も既存ファイルの解除関数に委譲する
-    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); ${removeFunc}(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
+    imgDiv.innerHTML = `<img src="${thumbSrc}" onerror="this.onerror=null; this.src='https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); ${removeFunc}(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</div>`;
     
     previewContainer.appendChild(imgDiv);
     showToast('✅ Driveリンクを抽出し、添付チップとして追加したぞ。');
@@ -919,7 +948,7 @@ async function handleImageUpload(event, previewId) {
         const inferredMime = file.name.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'application/octet-stream';
         const attachmentData = { mimeType: fileBlob.type || file.type || inferredMime, name: file.name, base64: base64Data, fileBlob: fileBlob, uid: uid };
         const imgDiv = document.createElement('div'); imgDiv.className = 'preview-item'; imgDiv.style.cssText = "position:relative; display:inline-block;";
-        const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
+        const thumbSrc = file.type.startsWith('image/') ? `data:${file.type};base64,${base64Data}` : 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png';
 
         if (previewId === 'edit-attach-preview') {
             pendingEventAttachments.push(attachmentData);
@@ -1003,8 +1032,8 @@ function openTaskEditor(t = null) {
         parsed.files.forEach(f => {
             let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
             let currentMime = isImg ? 'image/jpeg' : 'application/pdf';
-            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
-            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg'; } }
+            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png';
+            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType; if (!currentMime || currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png'; } }
             // ★真の記憶継承：MIMEタイプを欠落させずに変換器へ引き渡す
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId, mimeType: currentMime });
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
@@ -1507,7 +1536,7 @@ async function runStorageScan() {
         } else {
             let html = `<div style="color:#ff3b30; font-weight:bold; margin-bottom: 5px;">⚠️ ${orphanFilesCache.length}件の孤立ファイルを発見した。</div>`;
             orphanFilesCache.forEach(f => {
-                const thumbSrc = f.mimeType.startsWith('image/') ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w100-h100` : 'https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg';
+                const thumbSrc = f.mimeType.startsWith('image/') ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w100-h100` : 'https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_3_pdf_x128.png';
                 html += `
                 <div style="background:var(--head-bg); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px;">
                     <img src="${thumbSrc}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; background:#f0f0f0;">
