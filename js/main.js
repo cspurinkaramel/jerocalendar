@@ -463,10 +463,17 @@ async function processSyncQueue(isSilent = false) {
 function getCardHtml(type, item) {
     const isEvent = type === 'event';
     const colorId = isEvent ? item.colorId : extractTaskData(item.notes).colorId;
-    const color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
+    let color = isEvent ? (colorId ? GOOGLE_COLORS[colorId] : 'var(--accent)') : (colorId ? GOOGLE_COLORS[colorId] : '#34c759');
     const isPendingInsert = item._localId ? true : false; const isPendingUpdate = item._pendingUpdate ? true : false; const isPendingDelete = item._pendingDelete ? true : false;
     let stateIcon = ''; if (isPendingInsert) stateIcon = ' ➕🔄'; if (isPendingUpdate) stateIcon = ' 📝🔄'; if (isPendingDelete) stateIcon = ' 🗑️';
-    const title = (isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)')) + stateIcon;
+    
+    // ★詳細カードにも変換エンジンを適用し、タイトルとカラーバーをスタンプ色で上書きする
+    let rawTitle = isEvent ? (item.summary || '(無名予定)') : (item.title || '(無名タスク)');
+    const pData = processSemanticText(rawTitle);
+    const title = pData.text + stateIcon;
+    if (pData.style) {
+        color = pData.style.bg; // カード左端のカラーバーをスタンプ色で染める
+    }
 
     // ★Drive Nexus：添付ファイルの美しいチップ化（PDF対応）
     let driveThumbHtml = '';
@@ -578,19 +585,27 @@ function processSemanticText(text) {
     if (!text) return { text: "", style: null }; 
     let resText = text; let matchStyle = null; 
 
-    // 1. まずは従来の「装飾辞書」を反映する（テキストの置換と、基本の色の適用）
-    for (const item of advancedDict) { 
-        let matched = false; 
-        for (const key of item.keys) { 
-            if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } 
-        } 
-        if (matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } 
-    } 
+    // ★部分一致バグの粉砕：辞書とスタンプの全キーワードを集め、文字数の「長い順」にソートする
+    let allKeywords = [];
     
-    // 2. 次に「スタンプ」を反映する（辞書と共存させつつ、色はスタンプのものを【最優先】で上書きする）
     if (typeof customStamps !== 'undefined') {
-        for (const stamp of customStamps) {
-            if (resText.includes(stamp.insertText)) {
+        customStamps.forEach(stamp => {
+            if (stamp.insertText) allKeywords.push({ type: 'stamp', keyword: stamp.insertText, data: stamp });
+        });
+    }
+    if (typeof advancedDict !== 'undefined') {
+        advancedDict.forEach(item => {
+            if (item.keys) item.keys.forEach(key => allKeywords.push({ type: 'dict', keyword: key, data: item }));
+        });
+    }
+    
+    // 文字数の降順（長いものから先に処理）
+    allKeywords.sort((a, b) => b.keyword.length - a.keyword.length);
+
+    for (const item of allKeywords) {
+        if (resText.includes(item.keyword)) {
+            if (item.type === 'stamp') {
+                const stamp = item.data;
                 resText = resText.split(stamp.insertText).join(stamp.icon + " " + stamp.label);
                 
                 let hexColor = stamp.baseColor;
@@ -601,12 +616,14 @@ function processSemanticText(text) {
                         const g = parseInt(match[2]).toString(16).padStart(2, '0');
                         const b = parseInt(match[3]).toString(16).padStart(2, '0');
                         hexColor = `#${r}${g}${b}`;
-                    } else {
-                        hexColor = '#0a84ff';
-                    }
+                    } else { hexColor = '#0a84ff'; }
                 }
                 const txtColor = getContrastYIQ(hexColor);
-                matchStyle = { bg: hexColor, txt: txtColor }; // ★スタンプの色で強制上書き
+                if (!matchStyle) matchStyle = { bg: hexColor, txt: txtColor }; // 最初に見つけた色を最優先
+            } else if (item.type === 'dict') {
+                const dictItem = item.data;
+                resText = resText.split(item.keyword).join(dictItem.icon);
+                if (!matchStyle) matchStyle = { bg: dictItem.bg, txt: dictItem.txt };
             }
         }
     }
