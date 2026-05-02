@@ -574,7 +574,35 @@ function removeDictItem(idx) { advancedDict.splice(idx, 1); saveDict(); }
 function openEmojiPicker() { document.getElementById('emoji-picker-modal').classList.add('active'); const container = document.getElementById('emoji-list-container'); if (container.innerHTML !== '') return; let html = ''; EMOJI_LIST.forEach(group => { html += `<div style="font-size:12px; font-weight:bold; color:#888; margin-top:10px; margin-bottom:5px;">${group.cat}</div><div style="display:flex; flex-wrap:wrap; gap:8px;">`; group.icons.forEach(icon => { html += `<div style="font-size:26px; padding:10px; background:var(--head-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer;" onclick="selectEmoji('${icon}')">${icon}</div>`; }); html += `</div>`; }); html += `<div style="margin-top:20px; text-align:center;"><button class="btn-gray" style="padding:10px 20px; border-radius:20px; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="document.getElementById('dict-edit-icon').innerText = '➕ 選択'; closeEmojiPicker(); showToast('一覧にない場合は手入力してくれ。');">その他の絵文字を使う</button></div>`; container.innerHTML = html; }
 function closeEmojiPicker() { document.getElementById('emoji-picker-modal').classList.remove('active'); }
 function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText = icon; closeEmojiPicker(); }
-function processSemanticText(text) { if (!text) return { text: "", style: null }; let resText = text; let matchStyle = null; for (const item of advancedDict) { let matched = false; for (const key of item.keys) { if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } } if (matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } } return { text: resText, style: matchStyle }; }
+function processSemanticText(text) { 
+    if (!text) return { text: "", style: null }; 
+    let resText = text; let matchStyle = null; 
+    
+    // ★スタンプ機能の優先反映：ハンコの文字があれば、カレンダーの帯をその色に染める
+    if (typeof customStamps !== 'undefined') {
+        for (const stamp of customStamps) {
+            if (resText.includes(stamp.insertText)) {
+                // 予定の文字を「アイコン＋名前」に置き換えて視認性を上げる（例：「休)」→「🏖️ 休」）
+                resText = resText.split(stamp.insertText).join(stamp.icon + " " + stamp.label);
+                // カレンダーの帯には、透過ではないベースカラー（濃い色）を適用し、文字色は自動計算(白か黒)
+                const baseHex = stamp.baseColor || rgbaToHexForStamp(stamp.bg); // 古いデータへの後方互換
+                const txtColor = getContrastYIQ(baseHex);
+                if (!matchStyle) matchStyle = { bg: baseHex, txt: txtColor };
+                return { text: resText, style: matchStyle }; // ハンコが最優先
+            }
+        }
+    }
+
+    // 従来の装飾辞書の反映
+    for (const item of advancedDict) { 
+        let matched = false; 
+        for (const key of item.keys) { 
+            if (resText.includes(key)) { resText = resText.split(key).join(item.icon); matched = true; } 
+        } 
+        if (matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } 
+    } 
+    return { text: resText, style: matchStyle }; 
+}
 function extractTaskData(notes) { if (!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
 function initColorPicker() { const picker = document.getElementById('color-picker'); if (!picker) return; picker.innerHTML = `<div class="color-opt selected" style="background:var(--accent)" onclick="selectColor(this, '')"></div>`; Object.keys(GOOGLE_COLORS).forEach(id => { picker.innerHTML += `<div class="color-opt" style="background:${GOOGLE_COLORS[id]}" onclick="selectColor(this, '${id}')"></div>`; }); }
 function selectColor(el, id) { document.querySelectorAll('#color-picker .color-opt').forEach(c => c.classList.remove('selected')); if (el) { el.classList.add('selected'); } else { document.querySelectorAll('#color-picker .color-opt').forEach(c => { if ((id === '' && c.style.background === 'var(--accent)') || c.getAttribute('onclick').includes(`'${id}'`)) c.classList.add('selected'); }); } selectedColorId = id; }
@@ -1907,13 +1935,13 @@ function renderStampSettingsUI() {
     customStamps.forEach((stamp, idx) => {
         const el = document.createElement('div');
         el.className = 'dict-item';
+        // ★実際のハンコと全く同じデザインのプレビューを生成する
         el.innerHTML = `
             <div class="dict-info">
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <span style="font-size:20px;">${stamp.icon}</span>
-                    <span style="font-weight:bold;">${stamp.label}</span>
+                <div style="padding:4px 10px; border-radius:8px; background:${stamp.bg}; border:1px solid ${stamp.border}; color:${stamp.color}; font-size:14px; display:inline-flex; align-items:center; gap:6px;">
+                    <span>${stamp.icon}</span><span style="font-weight:bold;">${stamp.label}</span>
                 </div>
-                <div style="font-size:11px; color:#888;">印字: ${stamp.insertText}</div>
+                <div style="font-size:11px; color:#888; margin-top:6px;">印字: ${stamp.insertText}</div>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px;">
                 <button class="dict-btn-edit" onclick="openStampEditor(${idx})">編集</button>
@@ -1984,9 +2012,10 @@ function saveStampItem() {
 
     if (!insertText || !label || !icon) { showToast('文字、名前、アイコンは必須だ。'); return; }
 
+// 【修正後】★baseColorを追加
     const newItem = { 
         id: idx >= 0 ? customStamps[idx].id : 'stamp_' + Date.now(), 
-        icon, label, bg, border, color: 'var(--txt)', insertText 
+        icon, label, bg, border, color: 'var(--txt)', insertText, baseColor: baseHex 
     };
 
     if (idx >= 0) customStamps[idx] = newItem;
