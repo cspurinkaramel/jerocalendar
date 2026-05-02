@@ -577,34 +577,8 @@ function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText
 function processSemanticText(text) { 
     if (!text) return { text: "", style: null }; 
     let resText = text; let matchStyle = null; 
-    
-    // ★スタンプ機能の優先反映：ハンコの文字があれば、カレンダーの帯をその色に染める
-    if (typeof customStamps !== 'undefined') {
-        for (const stamp of customStamps) {
-            if (resText.includes(stamp.insertText)) {
-                resText = resText.split(stamp.insertText).join(stamp.icon + " " + stamp.label);
-                // ★バグ修正：必ず16進数の濃い色（baseColor）を抽出し、確実に背景色として適用する
-                let hexColor = stamp.baseColor;
-                if (!hexColor) {
-                    // 古いデータ（baseColorが無い場合）は bg (rgba) から無理やり HEX を生成する
-                    const match = stamp.bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-                    if (match) {
-                        const r = parseInt(match[1]).toString(16).padStart(2, '0');
-                        const g = parseInt(match[2]).toString(16).padStart(2, '0');
-                        const b = parseInt(match[3]).toString(16).padStart(2, '0');
-                        hexColor = `#${r}${g}${b}`;
-                    } else {
-                        hexColor = '#0a84ff'; // 失敗時の最終防衛ライン
-                    }
-                }
-                const txtColor = getContrastYIQ(hexColor);
-                if (!matchStyle) matchStyle = { bg: hexColor, txt: txtColor };
-                return { text: resText, style: matchStyle }; 
-            }
-        }
-    }
 
-    // 従来の装飾辞書の反映
+    // 1. まずは従来の「装飾辞書」を反映する（テキストの置換と、基本の色の適用）
     for (const item of advancedDict) { 
         let matched = false; 
         for (const key of item.keys) { 
@@ -612,6 +586,31 @@ function processSemanticText(text) {
         } 
         if (matched && !matchStyle) { matchStyle = { bg: item.bg, txt: item.txt }; } 
     } 
+    
+    // 2. 次に「スタンプ」を反映する（辞書と共存させつつ、色はスタンプのものを【最優先】で上書きする）
+    if (typeof customStamps !== 'undefined') {
+        for (const stamp of customStamps) {
+            if (resText.includes(stamp.insertText)) {
+                resText = resText.split(stamp.insertText).join(stamp.icon + " " + stamp.label);
+                
+                let hexColor = stamp.baseColor;
+                if (!hexColor) {
+                    const match = stamp.bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (match) {
+                        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+                        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+                        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+                        hexColor = `#${r}${g}${b}`;
+                    } else {
+                        hexColor = '#0a84ff';
+                    }
+                }
+                const txtColor = getContrastYIQ(hexColor);
+                matchStyle = { bg: hexColor, txt: txtColor }; // ★スタンプの色で強制上書き
+            }
+        }
+    }
+
     return { text: resText, style: matchStyle }; 
 }
 function extractTaskData(notes) { if (!notes) return { colorId: "", recurrence: "", cleanNotes: "" }; let colorId = "", recurrence = "", cleanNotes = notes; const cMatch = cleanNotes.match(/\[c:(\d+)\]/); if (cMatch) { colorId = cMatch[1]; cleanNotes = cleanNotes.replace(/\[c:\d+\]/, ''); } const rMatch = cleanNotes.match(/\[r:([A-Z]+)\]/); if (rMatch) { recurrence = rMatch[1]; cleanNotes = cleanNotes.replace(/\[r:[A-Z]+\]/, ''); } return { colorId, recurrence, cleanNotes: cleanNotes.trim() }; }
@@ -856,7 +855,42 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
 // ==========================================
 // 7. エディタ UI (完全非同期マルチアップロード)
 // ==========================================
-function renderIconPalette(targetId, inputId) { const palette = document.getElementById(targetId); if (!palette) return; palette.innerHTML = ''; advancedDict.forEach(item => { if (!item.icon || !item.keys || item.keys.length === 0) return; const prefix = item.keys[0]; const btn = document.createElement('div'); btn.innerHTML = `<span style="font-size:18px;">${item.icon}</span><span style="font-size:10px; color:#666; margin-left:4px; font-weight:bold;">${prefix}</span>`; btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;`; btn.onclick = () => { const inputEl = document.getElementById(inputId); if (!inputEl.value.startsWith(prefix)) { inputEl.value = prefix + " " + inputEl.value; } }; palette.appendChild(btn); }); }
+function renderIconPalette(targetId, inputId) { 
+    const palette = document.getElementById(targetId); if (!palette) return; 
+    palette.innerHTML = ''; 
+    
+    // ① 辞書データのボタンを配置
+    advancedDict.forEach(item => { 
+        if (!item.icon || !item.keys || item.keys.length === 0) return; 
+        const prefix = item.keys[0]; 
+        const btn = document.createElement('div'); 
+        btn.innerHTML = `<span style="font-size:18px;">${item.icon}</span><span style="font-size:10px; color:#666; margin-left:4px; font-weight:bold;">${prefix}</span>`; 
+        btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: var(--head-bg); border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);`; 
+        btn.onclick = () => { 
+            const inputEl = document.getElementById(inputId); 
+            if (!inputEl.value.includes(prefix)) { inputEl.value = prefix + " " + inputEl.value; } 
+        }; 
+        palette.appendChild(btn); 
+    }); 
+
+    // ② スタンプデータのボタンも連動して配置（デザインはスタンプの透明色を活かす）
+    if (typeof customStamps !== 'undefined') {
+        customStamps.forEach(stamp => {
+            if (!stamp.icon || !stamp.insertText) return;
+            const btn = document.createElement('div');
+            btn.innerHTML = `<span style="font-size:18px;">${stamp.icon}</span><span style="font-size:10px; color:${stamp.baseColor || '#666'}; margin-left:4px; font-weight:bold;">${stamp.label}</span>`;
+            btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: ${stamp.bg || 'var(--head-bg)'}; border: 1px solid ${stamp.border || 'var(--border)'}; border-radius: 8px; flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);`;
+            btn.onclick = () => { 
+                const inputEl = document.getElementById(inputId); 
+                if (!inputEl.value.includes(stamp.insertText)) { 
+                    // スタンプは既存の文字があれば末尾に、無ければそのまま追加する
+                    inputEl.value = inputEl.value ? inputEl.value + " " + stamp.insertText : stamp.insertText; 
+                } 
+            };
+            palette.appendChild(btn);
+        });
+    }
+}
 
 // ★退避配列（保持する既存データ群と、新規追加するデータ群）
 let activeEventAttachments = []; let activeTaskAttachments = [];
