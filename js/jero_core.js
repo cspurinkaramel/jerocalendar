@@ -554,3 +554,122 @@ async function executeAiBatch() {
     currentAiDrafts = [];
     btn.disabled = false; btn.innerText = "✅ 選択した項目を一括登録する";
 }
+// ==========================================
+// ★ Jero Core: 超・自動予定登録エンジン (Phase 4 - Route A)
+// ==========================================
+
+function addChatMessage(sender, text) {
+    const history = document.getElementById('chat-history');
+    if (!history) return;
+    const msgDiv = document.createElement('div');
+    msgDiv.style.cssText = `max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; word-wrap: break-word;`;
+    if (sender === 'user') {
+        msgDiv.style.alignSelf = 'flex-end';
+        msgDiv.style.background = 'var(--accent)';
+        msgDiv.style.color = '#fff';
+        msgDiv.innerText = text;
+    } else {
+        msgDiv.style.alignSelf = 'flex-start';
+        msgDiv.style.background = 'var(--head-bg)';
+        msgDiv.style.color = 'var(--txt)';
+        msgDiv.style.border = '1px solid var(--border)';
+        msgDiv.innerHTML = text.replace(/\n/g, '<br>'); 
+    }
+    history.appendChild(msgDiv);
+    history.scrollTop = history.scrollHeight;
+}
+
+async function unlockAudioAndSend() {
+    const inputEl = document.getElementById('chat-input');
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    const apiKey = localStorage.getItem('jero_gemini_key');
+    if (!apiKey) {
+        showToast('⚠️ 設定画面(⚙️)からGeminiのAPIキーを登録してくれ。');
+        return;
+    }
+
+    inputEl.value = '';
+    inputEl.style.height = 'auto'; // 高さをリセット
+    addChatMessage('user', text);
+    
+    const loadingId = 'loading_' + Date.now();
+    addChatMessage('ai', `<span id="${loadingId}">脳内会議中だ...🐈💨</span>`);
+
+    try {
+        // ★現在時刻をAIに叩き込み、相対的な日付（明日、来週など）を正確に計算させる
+        const now = new Date();
+        const days = ['日', '月', '火', '水', '木', '金', '土'];
+        const timeContext = `現在の正確な日時は ${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日(${days[now.getDay()]}) ${now.getHours()}時${now.getMinutes()}分 だ。これを基準に日付を計算しろ。`;
+        
+        const customPrompt = localStorage.getItem('jero_gemini_prompt') || '';
+
+        // ★JSON出力の絶対強制（Geminiにフォーマットを厳守させる最強のプロンプト）
+        const systemPrompt = `
+${customPrompt}
+${timeContext}
+
+【絶対命令】
+ユーザーの入力から「予定(event)」または「タスク(task)」を抽出し、以下のJSON配列形式で出力しろ。
+JSON以外の余計な挨拶や説明は一切不要だ。データが抽出できない場合は空の配列 [] を返せ。
+
+[
+  {
+    "type": "event",
+    "title": "タイトル",
+    "start": "YYYY-MM-DDTHH:mm:00+09:00", // 終日の場合は "YYYY-MM-DD"
+    "end": "YYYY-MM-DDTHH:mm:00+09:00", // 終日の場合は翌日の "YYYY-MM-DD"
+    "description": "場所やメモなど",
+    "location": "場所"
+  }
+]
+`;
+
+        const requestBody = {
+            contents: [{ parts: [{ text: text }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { 
+                responseMimeType: "application/json", // JSON強制モード
+                temperature: 0.1 // 幻覚（ハルシネーション）を防ぐために温度を極限まで下げる
+            }
+        };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) throw new Error('Google側のAPI通信エラーだ。');
+        const data = await response.json();
+        const aiResponseText = data.candidates[0].content.parts[0].text;
+        
+        // ★抽出したJSONを直接パースする
+        let extractedItems = [];
+        try {
+            extractedItems = JSON.parse(aiResponseText);
+        } catch(e) {
+            document.getElementById(loadingId).parentElement.innerHTML = `❌ JSONの解析に失敗した: ${aiResponseText}`;
+            return;
+        }
+
+        if (extractedItems.length === 0) {
+            document.getElementById(loadingId).parentElement.innerHTML = "予定として登録できそうな情報は見当たらなかったぞ。";
+            return;
+        }
+
+        // ★パースしたデータを司令塔（dispatchManualAction）に丸投げする
+        let successCount = 0;
+        for (const item of extractedItems) {
+            const action = { method: 'insert', ...item };
+            await dispatchManualAction(action); // オプティミスティックUIも野戦倉庫も自動発動
+            successCount++;
+        }
+        
+        document.getElementById(loadingId).parentElement.innerHTML = `✅ 抽出完了。${successCount}件の予定をシステムに流し込んだぞ。カレンダーを見てみろ。`;
+
+    } catch (err) {
+        document.getElementById(loadingId).parentElement.innerHTML = `❌ エラー: ${err.message}`;
+    }
+}
