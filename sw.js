@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jero-calendar-v8.9.29';
+const CACHE_NAME = 'jero-calendar-v8.9.30';
 
 // キャッシュすべき最新のモジュールパス群
 const ASSETS_TO_CACHE = [
