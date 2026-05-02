@@ -516,8 +516,13 @@
             <div class="form-row"><span>③ アイコン</span>
                 <div id="stamp-edit-icon" onclick="openEmojiPicker()" style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">➕ 選択</div>
             </div>
-            <div class="form-row"><span>背景色 (rgba等)</span><input type="text" id="stamp-edit-bg" placeholder="rgba(255,59,48,0.1)" style="padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt); width: 140px;"></div>
-            <div class="form-row"><span>枠線色 (rgba等)</span><input type="text" id="stamp-edit-border" placeholder="rgba(255,59,48,0.3)" style="padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt); width: 140px;"></div>
+            <div class="form-row" style="align-items:center;">
+                <span style="font-size:12px; font-weight:bold;">④ テーマカラー</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="color" id="stamp-edit-base-color" style="border:none; width:40px; height:40px; background:transparent; cursor:pointer;" value="#0a84ff">
+                    <span style="font-size:10px; color:#888;">※この色から背景と枠線を自動生成する</span>
+                </div>
+            </div>
         </div>
         <div class="action-bar"><button class="btn btn-gray" onclick="closeStampEditor()">取消</button><button class="btn btn-green" onclick="saveStampItem()">保存</button></div>
     </div>

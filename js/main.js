@@ -1924,6 +1924,26 @@ function renderStampSettingsUI() {
     });
 }
 
+// --- カラー変換自動調合エンジン ---
+function hexToRgbForStamp(hex) {
+    let r = 0, g = 0, b = 0;
+    hex = hex.replace('#', '');
+    if (hex.length === 3) { r = parseInt(hex.charAt(0) + hex.charAt(0), 16); g = parseInt(hex.charAt(1) + hex.charAt(1), 16); b = parseInt(hex.charAt(2) + hex.charAt(2), 16); } 
+    else if (hex.length === 6) { r = parseInt(hex.substring(0, 2), 16); g = parseInt(hex.substring(2, 4), 16); b = parseInt(hex.substring(4, 6), 16); }
+    return `${r}, ${g}, ${b}`;
+}
+
+function rgbaToHexForStamp(rgbaStr) {
+    const match = rgbaStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+    }
+    return '#0a84ff'; // フォールバック（初期色）
+}
+
 function openStampEditor(idx = -1) {
     document.getElementById('stamp-editor-modal').classList.add('active');
     if (idx >= 0) {
@@ -1932,16 +1952,15 @@ function openStampEditor(idx = -1) {
         document.getElementById('stamp-edit-text').value = stamp.insertText;
         document.getElementById('stamp-edit-label').value = stamp.label;
         document.getElementById('stamp-edit-icon').innerText = stamp.icon || '➕ 選択';
-        document.getElementById('stamp-edit-bg').value = stamp.bg;
-        document.getElementById('stamp-edit-border').value = stamp.border;
+        // 既存の透過rgbaデータを、カラーピッカー用のHexコードに逆変換してセットする
+        document.getElementById('stamp-edit-base-color').value = rgbaToHexForStamp(stamp.bg);
         document.getElementById('stamp-editor-title').innerText = 'スタンプ編集';
     } else {
         document.getElementById('stamp-edit-idx').value = -1;
         document.getElementById('stamp-edit-text').value = '';
         document.getElementById('stamp-edit-label').value = '';
         document.getElementById('stamp-edit-icon').innerText = '➕ 選択';
-        document.getElementById('stamp-edit-bg').value = 'rgba(10,132,255,0.1)';
-        document.getElementById('stamp-edit-border').value = 'rgba(10,132,255,0.3)';
+        document.getElementById('stamp-edit-base-color').value = '#0a84ff';
         document.getElementById('stamp-editor-title').innerText = '新規作成';
     }
 }
@@ -1956,8 +1975,12 @@ function saveStampItem() {
     const label = document.getElementById('stamp-edit-label').value.trim();
     const iconRaw = document.getElementById('stamp-edit-icon').innerText;
     const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
-    const bg = document.getElementById('stamp-edit-bg').value.trim();
-    const border = document.getElementById('stamp-edit-border').value.trim();
+    
+    // ★視覚的に選ばれた色から、透明度付きの背景(10%)と枠線(30%)を自動生成する
+    const baseHex = document.getElementById('stamp-edit-base-color').value;
+    const rgbStr = hexToRgbForStamp(baseHex);
+    const bg = `rgba(${rgbStr}, 0.1)`;
+    const border = `rgba(${rgbStr}, 0.3)`;
 
     if (!insertText || !label || !icon) { showToast('文字、名前、アイコンは必須だ。'); return; }
 
