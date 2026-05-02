@@ -1892,4 +1892,101 @@ async function applyTemplateStamp(templateId, targetDateStr) {
 document.addEventListener('DOMContentLoaded', () => {
     loadStamps();
     renderStampPaletteUI();
+    renderStampSettingsUI();
 });
+
+// === スタンプ管理 UIロジック ===
+function renderStampSettingsUI() {
+    const container = document.getElementById('stamp-settings-list');
+    if (!container) return;
+    container.innerHTML = '';
+    if (customStamps.length === 0) {
+        container.innerHTML = '<div style="color:#888; font-size:12px;">スタンプはないぞ。</div>';
+        return;
+    }
+    customStamps.forEach((stamp, idx) => {
+        const el = document.createElement('div');
+        el.className = 'dict-item';
+        el.innerHTML = `
+            <div class="dict-info">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:20px;">${stamp.icon}</span>
+                    <span style="font-weight:bold;">${stamp.label}</span>
+                </div>
+                <div style="font-size:11px; color:#888;">印字: ${stamp.insertText}</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <button class="dict-btn-edit" onclick="openStampEditor(${idx})">編集</button>
+                <button class="dict-btn-del" onclick="removeStampItem(${idx})">削除</button>
+            </div>
+        `;
+        container.appendChild(el);
+    });
+}
+
+function openStampEditor(idx = -1) {
+    document.getElementById('stamp-editor-modal').classList.add('active');
+    if (idx >= 0) {
+        const stamp = customStamps[idx];
+        document.getElementById('stamp-edit-idx').value = idx;
+        document.getElementById('stamp-edit-text').value = stamp.insertText;
+        document.getElementById('stamp-edit-label').value = stamp.label;
+        document.getElementById('stamp-edit-icon').innerText = stamp.icon || '➕ 選択';
+        document.getElementById('stamp-edit-bg').value = stamp.bg;
+        document.getElementById('stamp-edit-border').value = stamp.border;
+        document.getElementById('stamp-editor-title').innerText = 'スタンプ編集';
+    } else {
+        document.getElementById('stamp-edit-idx').value = -1;
+        document.getElementById('stamp-edit-text').value = '';
+        document.getElementById('stamp-edit-label').value = '';
+        document.getElementById('stamp-edit-icon').innerText = '➕ 選択';
+        document.getElementById('stamp-edit-bg').value = 'rgba(10,132,255,0.1)';
+        document.getElementById('stamp-edit-border').value = 'rgba(10,132,255,0.3)';
+        document.getElementById('stamp-editor-title').innerText = '新規作成';
+    }
+}
+
+function closeStampEditor() {
+    document.getElementById('stamp-editor-modal').classList.remove('active');
+}
+
+function saveStampItem() {
+    const idx = parseInt(document.getElementById('stamp-edit-idx').value);
+    const insertText = document.getElementById('stamp-edit-text').value.trim();
+    const label = document.getElementById('stamp-edit-label').value.trim();
+    const iconRaw = document.getElementById('stamp-edit-icon').innerText;
+    const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
+    const bg = document.getElementById('stamp-edit-bg').value.trim();
+    const border = document.getElementById('stamp-edit-border').value.trim();
+
+    if (!insertText || !label || !icon) { showToast('文字、名前、アイコンは必須だ。'); return; }
+
+    const newItem = { 
+        id: idx >= 0 ? customStamps[idx].id : 'stamp_' + Date.now(), 
+        icon, label, bg, border, color: 'var(--txt)', insertText 
+    };
+
+    if (idx >= 0) customStamps[idx] = newItem;
+    else customStamps.push(newItem);
+
+    saveStamps();
+    renderStampSettingsUI();
+    closeStampEditor();
+}
+
+function removeStampItem(idx) {
+    if (!confirm('このスタンプを消し去るか？')) return;
+    customStamps.splice(idx, 1);
+    saveStamps();
+    renderStampSettingsUI();
+}
+
+// ★絵文字ピッカーの挙動をオーバーライド（辞書とスタンプ作成の両方で賢く使い回す）
+function selectEmoji(icon) { 
+    if (document.getElementById('stamp-editor-modal').classList.contains('active')) {
+        document.getElementById('stamp-edit-icon').innerText = icon; 
+    } else {
+        document.getElementById('dict-edit-icon').innerText = icon; 
+    }
+    closeEmojiPicker(); 
+}

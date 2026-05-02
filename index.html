@@ -403,6 +403,13 @@
                     style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); height: 150px; font-size: 11px; resize: none; margin-top: 5px;"></textarea>
             </div>
             <div class="setting-row">
+                <div style="display:flex; justify-content:space-between; align-items:center;"><label>スタンプ管理</label><button
+                        class="btn-green"
+                        style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;"
+                        onclick="openStampEditor()">＋ 新規作成</button></div>
+                <div class="dict-container" id="stamp-settings-list" style="margin-top: 10px;"></div>
+            </div>
+            <div class="setting-row">
                 <div style="display:flex; justify-content:space-between; align-items:center;"><label>装飾辞書</label><button
                         class="btn-blue"
                         style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;"
@@ -493,6 +500,26 @@
         <div class="action-bar" style="padding: 15px 20px;">
             <button class="btn btn-blue" id="btn-batch-execute" onclick="executeAiBatch()" style="width: 100%; padding: 12px; font-size: 14px;">✅ 選択した項目を一括登録する</button>
         </div>
+    </div>
+
+    <div id="stamp-editor-modal" class="bottom-modal" style="z-index: 110;">
+        <div class="modal-drag-area" onclick="closeStampEditor()">
+            <div class="modal-drag"></div>
+        </div>
+        <div class="modal-header">
+            <h2 id="stamp-editor-title">スタンプ編集</h2><button class="close-btn" onclick="closeStampEditor()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="stamp-edit-idx">
+            <div class="form-group"><label style="font-size:12px; color:var(--accent); font-weight:bold;">① カレンダーに印字する文字</label><input type="text" id="stamp-edit-text" placeholder="例: 休)" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-group"><label style="font-size:12px; color:#888;">② パレットに表示する名前</label><input type="text" id="stamp-edit-label" placeholder="例: 休" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
+            <div class="form-row"><span>③ アイコン</span>
+                <div id="stamp-edit-icon" onclick="openEmojiPicker()" style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">➕ 選択</div>
+            </div>
+            <div class="form-row"><span>背景色 (rgba等)</span><input type="text" id="stamp-edit-bg" placeholder="rgba(255,59,48,0.1)" style="padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt); width: 140px;"></div>
+            <div class="form-row"><span>枠線色 (rgba等)</span><input type="text" id="stamp-edit-border" placeholder="rgba(255,59,48,0.3)" style="padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt); width: 140px;"></div>
+        </div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeStampEditor()">取消</button><button class="btn btn-green" onclick="saveStampItem()">保存</button></div>
     </div>
 
     <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
