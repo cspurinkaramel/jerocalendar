@@ -1816,30 +1816,68 @@ async function saveQuickMemo(id, type) {
 }
 
 // ==========================================
-// ★ 究極の最適解：D&D式 休日スタンプエンジン
+// ★ 究極の最適解：汎用スタンプエンジン (Phase 3)
 // ==========================================
-// ※スタンプのドラッグ処理(handleTemplateDrag)は、完全統合エンジン(handleDragStart)に吸収・浄化された。
 
-async function applyTemplateStamp(templateType, targetDateStr) {
-    const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';
-    const tagsPStr = localStorage.getItem('jero_paidleave_tags') || '有休),【有休】';
-    const tagH = tagsHStr.split(',')[0].trim() || '休)';
-    const tagP = tagsPStr.split(',')[0].trim() || '有休)';
-    const targetTag = templateType === 'holiday' ? tagH : tagP;
-    const checkTags = templateType === 'holiday' ? tagsHStr.split(',').map(t=>t.trim()).filter(t=>t) : tagsPStr.split(',').map(t=>t.trim()).filter(t=>t);
+// 初期装備のスタンプ群
+const DEFAULT_STAMPS = [
+    { id: "stamp_holiday", icon: "🏖️", label: "休", bg: "rgba(255,59,48,0.1)", border: "rgba(255,59,48,0.3)", color: "var(--txt)", insertText: "休)" },
+    { id: "stamp_paidleave", icon: "🌴", label: "有休", bg: "rgba(52,199,89,0.1)", border: "rgba(52,199,89,0.3)", color: "var(--txt)", insertText: "有休)" },
+    { id: "stamp_remote", icon: "💻", label: "在宅", bg: "rgba(10,132,255,0.1)", border: "rgba(10,132,255,0.3)", color: "var(--txt)", insertText: "在宅)" },
+    { id: "stamp_trip", icon: "🚄", label: "出張", bg: "rgba(255,149,0,0.1)", border: "rgba(255,149,0,0.3)", color: "var(--txt)", insertText: "出張)" }
+];
+
+let customStamps = [];
+
+function loadStamps() {
+    const saved = localStorage.getItem('jero_stamps');
+    if (saved) { try { customStamps = JSON.parse(saved); } catch(e) { customStamps = [...DEFAULT_STAMPS]; } }
+    else { customStamps = [...DEFAULT_STAMPS]; }
+}
+
+function saveStamps() { 
+    localStorage.setItem('jero_stamps', JSON.stringify(customStamps)); 
+    renderStampPaletteUI();
+}
+
+// データからパレットのUIを動的生成する
+function renderStampPaletteUI() {
+    const container = document.getElementById('stamp-palette-container');
+    if (!container) return;
+    container.innerHTML = '';
+    customStamps.forEach(stamp => {
+        const el = document.createElement('div');
+        el.setAttribute('draggable', 'true');
+        el.setAttribute('data-template', stamp.id);
+        el.setAttribute('ondragstart', 'handleDragStart(event)');
+        // スマホでも滑らかに横スクロール・ドラッグできるようCSSを最適化
+        el.style.cssText = `font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:${stamp.bg}; border:1px solid ${stamp.border}; color:${stamp.color}; touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex-shrink: 0; display: flex; align-items: center; gap: 4px;`;
+        el.innerHTML = `<span>${stamp.icon}</span><span style="font-size:12px; font-weight:bold;">${stamp.label}</span>`;
+        container.appendChild(el);
+    });
+}
+
+// スタンプがドロップされた時の汎用処理
+async function applyTemplateStamp(templateId, targetDateStr) {
+    const stamp = customStamps.find(s => s.id === templateId);
+    if (!stamp) return;
     
-    const [y, m, d] = targetDateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
+    const targetTag = stamp.insertText;
+    
+    const [y, m, d] = targetDateStr.split('-'); 
+    const data = dataCache[`${y}-${parseInt(m) - 1}`];
     let existingItem = null;
+    
     if (data && data.events) {
         existingItem = data.events.find(e => {
             if (!e.start) return false;
             const isTargetDay = (e.start.date === targetDateStr) || (e.start.dateTime && e.start.dateTime.startsWith(targetDateStr));
-            return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
+            return isTargetDay && (e.summary || '').includes(targetTag);
         });
     }
 
     if (existingItem) {
-        // すでに休みがある日に落とした場合は「剥がす（削除）」
+        // 同じスタンプがあれば剥がす（削除）
         triggerHaptic('heavy');
         await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: targetDateStr });
     } else {
@@ -1850,117 +1888,8 @@ async function applyTemplateStamp(templateType, targetDateStr) {
     }
 }
 
-function toggleStampPalette() {
-    const pal = document.getElementById('stamp-palette');
-    if (pal.style.display === 'none' || pal.style.display === '') {
-        pal.style.display = 'flex';
-        initStampDraggable();
-    } else { closeStampPalette(); }
-}
-
-function closeStampPalette() {
-    // パレットを隠すだけ（モードの解除は行わない）
-    document.getElementById('stamp-palette').style.display = 'none';
-}
-
-function cancelStampMode() {
-    // ★完全解除トリガー
-    currentStampMode = null;
-    closeStampPalette();
-    updateStampUI();
-    showToast('スタンプモードを解除した。');
-}
-
-function setStampMode(mode) {
-    if (currentStampMode === mode) { currentStampMode = null; } else { currentStampMode = mode; }
-    closeStampPalette(); // ★ハンコを選んだ瞬間、用済みの筆箱は空気を読んで消滅する
-    updateStampUI();
-}
-
-function updateStampUI() {
-    const btnH = document.getElementById('btn-stamp-holiday'); const btnP = document.getElementById('btn-stamp-paidleave');
-    btnH.style.background = currentStampMode === 'holiday' ? 'rgba(255, 59, 48, 0.15)' : 'var(--head-bg)';
-    btnH.style.borderColor = currentStampMode === 'holiday' ? '#ff3b30' : 'var(--border)';
-    btnH.style.color = currentStampMode === 'holiday' ? '#ff3b30' : 'var(--txt)';
-    btnP.style.background = currentStampMode === 'paidleave' ? 'rgba(52, 199, 89, 0.15)' : 'var(--head-bg)';
-    btnP.style.borderColor = currentStampMode === 'paidleave' ? '#34c759' : 'var(--border)';
-    btnP.style.color = currentStampMode === 'paidleave' ? '#34c759' : 'var(--txt)';
-    
-    // ★メインモニター乗っ取りを完全廃止し、親指に寄り添うフローティング・カプセルへ移行
-    const pill = document.getElementById('stamp-mode-pill');
-    if (currentStampMode === 'holiday') {
-        pill.innerHTML = '🏖️ 休みスタンプ起動中 <span style="background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:12px; font-size:11px; margin-left:4px;">✕ 解除</span>';
-        pill.style.backgroundColor = '#ff3b30';
-        pill.style.display = 'flex';
-    } else if (currentStampMode === 'paidleave') {
-        pill.innerHTML = '🌴 有休スタンプ起動中 <span style="background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:12px; font-size:11px; margin-left:4px;">✕ 解除</span>';
-        pill.style.backgroundColor = '#34c759';
-        pill.style.display = 'flex';
-    } else {
-        pill.style.display = 'none';
-        updateHeaderDisplay(); // 念のため月表示を再計算させておく
-    }
-}
-
-let isStampProcessing = false; // ★連打・暴走防止の物理ロック
-async function handleStampAction(dateStr) {
-    if (!currentStampMode || isStampProcessing) return;
-    isStampProcessing = true; // ロックをかける
-    try {
-        const tagsHStr = localStorage.getItem('jero_holiday_tags') || '休),【休】,🏖️';
-        const tagsPStr = localStorage.getItem('jero_paidleave_tags') || '有休),【有休】';
-        // ハンコとして押すタグ（カンマ区切りの最初のもの）
-        const tagH = tagsHStr.split(',')[0].trim() || '休)';
-        const tagP = tagsPStr.split(',')[0].trim() || '有休)';
-        const targetTag = currentStampMode === 'holiday' ? tagH : tagP;
-        // 既存チェック用のタグ配列
-        const checkTags = currentStampMode === 'holiday' ? tagsHStr.split(',').map(t=>t.trim()).filter(t=>t) : tagsPStr.split(',').map(t=>t.trim()).filter(t=>t);
-        
-        const [y, m, d] = dateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
-        let existingItem = null;
-        if (data && data.events) {
-            existingItem = data.events.find(e => {
-                if (!e.start) return false;
-                const isTargetDay = (e.start.date === dateStr) || (e.start.dateTime && e.start.dateTime.startsWith(dateStr));
-                // 接頭辞として含まれるかを判定する（右側に任意の文字が追記されていても正しく認識する）
-                return isTargetDay && checkTags.some(tag => (e.summary || '').includes(tag));
-            });
-        }
-
-        if (existingItem) {
-            triggerHaptic('heavy');
-            await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: dateStr });
-        } else {
-            triggerHaptic('success');
-            const edD = new Date(dateStr); edD.setDate(edD.getDate() + 1);
-            await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: dateStr, end: getSafeLocalDateStr(edD) });
-        }
-    } finally {
-        // ★処理が終わるまで次のスタンプを絶対に受け付けない（0.1秒のクールタイム）
-        setTimeout(() => isStampProcessing = false, 100);
-    }
-}
-
-function initStampDraggable() {
-    const pal = document.getElementById('stamp-palette'); const handle = document.getElementById('stamp-drag-handle');
-    if (!pal || !handle) return;
-    let isDragging = false; let startX, startY, initialLeft, initialTop;
-    const startDrag = (e) => {
-        if (e.target.tagName.toLowerCase() === 'button') return;
-        const evt = e.type.includes('touch') ? e.touches[0] : e;
-        startX = evt.clientX; startY = evt.clientY;
-        const rect = pal.getBoundingClientRect(); initialLeft = rect.left; initialTop = rect.top;
-        isDragging = true;
-        pal.style.transform = 'none'; pal.style.left = initialLeft + 'px'; pal.style.top = initialTop + 'px'; pal.style.transition = 'none';
-    };
-    const doDrag = (e) => {
-        if (!isDragging) return; e.preventDefault();
-        const evt = e.type.includes('touch') ? e.touches[0] : e;
-        const dx = evt.clientX - startX; const dy = evt.clientY - startY;
-        pal.style.left = Math.max(0, Math.min(initialLeft + dx, window.innerWidth - pal.offsetWidth)) + 'px';
-        pal.style.top = Math.max(0, Math.min(initialTop + dy, window.innerHeight - pal.offsetHeight)) + 'px';
-    };
-    const endDrag = () => { isDragging = false; };
-    handle.addEventListener('mousedown', startDrag); document.addEventListener('mousemove', doDrag, { passive: false }); document.addEventListener('mouseup', endDrag);
-    handle.addEventListener('touchstart', startDrag, { passive: true }); document.addEventListener('touchmove', doDrag, { passive: false }); document.addEventListener('touchend', endDrag);
-}
+// 起動時にスタンプを読み込んで描画する
+document.addEventListener('DOMContentLoaded', () => {
+    loadStamps();
+    renderStampPaletteUI();
+});
