@@ -403,17 +403,11 @@
                     style="padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--head-bg); color:var(--txt); width:calc(100% - 20px); height: 150px; font-size: 11px; resize: none; margin-top: 5px;"></textarea>
             </div>
             <div class="setting-row">
-                <div style="display:flex; justify-content:space-between; align-items:center;"><label>スタンプ管理</label><button
-                        class="btn-green"
-                        style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;"
-                        onclick="openStampEditor()">＋ 新規作成</button></div>
-                <div class="dict-container" id="stamp-settings-list" style="margin-top: 10px;"></div>
-            </div>
-            <div class="setting-row">
-                <div style="display:flex; justify-content:space-between; align-items:center;"><label>装飾辞書</label><button
-                        class="btn-blue"
-                        style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;"
-                        onclick="openDictEditor()">＋ 新規追加</button></div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="color:var(--txt);">アイコン＆スタンプ辞書</label>
+                    <button class="btn-blue" style="padding: 4px 10px; border-radius: 6px; border:none; color:white; font-size:12px; font-weight:bold; cursor:pointer;" onclick="openDictEditor()">＋ 新規追加</button>
+                </div>
+                <div style="font-size: 11px; color: #888; margin-top: 4px; margin-bottom: 8px;">文字の自動アイコン化や、上部のD&Dスタンプを一括管理するぞ。</div>
                 <div class="dict-container" id="dict-list"></div>
             </div>
             <div class="setting-row">
@@ -502,62 +496,41 @@
         </div>
     </div>
 
-    <div id="stamp-editor-modal" class="bottom-modal" style="z-index: 110;">
-        <div class="modal-drag-area" onclick="closeStampEditor()">
-            <div class="modal-drag"></div>
-        </div>
-        <div class="modal-header">
-            <h2 id="stamp-editor-title">スタンプ編集</h2><button class="close-btn" onclick="closeStampEditor()">✕</button>
-        </div>
-        <div class="modal-body">
-            <input type="hidden" id="stamp-edit-idx">
-            <div class="form-group"><label style="font-size:12px; color:var(--accent); font-weight:bold;">① カレンダーに印字する文字</label><input type="text" id="stamp-edit-text" placeholder="例: 休)" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
-            <div class="form-group"><label style="font-size:12px; color:#888;">② パレットに表示する名前</label><input type="text" id="stamp-edit-label" placeholder="例: 休" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);"></div>
-            <div class="form-row"><span>③ アイコン</span>
-                <div id="stamp-edit-icon" onclick="openEmojiPicker()" style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">➕ 選択</div>
-            </div>
-            <div class="form-row" style="align-items:center;">
-                <span style="font-size:12px; font-weight:bold;">④ テーマカラー</span>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <input type="color" id="stamp-edit-base-color" style="border:none; width:40px; height:40px; background:transparent; cursor:pointer;" value="#0a84ff">
-                    <span style="font-size:10px; color:#888;">※この色から背景と枠線を自動生成する</span>
-                </div>
-            </div>
-        </div>
-        <div class="action-bar"><button class="btn btn-gray" onclick="closeStampEditor()">取消</button><button class="btn btn-green" onclick="saveStampItem()">保存</button></div>
-    </div>
-
-    <div id="dict-editor-modal" class="bottom-modal" style="z-index: 109;">
+<div id="dict-editor-modal" class="bottom-modal" style="z-index: 110;">
         <div class="modal-drag-area" onclick="closeDictEditor()">
             <div class="modal-drag"></div>
         </div>
         <div class="modal-header">
-            <h2 id="dict-editor-title">辞書編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button>
+            <h2 id="dict-editor-title">辞書・スタンプ編集</h2><button class="close-btn" onclick="closeDictEditor()">✕</button>
         </div>
         <div class="modal-body">
             <input type="hidden" id="dict-edit-idx">
-            <div class="form-group"><label style="font-size:12px; color:var(--accent); font-weight:bold;">①
-                    主ルール</label><input type="text" id="dict-edit-prefix"
-                    style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);">
+            <div class="form-group">
+                <label style="font-size:12px; color:var(--accent); font-weight:bold;">① 予定に印字する文字 (カンマ区切りで複数可)</label>
+                <input type="text" id="dict-edit-keys" placeholder="例: 休), 【休】" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);">
             </div>
-            <div class="form-group"><label style="font-size:12px; color:#888;">② 検知キーワード</label><input type="text"
-                    id="dict-edit-aliases"
-                    style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);">
+            <div class="form-row"><span>② アイコン</span>
+                <div id="dict-edit-icon" onclick="openEmojiPicker()" style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">➕ 選択</div>
             </div>
-            <div class="form-row"><span>③ アイコン</span>
-                <div id="dict-edit-icon" onclick="openEmojiPicker()"
-                    style="font-size:24px; cursor:pointer; padding:6px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
-                    ➕ 選択</div>
+            <div class="form-row" style="align-items:center;">
+                <span style="font-size:12px; font-weight:bold;">③ テーマカラー</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="color" id="dict-edit-color" style="border:none; width:40px; height:40px; background:transparent; cursor:pointer;" value="#0a84ff">
+                </div>
             </div>
-            <div class="form-row"><span>背景色</span><input type="color" id="dict-edit-bg"
-                    style="border:none; width:40px; height:40px; background:transparent;"></div>
-            <div class="form-row"><span>文字色</span><input type="color" id="dict-edit-txt"
-                    style="border:none; width:40px; height:40px; background:transparent;"></div>
+            <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-size:12px; font-weight:bold; color:var(--txt);">④ 上部のD&Dスタンプとして表示する</label>
+                    <label class="toggle-switch"><input type="checkbox" id="dict-edit-is-stamp" onchange="document.getElementById('stamp-name-row').style.display = this.checked ? 'block' : 'none';"><span class="slider"></span></label>
+                </div>
+                <div id="stamp-name-row" style="display:none; margin-top:10px;">
+                    <label style="font-size:12px; color:#888;">パレットに表示する短い名前</label>
+                    <input type="text" id="dict-edit-label" placeholder="例: 休" style="margin-top:5px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--txt);">
+                </div>
+            </div>
         </div>
-        <div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button
-                class="btn btn-blue" onclick="saveDictItem()">保存</button></div>
+        <div class="action-bar"><button class="btn btn-gray" onclick="closeDictEditor()">取消</button><button class="btn btn-blue" onclick="saveDictItem()">保存</button></div>
     </div>
-
     <div id="emoji-picker-modal" class="bottom-modal" style="z-index: 111; height: 60vh;">
         <div class="modal-drag-area" onclick="closeEmojiPicker()">
             <div class="modal-drag"></div>
@@ -745,8 +718,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.40" defer></script>
-    <script src="./js/jero_core.js?v=16.40" defer></script>
+    <script src="./js/main.js?v=16.41" defer></script>
+    <script src="./js/jero_core.js?v=16.41" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

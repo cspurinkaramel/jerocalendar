@@ -1906,118 +1906,11 @@ async function saveQuickMemo(id, type) {
 }
 
 // ==========================================
-// ★ 究極の最適解：汎用スタンプエンジン (Phase 3)
+// ★ 究極の最適解：汎用アイコン＆スタンプ統合エンジン (Phase 3+)
 // ==========================================
 
-// 初期装備のスタンプ群
-const DEFAULT_STAMPS = [
-    { id: "stamp_holiday", icon: "🏖️", label: "休", bg: "rgba(255,59,48,0.1)", border: "rgba(255,59,48,0.3)", color: "var(--txt)", insertText: "休)" },
-    { id: "stamp_paidleave", icon: "🌴", label: "有休", bg: "rgba(52,199,89,0.1)", border: "rgba(52,199,89,0.3)", color: "var(--txt)", insertText: "有休)" },
-    { id: "stamp_remote", icon: "💻", label: "在宅", bg: "rgba(10,132,255,0.1)", border: "rgba(10,132,255,0.3)", color: "var(--txt)", insertText: "在宅)" },
-    { id: "stamp_trip", icon: "🚄", label: "出張", bg: "rgba(255,149,0,0.1)", border: "rgba(255,149,0,0.3)", color: "var(--txt)", insertText: "出張)" }
-];
-
-let customStamps = [];
-
-function loadStamps() {
-    const saved = localStorage.getItem('jero_stamps');
-    if (saved) { try { customStamps = JSON.parse(saved); } catch(e) { customStamps = [...DEFAULT_STAMPS]; } }
-    else { customStamps = [...DEFAULT_STAMPS]; }
-}
-
-function saveStamps() { 
-    localStorage.setItem('jero_stamps', JSON.stringify(customStamps)); 
-    renderStampPaletteUI();
-}
-
-// データからパレットのUIを動的生成する
-function renderStampPaletteUI() {
-    const container = document.getElementById('stamp-palette-container');
-    if (!container) return;
-    container.innerHTML = '';
-    customStamps.forEach(stamp => {
-        const el = document.createElement('div');
-        el.setAttribute('draggable', 'true');
-        el.setAttribute('data-template', stamp.id);
-        el.setAttribute('ondragstart', 'handleDragStart(event)');
-        // スマホでも滑らかに横スクロール・ドラッグできるようCSSを最適化
-        el.style.cssText = `font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:${stamp.bg}; border:1px solid ${stamp.border}; color:${stamp.color}; touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex-shrink: 0; display: flex; align-items: center; gap: 4px;`;
-        el.innerHTML = `<span>${stamp.icon}</span><span style="font-size:12px; font-weight:bold;">${stamp.label}</span>`;
-        container.appendChild(el);
-    });
-}
-
-// スタンプがドロップされた時の汎用処理
-async function applyTemplateStamp(templateId, targetDateStr) {
-    const stamp = customStamps.find(s => s.id === templateId);
-    if (!stamp) return;
-    
-    const targetTag = stamp.insertText;
-    
-    const [y, m, d] = targetDateStr.split('-'); 
-    const data = dataCache[`${y}-${parseInt(m) - 1}`];
-    let existingItem = null;
-    
-    if (data && data.events) {
-        existingItem = data.events.find(e => {
-            if (!e.start) return false;
-            const isTargetDay = (e.start.date === targetDateStr) || (e.start.dateTime && e.start.dateTime.startsWith(targetDateStr));
-            return isTargetDay && (e.summary || '').includes(targetTag);
-        });
-    }
-
-    if (existingItem) {
-        // 同じスタンプがあれば剥がす（削除）
-        triggerHaptic('heavy');
-        await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: targetDateStr });
-    } else {
-        // 新規配置
-        triggerHaptic('success');
-        const edD = new Date(targetDateStr); edD.setDate(edD.getDate() + 1);
-        await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: targetDateStr, end: getSafeLocalDateStr(edD) });
-    }
-}
-
-// 起動時にスタンプを読み込んで描画する
-document.addEventListener('DOMContentLoaded', () => {
-    loadStamps();
-    renderStampPaletteUI();
-    renderStampSettingsUI();
-});
-
-// === スタンプ管理 UIロジック ===
-function renderStampSettingsUI() {
-    const container = document.getElementById('stamp-settings-list');
-    if (!container) return;
-    container.innerHTML = '';
-    if (customStamps.length === 0) {
-        container.innerHTML = '<div style="color:#888; font-size:12px;">スタンプはないぞ。</div>';
-        return;
-    }
-    customStamps.forEach((stamp, idx) => {
-        const el = document.createElement('div');
-        el.className = 'dict-item';
-        // ★実際のハンコと全く同じデザインのプレビューを生成する
-        el.innerHTML = `
-            <div class="dict-info">
-                <div style="padding:4px 10px; border-radius:8px; background:${stamp.bg}; border:1px solid ${stamp.border}; color:${stamp.color}; font-size:14px; display:inline-flex; align-items:center; gap:6px;">
-                    <span>${stamp.icon}</span><span style="font-weight:bold;">${stamp.label}</span>
-                </div>
-                <div style="font-size:11px; color:#888; margin-top:6px;">印字: ${stamp.insertText}</div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-                <button class="dict-btn-edit" onclick="openStampEditor(${idx})">編集</button>
-                <button class="dict-btn-del" onclick="removeStampItem(${idx})">削除</button>
-            </div>
-        `;
-        container.appendChild(el);
-    });
-}
-
-// --- カラー変換自動調合エンジン ---
 function hexToRgbForStamp(hex) {
-    let r = 0, g = 0, b = 0;
-    hex = hex.replace('#', '');
+    let r = 0, g = 0, b = 0; hex = hex.replace('#', '');
     if (hex.length === 3) { r = parseInt(hex.charAt(0) + hex.charAt(0), 16); g = parseInt(hex.charAt(1) + hex.charAt(1), 16); b = parseInt(hex.charAt(2) + hex.charAt(2), 16); } 
     else if (hex.length === 6) { r = parseInt(hex.substring(0, 2), 16); g = parseInt(hex.substring(2, 4), 16); b = parseInt(hex.substring(4, 6), 16); }
     return `${r}, ${g}, ${b}`;
@@ -2025,80 +1918,194 @@ function hexToRgbForStamp(hex) {
 
 function rgbaToHexForStamp(rgbaStr) {
     const match = rgbaStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-    if (match) {
-        const r = parseInt(match[1]).toString(16).padStart(2, '0');
-        const g = parseInt(match[2]).toString(16).padStart(2, '0');
-        const b = parseInt(match[3]).toString(16).padStart(2, '0');
-        return `#${r}${g}${b}`;
-    }
-    return '#0a84ff'; // フォールバック（初期色）
+    if (match) { const r = parseInt(match[1]).toString(16).padStart(2, '0'); const g = parseInt(match[2]).toString(16).padStart(2, '0'); const b = parseInt(match[3]).toString(16).padStart(2, '0'); return `#${r}${g}${b}`; }
+    return '#0a84ff';
 }
 
-function openStampEditor(idx = -1) {
-    document.getElementById('stamp-editor-modal').classList.add('active');
-    if (idx >= 0) {
-        const stamp = customStamps[idx];
-        document.getElementById('stamp-edit-idx').value = idx;
-        document.getElementById('stamp-edit-text').value = stamp.insertText;
-        document.getElementById('stamp-edit-label').value = stamp.label;
-        document.getElementById('stamp-edit-icon').innerText = stamp.icon || '➕ 選択';
-        // 既存の透過rgbaデータを、カラーピッカー用のHexコードに逆変換してセットする
-        document.getElementById('stamp-edit-base-color').value = rgbaToHexForStamp(stamp.bg);
-        document.getElementById('stamp-editor-title').innerText = 'スタンプ編集';
-    } else {
-        document.getElementById('stamp-edit-idx').value = -1;
-        document.getElementById('stamp-edit-text').value = '';
-        document.getElementById('stamp-edit-label').value = '';
-        document.getElementById('stamp-edit-icon').innerText = '➕ 選択';
-        document.getElementById('stamp-edit-base-color').value = '#0a84ff';
-        document.getElementById('stamp-editor-title').innerText = '新規作成';
-    }
-}
-
-function closeStampEditor() {
-    document.getElementById('stamp-editor-modal').classList.remove('active');
-}
-
-function saveStampItem() {
-    const idx = parseInt(document.getElementById('stamp-edit-idx').value);
-    const insertText = document.getElementById('stamp-edit-text').value.trim();
-    const label = document.getElementById('stamp-edit-label').value.trim();
-    const iconRaw = document.getElementById('stamp-edit-icon').innerText;
-    const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
+function loadDict() { 
+    const savedDict = localStorage.getItem('jero_adv_dict'); 
+    const savedStamps = localStorage.getItem('jero_stamps');
     
-    const baseHex = document.getElementById('stamp-edit-base-color').value;
-    const rgbStr = hexToRgbForStamp(baseHex);
-    const bg = `rgba(${rgbStr}, 0.15)`; // 少し濃くして視認性を上げる
-    const border = `rgba(${rgbStr}, 0.4)`;
-
-    if (!insertText || !label || !icon) { showToast('文字、名前、アイコンは必須だ。'); return; }
-
-    const newItem = { 
-        id: idx >= 0 ? customStamps[idx].id : 'stamp_' + Date.now(), 
-        icon, label, bg, border, color: 'var(--txt)', insertText, baseColor: baseHex 
-    };
-
-    if (idx >= 0) customStamps[idx] = newItem;
-    else customStamps.push(newItem);
-
-    saveStamps();
-    renderStampSettingsUI();
-    closeStampEditor();
+    if (savedDict || savedStamps) {
+        let merged = [];
+        if (savedDict) {
+            try {
+                JSON.parse(savedDict).forEach(d => {
+                    let baseColor = d.color || d.bg || '#0a84ff';
+                    if (baseColor.startsWith('rgba')) baseColor = rgbaToHexForStamp(baseColor);
+                    merged.push({ keys: d.keys || [], icon: d.icon || '', color: baseColor, isStamp: d.isStamp || false, label: d.label || '' });
+                });
+            } catch(e) {}
+        }
+        // ★自動マイグレーション：過去のスタンプデータがあれば統合して破棄する
+        if (savedStamps) {
+            try {
+                JSON.parse(savedStamps).forEach(s => {
+                    let baseColor = s.baseColor || rgbaToHexForStamp(s.bg);
+                    let existing = merged.find(m => m.keys.includes(s.insertText));
+                    if (existing) { existing.isStamp = true; existing.label = s.label; existing.color = baseColor; existing.icon = s.icon; } 
+                    else { merged.unshift({ keys: [s.insertText], icon: s.icon, color: baseColor, isStamp: true, label: s.label }); }
+                });
+            } catch(e) {}
+            localStorage.removeItem('jero_stamps'); localStorage.setItem('jero_adv_dict', JSON.stringify(merged));
+        }
+        advancedDict = merged;
+    } else { 
+        // 初期装備
+        advancedDict = [
+            { keys: ["休)"], icon: "🏖️", color: "#ff3b30", isStamp: true, label: "休" },
+            { keys: ["有休)"], icon: "🌴", color: "#34c759", isStamp: true, label: "有休" },
+            { keys: ["在宅)"], icon: "💻", color: "#007aff", isStamp: true, label: "在宅" },
+            { keys: ["出張)"], icon: "🚄", color: "#ff9500", isStamp: true, label: "出張" },
+            { keys: ["誕生日", "【誕】"], icon: "🎂", color: "#ff2d55", isStamp: false },
+            { keys: ["会議", "【会】"], icon: "👥", color: "#5856d6", isStamp: false }
+        ];
+    } 
+    renderDictUI(); renderStampPaletteUI();
 }
 
-function removeStampItem(idx) {
-    if (!confirm('このスタンプを消し去るか？')) return;
-    customStamps.splice(idx, 1);
-    saveStamps();
-    renderStampSettingsUI();
+function saveDict() { localStorage.setItem('jero_adv_dict', JSON.stringify(advancedDict)); renderDictUI(); renderStampPaletteUI(); triggerFullReRender(); }
+
+function renderDictUI() { 
+    const container = document.getElementById('dict-list'); if (!container) return; 
+    container.innerHTML = ''; 
+    if (advancedDict.length === 0) { container.innerHTML = '<div style="color:#888; font-size:12px;">辞書は空だ。</div>'; return; } 
+    advancedDict.forEach((item, idx) => { 
+        const primary = item.keys[0] || "(キーなし)"; 
+        const rgbStr = hexToRgbForStamp(item.color);
+        const bg = `rgba(${rgbStr}, 0.15)`; const border = `rgba(${rgbStr}, 0.4)`;
+        
+        const el = document.createElement('div'); el.className = 'dict-item'; 
+        el.innerHTML = `
+            <div class="dict-info">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:20px;">${item.icon}</span>
+                    <span style="font-weight:bold;">${item.isStamp ? item.label : primary}</span>
+                    ${item.isStamp ? '<span style="font-size:10px; background:rgba(10,132,255,0.1); color:#0a84ff; padding:2px 6px; border-radius:4px;">スタンプON</span>' : ''}
+                </div>
+                <div style="font-size:11px; color:#888; margin-top:6px;">キーワード: ${item.keys.join(', ')}</div>
+                <div style="margin-top:6px; padding:2px 8px; border-radius:6px; background:${bg}; border:1px solid ${border}; color:var(--txt); font-size:12px; display:inline-block;">プレビュー</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <button class="dict-btn-edit" onclick="openDictEditor(${idx})">編集</button>
+                <button class="dict-btn-del" onclick="removeDictItem(${idx})">削除</button>
+            </div>
+        `; 
+        container.appendChild(el); 
+    }); 
 }
 
-// ★絵文字ピッカーの挙動をオーバーライド（辞書とスタンプ作成の両方で賢く使い回す）
-function selectEmoji(icon) { 
-    if (document.getElementById('stamp-editor-modal').classList.contains('active')) {
-        document.getElementById('stamp-edit-icon').innerText = icon; 
-    } else {
-        document.getElementById('dict-edit-icon').innerText = icon; 
+function openDictEditor(idx = -1) { 
+    document.getElementById('dict-editor-modal').classList.add('active'); 
+    if (idx >= 0) { 
+        const item = advancedDict[idx]; 
+        document.getElementById('dict-edit-idx').value = idx; 
+        document.getElementById('dict-edit-keys').value = item.keys.join(', '); 
+        document.getElementById('dict-edit-icon').innerText = item.icon || '➕ 選択'; 
+        document.getElementById('dict-edit-color').value = item.color || '#0a84ff'; 
+        document.getElementById('dict-edit-is-stamp').checked = !!item.isStamp;
+        document.getElementById('stamp-name-row').style.display = item.isStamp ? 'block' : 'none';
+        document.getElementById('dict-edit-label').value = item.label || ''; 
+        document.getElementById('dict-editor-title').innerText = '辞書・スタンプ編集'; 
+    } else { 
+        document.getElementById('dict-edit-idx').value = -1; 
+        document.getElementById('dict-edit-keys').value = ''; 
+        document.getElementById('dict-edit-icon').innerText = '➕ 選択'; 
+        document.getElementById('dict-edit-color').value = '#0a84ff'; 
+        document.getElementById('dict-edit-is-stamp').checked = false;
+        document.getElementById('stamp-name-row').style.display = 'none';
+        document.getElementById('dict-edit-label').value = ''; 
+        document.getElementById('dict-editor-title').innerText = '新規追加'; 
+    } 
+}
+
+function closeDictEditor() { document.getElementById('dict-editor-modal').classList.remove('active'); }
+
+function saveDictItem() { 
+    const idx = parseInt(document.getElementById('dict-edit-idx').value); 
+    const keysRaw = document.getElementById('dict-edit-keys').value; 
+    const iconRaw = document.getElementById('dict-edit-icon').innerText; 
+    const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim(); 
+    const color = document.getElementById('dict-edit-color').value; 
+    const isStamp = document.getElementById('dict-edit-is-stamp').checked;
+    const label = document.getElementById('dict-edit-label').value.trim();
+
+    if (!keysRaw || !icon) { showToast('キーワードとアイコンは必須だ。'); return; } 
+    if (isStamp && !label) { showToast('スタンプ化する場合は表示名が必須だ。'); return; }
+
+    const keys = keysRaw.split(',').map(k => k.trim()).filter(k => k);
+    const newItem = { keys, icon, color, isStamp, label }; 
+    if (idx >= 0) advancedDict[idx] = newItem; else advancedDict.push(newItem); 
+    
+    saveDict(); closeDictEditor(); 
+}
+
+function removeDictItem(idx) { if(!confirm('本当に削除するか？')) return; advancedDict.splice(idx, 1); saveDict(); }
+
+function renderStampPaletteUI() {
+    const container = document.getElementById('stamp-palette-container'); if (!container) return; container.innerHTML = '';
+    const stampItems = advancedDict.filter(d => d.isStamp);
+    if(stampItems.length === 0) { container.innerHTML = '<span style="font-size:12px; color:#888;">設定から追加できるぞ</span>'; return; }
+    
+    stampItems.forEach(stamp => {
+        const rgbStr = hexToRgbForStamp(stamp.color); const bg = `rgba(${rgbStr}, 0.15)`; const border = `rgba(${rgbStr}, 0.4)`;
+        const el = document.createElement('div');
+        el.setAttribute('draggable', 'true'); el.setAttribute('data-template', stamp.keys[0]); el.setAttribute('ondragstart', 'handleDragStart(event)');
+        el.style.cssText = `font-size:16px; cursor:grab; padding:2px 10px; border-radius:8px; background:${bg}; border:1px solid ${border}; color:var(--txt); touch-action:none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); flex-shrink: 0; display: flex; align-items: center; gap: 4px;`;
+        el.innerHTML = `<span>${stamp.icon}</span><span style="font-size:12px; font-weight:bold;">${stamp.label}</span>`;
+        container.appendChild(el);
+    });
+}
+
+async function applyTemplateStamp(templateKey, targetDateStr) {
+    const stamp = advancedDict.find(s => s.keys[0] === templateKey); if (!stamp) return;
+    const targetTag = stamp.keys[0]; const [y, m, d] = targetDateStr.split('-'); const data = dataCache[`${y}-${parseInt(m) - 1}`];
+    let existingItem = null;
+    if (data && data.events) { existingItem = data.events.find(e => { if (!e.start) return false; const isTargetDay = (e.start.date === targetDateStr) || (e.start.dateTime && e.start.dateTime.startsWith(targetDateStr)); return isTargetDay && stamp.keys.some(tag => (e.summary || '').includes(tag)); }); }
+
+    if (existingItem) { triggerHaptic('heavy'); await dispatchManualAction({ type: 'event', method: 'delete', id: existingItem.id, start: targetDateStr }); } 
+    else { triggerHaptic('success'); const edD = new Date(targetDateStr); edD.setDate(edD.getDate() + 1); await dispatchManualAction({ type: 'event', method: 'insert', title: targetTag, description: '', location: '', colorId: '', start: targetDateStr, end: getSafeLocalDateStr(edD) }); }
+}
+
+function renderIconPalette(targetId, inputId) { 
+    const palette = document.getElementById(targetId); if (!palette) return; palette.innerHTML = ''; 
+    advancedDict.forEach(item => { 
+        if (!item.icon || !item.keys || item.keys.length === 0) return; 
+        const prefix = item.keys[0]; 
+        let bg = 'var(--head-bg)'; let border = 'var(--border)'; let txtColor = '#666'; let label = prefix;
+        
+        if(item.isStamp) { const rgbStr = hexToRgbForStamp(item.color); bg = `rgba(${rgbStr}, 0.15)`; border = `rgba(${rgbStr}, 0.4)`; txtColor = item.color; label = item.label; }
+
+        const btn = document.createElement('div'); 
+        btn.innerHTML = `<span style="font-size:18px;">${item.icon}</span><span style="font-size:10px; color:${txtColor}; margin-left:4px; font-weight:bold;">${label}</span>`; 
+        btn.style.cssText = `display:flex; align-items:center; cursor: pointer; padding: 4px 8px; background: ${bg}; border: 1px solid ${border}; border-radius: 8px; flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);`; 
+        btn.onclick = () => { const inputEl = document.getElementById(inputId); if (!inputEl.value.includes(prefix)) { inputEl.value = item.isStamp ? (inputEl.value ? inputEl.value + " " + prefix : prefix) : prefix + " " + inputEl.value; } }; 
+        palette.appendChild(btn); 
+    }); 
+}
+
+function processSemanticText(text) { 
+    if (!text) return { text: "", style: null }; 
+    let resText = text; let matchStyle = null; 
+
+    // 長いキーワード順にソートして部分一致バグを確実に防ぐ
+    let allKeywords = [];
+    advancedDict.forEach(item => { item.keys.forEach(key => allKeywords.push({ keyword: key, data: item })); });
+    allKeywords.sort((a, b) => b.keyword.length - a.keyword.length);
+
+    for (const item of allKeywords) {
+        if (resText.includes(item.keyword)) {
+            const dictItem = item.data;
+            if (dictItem.isStamp) resText = resText.split(item.keyword).join(dictItem.icon + " " + dictItem.label);
+            else resText = resText.split(item.keyword).join(dictItem.icon);
+            
+            // 色は最初に見つけたもの（一番長いキーワード）を優先
+            if (!matchStyle) { const hexColor = dictItem.color || '#0a84ff'; const txtColor = getContrastYIQ(hexColor); matchStyle = { bg: hexColor, txt: txtColor }; }
+        }
     }
-    closeEmojiPicker(); 
+    return { text: resText, style: matchStyle }; 
 }
+
+function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText = icon; closeEmojiPicker(); }
+
+document.addEventListener('DOMContentLoaded', () => { loadDict(); });
