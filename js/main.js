@@ -582,13 +582,24 @@ function processSemanticText(text) {
     if (typeof customStamps !== 'undefined') {
         for (const stamp of customStamps) {
             if (resText.includes(stamp.insertText)) {
-                // 予定の文字を「アイコン＋名前」に置き換えて視認性を上げる（例：「休)」→「🏖️ 休」）
                 resText = resText.split(stamp.insertText).join(stamp.icon + " " + stamp.label);
-                // カレンダーの帯には、透過ではないベースカラー（濃い色）を適用し、文字色は自動計算(白か黒)
-                const baseHex = stamp.baseColor || rgbaToHexForStamp(stamp.bg); // 古いデータへの後方互換
-                const txtColor = getContrastYIQ(baseHex);
-                if (!matchStyle) matchStyle = { bg: baseHex, txt: txtColor };
-                return { text: resText, style: matchStyle }; // ハンコが最優先
+                // ★バグ修正：必ず16進数の濃い色（baseColor）を抽出し、確実に背景色として適用する
+                let hexColor = stamp.baseColor;
+                if (!hexColor) {
+                    // 古いデータ（baseColorが無い場合）は bg (rgba) から無理やり HEX を生成する
+                    const match = stamp.bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (match) {
+                        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+                        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+                        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+                        hexColor = `#${r}${g}${b}`;
+                    } else {
+                        hexColor = '#0a84ff'; // 失敗時の最終防衛ライン
+                    }
+                }
+                const txtColor = getContrastYIQ(hexColor);
+                if (!matchStyle) matchStyle = { bg: hexColor, txt: txtColor };
+                return { text: resText, style: matchStyle }; 
             }
         }
     }
@@ -2004,15 +2015,13 @@ function saveStampItem() {
     const iconRaw = document.getElementById('stamp-edit-icon').innerText;
     const icon = iconRaw === '➕ 選択' ? '' : iconRaw.trim();
     
-    // ★視覚的に選ばれた色から、透明度付きの背景(10%)と枠線(30%)を自動生成する
     const baseHex = document.getElementById('stamp-edit-base-color').value;
     const rgbStr = hexToRgbForStamp(baseHex);
-    const bg = `rgba(${rgbStr}, 0.1)`;
-    const border = `rgba(${rgbStr}, 0.3)`;
+    const bg = `rgba(${rgbStr}, 0.15)`; // 少し濃くして視認性を上げる
+    const border = `rgba(${rgbStr}, 0.4)`;
 
     if (!insertText || !label || !icon) { showToast('文字、名前、アイコンは必須だ。'); return; }
 
-// 【修正後】★baseColorを追加
     const newItem = { 
         id: idx >= 0 ? customStamps[idx].id : 'stamp_' + Date.now(), 
         icon, label, bg, border, color: 'var(--txt)', insertText, baseColor: baseHex 
