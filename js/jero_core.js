@@ -357,11 +357,11 @@ async function executeAiBatch() {
     showToast(`✅ ${successCount}件の予定を一括登録した！`);
 }
 
+// --- Jero Core: 最終RAGエンジン (gemini-2.5-flash搭載) ---
 async function unlockAudioAndSend() {
     const inputEl = document.getElementById('chat-input');
     const text = inputEl.value.trim();
     
-    // テキストも画像もない場合は何もしない
     if (!text && !chatFileBase64) return;
 
     const apiKey = localStorage.getItem('jero_gemini_key');
@@ -390,17 +390,16 @@ async function unlockAudioAndSend() {
         const days = ['日', '月', '火', '水', '木', '金', '土'];
         const timeContext = `現在の正確な日時は ${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日(${days[now.getDay()]}) ${now.getHours()}時${now.getMinutes()}分 だ。これを基準に日付を計算しろ。画像内の日付に年が書かれていない場合は、現状から最も自然な年を推測しろ。`;
         
-        // ★Route C: RAG用のカレンダーデータ超圧縮エンジン
         let scheduleData = "\n\n【直近のスケジュール状況(読み取り専用)】\n";
         let dataLines = [];
         const _y = now.getFullYear(), _m = now.getMonth();
-        const targetMonths = [`${_y}-${_m}`, `${_m===11?_y+1:_y}-${_m===11?0:_m+1}`]; // 今月と来月のキャッシュを探る
+        const targetMonths = [`${_y}-${_m}`, `${_m===11?_y+1:_y}-${_m===11?0:_m+1}`];
         
         targetMonths.forEach(mKey => {
             if (typeof dataCache !== 'undefined' && dataCache[mKey] && dataCache[mKey].events) {
                 dataCache[mKey].events.forEach(e => {
                     const st = e.start.dateTime || e.start.date;
-                    if (new Date(st).getTime() > Date.now() - 86400000) { // 昨日以降の予定だけを抽出
+                    if (new Date(st).getTime() > Date.now() - 86400000) { 
                         dataLines.push(`📅 ${st}: ${e.summary || '(無名)'}`);
                     }
                 });
@@ -411,17 +410,15 @@ async function unlockAudioAndSend() {
 
         const customPrompt = localStorage.getItem('jero_gemini_prompt') || '';
 
-        // ★JSONフォーマットの再構築：チャットの返答(reply)と、予定の抽出(events)を分離させる
         const systemPrompt = `
 ${customPrompt}
 ${timeContext}
 ${scheduleData}
 
 【絶対命令】
-必ず以下のJSONフォーマット（オブジェクト）で出力しろ。マークダウン(バッククォート等)は絶対に含めるな。
-
+必ず以下のJSONフォーマット（オブジェクト）で出力しろ。マークダウンは絶対に含めるな。
 {
-  "reply": "ユーザーへの返答。質問（来週の予定は？等）には上の【直近のスケジュール】を見てジェロの口調で的確に答えろ。予定の登録のみを依頼された場合も『任せておけ』等と短く返答しろ。",
+  "reply": "ユーザーへの返答。質問には上の【直近のスケジュール】を見て的確に答えろ。",
   "events": [
     {
       "type": "event",
@@ -455,7 +452,7 @@ ${scheduleData}
             }
         };
 
-        // ★真の完全解：モデルを最新の gemini-2.5-flash に接続し、Googleが吐き出す本当の拒絶理由を暴き出す
+        // ★最強モデル 2.5-flash へ接続し、エラー理由を強制的に吐き出させる
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -463,44 +460,31 @@ ${scheduleData}
         });
 
         if (!response.ok) {
-            let errorText = `API通信エラー (${response.status}) だ。`;
+            let errMsg = `(${response.status})`;
             try {
-                const errorData = await response.json();
-                if (errorData.error && errorData.error.message) {
-                    errorText += `<br>理由: ${errorData.error.message}`;
-                }
+                const errData = await response.json();
+                if (errData.error && errData.error.message) errMsg += ` ${errData.error.message}`;
             } catch(e) {}
-            throw new Error(errorText);
+            throw new Error(`API通信エラー ${errMsg}`);
         }
+
         const data = await response.json();
         const aiResponseText = data.candidates[0].content.parts[0].text;
-        
         let cleanJsonStr = aiResponseText.replace(/```json/gi, '').replace(/```/g, '').trim();
         
         let parsedData = {};
-        try {
-            parsedData = JSON.parse(cleanJsonStr);
-        } catch(e) {
-            thinkingEl.innerText = `❌ JSONの解析に失敗した:\n${aiResponseText}`;
-            thinkingEl.classList.remove('pulse-think');
-            clearChatFile();
-            return;
-        }
+        try { parsedData = JSON.parse(cleanJsonStr); } 
+        catch(e) { throw new Error(`JSONパース失敗: ${cleanJsonStr}`); }
 
         const extractedItems = parsedData.events || [];
         const aiReply = parsedData.reply || "処理が完了したぞ。";
 
-        // ★UI更新: 思考中... を消してAIの回答を表示し、音声も鳴らす
         thinkingEl.classList.remove('pulse-think');
         thinkingEl.innerHTML = aiReply.replace(/\n/g, '<br>');
         if (typeof speakText === 'function') speakText(aiReply);
 
-        if (extractedItems.length === 0) {
-            clearChatFile();
-            return;
-        }
+        if (extractedItems.length === 0) { clearChatFile(); return; }
 
-        // Route B: 画像添付、または複数件抽出時は「検閲モード」へ
         if (chatFileBase64 || extractedItems.length > 1) {
             window.tempAiData = extractedItems;
             const btnHtml = `<br><button class="btn-blue" style="margin-top:10px; width:100%; padding:10px; border-radius:8px; font-weight:bold;" onclick="openAiReview(window.tempAiData)">👁️ 抽出データ(${extractedItems.length}件)を検閲する</button>`;
@@ -509,7 +493,6 @@ ${scheduleData}
             return;
         }
 
-        // Route A: 単一予定の場合は即座にシステム（野戦倉庫）へ直結
         let successCount = 0;
         for (const item of extractedItems) {
             const action = { method: 'insert', ...item };
