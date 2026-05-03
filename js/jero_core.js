@@ -455,13 +455,23 @@ ${scheduleData}
             }
         };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // ★真の完全解：モデルを最新の gemini-2.5-flash に接続し、Googleが吐き出す本当の拒絶理由を暴き出す
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
 
-        if (!response.ok) throw new Error('Google側のAPI通信エラーだ。');
+        if (!response.ok) {
+            let errorText = `API通信エラー (${response.status}) だ。`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error && errorData.error.message) {
+                    errorText += `<br>理由: ${errorData.error.message}`;
+                }
+            } catch(e) {}
+            throw new Error(errorText);
+        }
         const data = await response.json();
         const aiResponseText = data.candidates[0].content.parts[0].text;
         
@@ -510,7 +520,7 @@ ${scheduleData}
         clearChatFile();
 
     } catch (err) {
-        thinkingEl.innerText = `❌ エラー: ${err.message}`;
+        thinkingEl.innerHTML = `❌ エラー: ${err.message}`;
         thinkingEl.classList.remove('pulse-think');
         clearChatFile();
     }
