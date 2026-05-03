@@ -1297,6 +1297,16 @@ async function dispatchManualAction(action) {
     if (action.method === 'delete' && action.id) deletedIds.add(action.id);
     if (!action.start || typeof action.start === 'object') { action.start = (action.start && (action.start.dateTime || action.start.date)) || safeToday; } if (!action.end || typeof action.end === 'object') { action.end = (action.end && (action.end.dateTime || action.end.date)) || action.start; } if (!action.due || typeof action.due === 'object') { action.due = (action.due && (action.due.dateTime || action.due.date)) || safeToday; }
 
+    // ★絶対防壁：システム内部で「0日間の予定」になるのを防ぐ
+    if (action.type === 'event' && action.start && !action.start.includes('T') && action.start === action.end) {
+        const parts = action.start.split('-');
+        if(parts.length === 3) {
+            const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            ed.setDate(ed.getDate() + 1);
+            action.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+        }
+    }
+
     // ★第1層：オプティミスティックUI（仮IDで即座に画面反映）
     const tempLocalId = 'temp_' + Date.now() + '_' + Math.floor(Math.random()*1000);
     updateLocalCacheForOptimisticUI(action, tempLocalId);
@@ -1403,7 +1413,25 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
 async function rehydrateSyncQueue() { const queue = await getSyncQueue(); for (const item of queue) { updateLocalCacheForOptimisticUI(item.payload, item.id); } }
 async function executeApiAction(action, isRetry = false) {
     if (!navigator.onLine) throw new Error("Offline"); const payload = JSON.parse(JSON.stringify(action)); payload.title = payload.title || "(無名)"; payload.description = payload.description || ""; payload.location = payload.location || "";
-    if (payload.type === 'event') { if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.method === 'insert') payload.useDefaultReminders = true; } 
+    if (payload.type === 'event') { 
+        if (payload.start && typeof payload.start === 'object') payload.start = payload.start.dateTime || payload.start.date || ""; 
+        if (payload.end && typeof payload.end === 'object') payload.end = payload.end.dateTime || payload.end.date || ""; 
+        if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } 
+        if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; 
+        
+        // ★絶対防壁：GASへ送る直前、終日予定の開始・終了日が同じなら強制的に+1日する（APIエラーを完全に殺す）
+        if (payload.start && !payload.start.includes('T') && payload.start === payload.end) {
+            const parts = payload.start.split('-');
+            if(parts.length === 3) {
+                const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                ed.setDate(ed.getDate() + 1);
+                payload.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+            }
+        }
+        
+        if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } 
+        if (payload.method === 'insert') payload.useDefaultReminders = true; 
+    } 
     else if (payload.type === 'task') { if (payload.id && payload.id.startsWith('dummy_')) { if (payload.method === 'delete') return; if (payload.method === 'update') { payload.method = 'insert'; delete payload.id; } } if (payload.due && typeof payload.due === 'object') payload.due = payload.due.dateTime || payload.due.date || ""; if (payload.due && typeof payload.due === 'string') { const dateMatch = payload.due.match(/^(\d{4}-\d{2}-\d{2})/); if (dateMatch) { payload.due = dateMatch[1] + 'T00:00:00.000Z'; } } }
             
     // ★ジェロの真の最適解：Base64/JSON個別送信（CORS・302リダイレクトの壁を完全に突破する）
