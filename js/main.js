@@ -2173,8 +2173,19 @@ const JeroDB = {
 
     async saveFile(file) {
         return new Promise((resolve, reject) => {
-            // ★Base64変換という無駄な工程を完全に廃止し、File(バイナリ)のまま直にDBへ叩き込む
             const record = { id: Date.now().toString(), name: file.name, type: file.type, data: file, timestamp: Date.now() };
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            store.put(record);
+            transaction.oncomplete = () => resolve(record);
+            transaction.onerror = (e) => reject(e);
+        });
+    },
+
+    // ★追加：URLリンクをDBに保存するメソッド
+    async saveLink(title, url) {
+        return new Promise((resolve, reject) => {
+            const record = { id: Date.now().toString(), name: title, type: 'url', data: url, timestamp: Date.now() };
             const transaction = this.db.transaction([this.storeName], 'readwrite');
             const store = transaction.objectStore(this.storeName);
             store.put(record);
@@ -2211,13 +2222,14 @@ async function renderQuickFiles() {
     try {
         const files = await JeroDB.getAllFiles();
         if (files.length === 0) {
-            container.innerHTML = '<span style="font-size:11px; color:#888;">よく使うPDFや画像をここにピン留めできるぞ</span>';
+            container.innerHTML = '<span style="font-size:11px; color:#888;">資料やリンクをピン留めできるぞ</span>';
             return;
         }
         container.innerHTML = '';
         files.sort((a, b) => b.timestamp - a.timestamp).forEach(f => {
+            const isUrl = f.type === 'url';
             const isPdf = f.type === 'application/pdf';
-            const icon = isPdf ? '📄' : '🖼️';
+            const icon = isUrl ? '🔗' : (isPdf ? '📄' : '🖼️');
             const el = document.createElement('div');
             el.style.cssText = `display:flex; align-items:center; gap:4px; padding:4px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.05); white-space:nowrap;`;
             
@@ -2252,20 +2264,41 @@ async function handleQuickFileUpload(event) {
     }
 }
 
+// ★追加：URLリンクをプロンプトから受け取って保存する関数
+async function promptAddQuickLink() {
+    const url = prompt("ピン留めしたいURL（Driveの共有リンク等）を貼り付けてくれ:");
+    if (!url) return;
+    const title = prompt("表示する短い名前を入力してくれ:", "Driveリンク") || "リンク";
+    
+    if (typeof showGlobalLoader === 'function') showGlobalLoader('リンクを保存中...');
+    try {
+        await JeroDB.saveLink(title, url);
+        await renderQuickFiles();
+    } catch(e) {
+        alert('保存に失敗したぞ。');
+    } finally {
+        if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+    }
+}
+
 function openQuickFile(fileRecord) {
-    // ★生のバイナリデータ(Blob)から、ブラウザ内限定の「超高速一時URL」を錬成する
+    // ★URLリンクの場合は別タブでそのまま開く
+    if (fileRecord.type === 'url') {
+        window.open(fileRecord.data, '_blank');
+        return;
+    }
+
+    // ファイル(バイナリ)の場合は一時URLを錬成してiframeで開く
     const blobUrl = URL.createObjectURL(fileRecord.data);
     const newWindow = window.open();
     if(newWindow) {
         newWindow.document.write(`<iframe src="${blobUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
         newWindow.document.title = fileRecord.name;
-        // メモリリークを防ぐため、ウィンドウが閉じられたら一時URLを破棄する
         newWindow.addEventListener('unload', () => URL.revokeObjectURL(blobUrl));
     } else {
         alert('ポップアップブロックを解除してくれ。');
     }
 }
-
 // カレンダーのガベージコレクション（古いキャッシュの破棄）
 function runGarbageCollection() {
     if (typeof dataCache === 'undefined') return;

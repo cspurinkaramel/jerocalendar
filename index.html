@@ -48,14 +48,26 @@
     <div id="offline-badge">⚡️ オフライン (キャッシュ表示中・AI使用不可)</div>
 
     <div id="calendar-view" style="display: flex; flex-direction: column; height: calc(100vh - var(--top-bar-h) - env(safe-area-inset-top)); margin-top: calc(var(--top-bar-h) + env(safe-area-inset-top)); overflow: hidden;">
-        <div id="weekdays"></div>
-
-        <!-- ★ Phase 5: クイックアクセスファイルスロット -->
+        
+        <!-- ★ Phase 5: クイックアクセスファイルスロット (ハイブリッド版 / 曜日上部配置) -->
         <div id="quick-access-slot" style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:var(--head-bg); border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none; flex-shrink:0;">
-            <button class="btn-blue" style="padding:4px 8px; font-size:11px; border-radius:6px; border:none; color:white; font-weight:bold; cursor:pointer; flex-shrink:0;" onclick="document.getElementById('quick-file-input').click()">📁 追加</button>
+            <button class="btn-blue" style="padding:4px 8px; font-size:11px; border-radius:6px; border:none; color:white; font-weight:bold; cursor:pointer; flex-shrink:0;" onclick="document.getElementById('quick-file-input').click()">📁 ファイル</button>
+            <button class="btn-green" style="padding:4px 8px; font-size:11px; border-radius:6px; border:none; color:white; font-weight:bold; cursor:pointer; flex-shrink:0; background-color:#34c759;" onclick="promptAddQuickLink()">🔗 リンク</button>
             <input type="file" id="quick-file-input" style="display:none;" onchange="handleQuickFileUpload(event)" accept="application/pdf, image/*">
             <div id="quick-files-container" style="display:flex; gap:8px; align-items:center;">
-                <span style="font-size:11px; color:#888;">よく使うPDFや画像をここにピン留めできるぞ</span>
+                <span style="font-size:11px; color:#888;">よく使う資料やリンクをピン留めできるぞ</span>
+            </div>
+        </div>
+
+        <div id="weekdays"></div>
+
+        <!-- ★ Phase 5: クイックアクセスファイルスロット (ハイブリッド版) -->
+        <div id="quick-access-slot" style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:var(--head-bg); border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none; flex-shrink:0;">
+            <button class="btn-blue" style="padding:4px 8px; font-size:11px; border-radius:6px; border:none; color:white; font-weight:bold; cursor:pointer; flex-shrink:0;" onclick="document.getElementById('quick-file-input').click()">📁 ファイル</button>
+            <button class="btn-green" style="padding:4px 8px; font-size:11px; border-radius:6px; border:none; color:white; font-weight:bold; cursor:pointer; flex-shrink:0; background-color:#34c759;" onclick="promptAddQuickLink()">🔗 リンク</button>
+            <input type="file" id="quick-file-input" style="display:none;" onchange="handleQuickFileUpload(event)" accept="application/pdf, image/*">
+            <div id="quick-files-container" style="display:flex; gap:8px; align-items:center;">
+                <span style="font-size:11px; color:#888;">よく使う資料やリンクをピン留めできるぞ</span>
             </div>
         </div>
 
