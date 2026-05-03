@@ -2228,13 +2228,17 @@ async function renderQuickFiles() {
         container.innerHTML = '';
         files.sort((a, b) => b.timestamp - a.timestamp).forEach(f => {
             const isUrl = f.type === 'url';
-            const isPdf = f.type === 'application/pdf';
-            const icon = isUrl ? '🔗' : (isPdf ? '📄' : '🖼️');
+            
+            // ★追加：データ構造を一目で判別できる視覚的バッジを錬成
+            const badgeStr = isUrl 
+                ? '<span style="background:#34c759; color:white; padding:2px 4px; border-radius:4px; font-size:9px; margin-right:4px;">🌐 リンク</span>' 
+                : '<span style="background:#0a84ff; color:white; padding:2px 4px; border-radius:4px; font-size:9px; margin-right:4px;">💾 実体</span>';
+                
             const el = document.createElement('div');
-            el.style.cssText = `display:flex; align-items:center; gap:4px; padding:4px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.05); white-space:nowrap;`;
+            el.style.cssText = `display:flex; align-items:center; padding:4px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.05); white-space:nowrap;`;
             
             const nameSpan = document.createElement('span');
-            nameSpan.innerText = `${icon} ${f.name.length > 8 ? f.name.substring(0,8)+'...' : f.name}`;
+            nameSpan.innerHTML = `${badgeStr} ${f.name.length > 10 ? f.name.substring(0,10)+'...' : f.name}`;
             nameSpan.onclick = () => openQuickFile(f);
             
             const delBtn = document.createElement('span');
@@ -2264,11 +2268,18 @@ async function handleQuickFileUpload(event) {
     }
 }
 
-// ★追加：URLリンクをプロンプトから受け取って保存する関数
+// ★追加：URLリンクをプロンプトから受け取って保存する関数 (クリップボード自動読み取り機能付き)
 async function promptAddQuickLink() {
-    const url = prompt("ピン留めしたいURL（Driveの共有リンク等）を貼り付けてくれ:");
+    let defaultUrl = "";
+    try {
+        // ★ボタンを押した瞬間、クリップボードにURLがあれば自動で掠め取る
+        const clipText = await navigator.clipboard.readText();
+        if (clipText && clipText.startsWith("http")) defaultUrl = clipText;
+    } catch(e) { /* 権限がない場合は無視する */ }
+
+    const url = prompt("ピン留めするURL:\n(コピー済みの場合は最初から入っているぞ)", defaultUrl);
     if (!url) return;
-    const title = prompt("表示する短い名前を入力してくれ:", "Driveリンク") || "リンク";
+    const title = prompt("表示する短い名前:", "Driveリンク") || "リンク";
     
     if (typeof showGlobalLoader === 'function') showGlobalLoader('リンクを保存中...');
     try {
