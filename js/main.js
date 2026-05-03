@@ -2173,16 +2173,13 @@ const JeroDB = {
 
     async saveFile(file) {
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const record = { id: Date.now().toString(), name: file.name, type: file.type, data: e.target.result, timestamp: Date.now() };
-                const transaction = this.db.transaction([this.storeName], 'readwrite');
-                const store = transaction.objectStore(this.storeName);
-                store.put(record);
-                transaction.oncomplete = () => resolve(record);
-                transaction.onerror = (e) => reject(e);
-            };
-            reader.readAsDataURL(file); // PDFや画像を開くためにBase64化してDBへ保存
+            // ★Base64変換という無駄な工程を完全に廃止し、File(バイナリ)のまま直にDBへ叩き込む
+            const record = { id: Date.now().toString(), name: file.name, type: file.type, data: file, timestamp: Date.now() };
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            store.put(record);
+            transaction.oncomplete = () => resolve(record);
+            transaction.onerror = (e) => reject(e);
         });
     },
 
@@ -2256,11 +2253,14 @@ async function handleQuickFileUpload(event) {
 }
 
 function openQuickFile(fileRecord) {
-    // PDFや画像を別ウィンドウまたはタブで即座に展開
+    // ★生のバイナリデータ(Blob)から、ブラウザ内限定の「超高速一時URL」を錬成する
+    const blobUrl = URL.createObjectURL(fileRecord.data);
     const newWindow = window.open();
     if(newWindow) {
-        newWindow.document.write(`<iframe src="${fileRecord.data}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+        newWindow.document.write(`<iframe src="${blobUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
         newWindow.document.title = fileRecord.name;
+        // メモリリークを防ぐため、ウィンドウが閉じられたら一時URLを破棄する
+        newWindow.addEventListener('unload', () => URL.revokeObjectURL(blobUrl));
     } else {
         alert('ポップアップブロックを解除してくれ。');
     }
