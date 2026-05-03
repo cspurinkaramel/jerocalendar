@@ -396,17 +396,28 @@ async function unlockAudioAndSend() {
         const targetMonths = [`${_y}-${_m}`, `${_m===11?_y+1:_y}-${_m===11?0:_m+1}`];
         
         targetMonths.forEach(mKey => {
-            if (typeof dataCache !== 'undefined' && dataCache[mKey] && dataCache[mKey].events) {
-                dataCache[mKey].events.forEach(e => {
-                    const st = e.start.dateTime || e.start.date;
-                    if (new Date(st).getTime() > Date.now() - 86400000) { 
-                        dataLines.push(`📅 ${st}: ${e.summary || '(無名)'}`);
-                    }
-                });
+            if (typeof dataCache !== 'undefined' && dataCache[mKey]) {
+                // 予定の読み込み
+                if (dataCache[mKey].events) {
+                    dataCache[mKey].events.forEach(e => {
+                        const st = e.start.dateTime || e.start.date;
+                        if (new Date(st).getTime() > Date.now() - 86400000) { 
+                            dataLines.push(`📅 ${st}: ${e.summary || '(無名予定)'}`);
+                        }
+                    });
+                }
+                // タスクの読み込み（未完了のものだけを抽出）
+                if (dataCache[mKey].tasks) {
+                    dataCache[mKey].tasks.forEach(t => {
+                        if (t.status === 'completed') return;
+                        const due = t.due ? t.due.split('T')[0] : '期限なし';
+                        dataLines.push(`☑️ ${due}: ${t.title || '(無名タスク)'}`);
+                    });
+                }
             }
         });
         if (dataLines.length > 0) scheduleData += dataLines.join('\n');
-        else scheduleData += "直近の予定は今のところ無い。";
+        else scheduleData += "直近の予定・タスクは今のところ無い。";
 
         const customPrompt = localStorage.getItem('jero_gemini_prompt') || '';
 
@@ -421,16 +432,17 @@ ${scheduleData}
   "reply": "ユーザーへの返答。質問には上の【直近のスケジュール】を見て的確に答えろ。",
   "events": [
     {
-      "type": "event",
+      "type": "event または task",
       "title": "タイトル",
-      "start": "YYYY-MM-DDTHH:mm:00+09:00", 
-      "end": "YYYY-MM-DDTHH:mm:00+09:00", 
+      "start": "YYYY-MM-DDTHH:mm:00+09:00 (eventの場合の開始)", 
+      "end": "YYYY-MM-DDTHH:mm:00+09:00 (eventの場合の終了)", 
+      "due": "YYYY-MM-DDTHH:mm:00+09:00 (taskの場合の期限)",
       "description": "メモ",
       "location": "場所"
     }
   ]
 }
-※抽出・登録する予定がない場合は "events": [] とすること。
+※抽出・登録する情報がない場合は "events": [] とすること。
 `;
 
         let parts = [{ text: text || "この画像の予定を抽出してくれ" }];
