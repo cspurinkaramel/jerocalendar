@@ -1419,13 +1419,22 @@ async function executeApiAction(action, isRetry = false) {
         if (!payload.start || typeof payload.start !== 'string') { payload.start = getSafeLocalDateStr(); } 
         if (!payload.end || typeof payload.end !== 'string') payload.end = payload.start; 
         
-        // ★絶対防壁：GASへ送る直前、終日予定の開始・終了日が同じなら強制的に+1日する（APIエラーを完全に殺す）
-        if (payload.start && !payload.start.includes('T') && payload.start === payload.end) {
-            const parts = payload.start.split('-');
-            if(parts.length === 3) {
-                const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                ed.setDate(ed.getDate() + 1);
-                payload.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+        // ★真・絶対防壁：GASへ送る直前、開始と終了が完全に一致(0日間/0分間)なら強制的に時間を広げる
+        if (payload.start && payload.start === payload.end) {
+            if (payload.start.includes('T')) {
+                // 時間指定の場合：終了時間を開始の「1時間後」に強制補正
+                let stDate = new Date(payload.start);
+                stDate.setHours(stDate.getHours() + 1);
+                const pad = (n) => String(n).padStart(2, '0');
+                payload.end = `${stDate.getFullYear()}-${pad(stDate.getMonth()+1)}-${pad(stDate.getDate())}T${pad(stDate.getHours())}:${pad(stDate.getMinutes())}:${pad(stDate.getSeconds())}+09:00`;
+            } else {
+                // 終日予定の場合：終了日を「翌日」に強制補正
+                const parts = payload.start.split('-');
+                if(parts.length === 3) {
+                    const ed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    ed.setDate(ed.getDate() + 1);
+                    payload.end = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+                }
             }
         }
         
