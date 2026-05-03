@@ -421,6 +421,8 @@
             <div class="setting-row">
                 <label style="color: var(--txt);">システム・メンテナンス</label>
                 <button class="btn btn-blue" style="font-size: 14px; display:flex; justify-content:center; align-items:center; gap:8px; padding: 10px;" onclick="forceHardReload()">🔄 最新アプリ強制取得</button>
+                <!-- ★ここに野戦倉庫への直結ボタンを追加 -->
+                <button class="btn btn-gray" style="margin-top: 10px; font-size: 14px; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;" onclick="openSyncManager()">📦 未送信データの確認・破棄</button>
                 <button class="btn" style="margin-top: 10px; font-size: 14px; background: #ff9500; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;" onclick="openStorageCleaner()">🧹 孤立ファイル診断 (大掃除)</button>
             </div>
 
@@ -718,8 +720,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.45" defer></script>
-    <script src="./js/jero_core.js?v=16.45" defer></script>
+    <script src="./js/main.js?v=16.46" defer></script>
+    <script src="./js/jero_core.js?v=16.46" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
