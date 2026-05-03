@@ -2146,3 +2146,156 @@ function processSemanticText(text) {
 function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText = icon; closeEmojiPicker(); }
 
 document.addEventListener('DOMContentLoaded', () => { loadDict(); });
+
+// ==========================================
+// ★ Phase 5: JeroDB (IndexedDB) & ガベージコレクション
+// ==========================================
+
+const JeroDB = {
+    dbName: 'JeroStorage',
+    dbVersion: 1,
+    storeName: 'quickFiles',
+    db: null,
+
+    async init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.storeName)) {
+                    db.createObjectStore(this.storeName, { keyPath: 'id' });
+                }
+            };
+            request.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+            request.onerror = (e) => { console.error("JeroDB Error", e); reject(e); };
+        });
+    },
+
+    async saveFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const record = { id: Date.now().toString(), name: file.name, type: file.type, data: e.target.result, timestamp: Date.now() };
+                const transaction = this.db.transaction([this.storeName], 'readwrite');
+                const store = transaction.objectStore(this.storeName);
+                store.put(record);
+                transaction.oncomplete = () => resolve(record);
+                transaction.onerror = (e) => reject(e);
+            };
+            reader.readAsDataURL(file); // PDFや画像を開くためにBase64化してDBへ保存
+        });
+    },
+
+    async getAllFiles() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e);
+        });
+    },
+
+    async deleteFile(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            store.delete(id);
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = (e) => reject(e);
+        });
+    }
+};
+
+// クイックアクセスUIの描画
+async function renderQuickFiles() {
+    const container = document.getElementById('quick-files-container');
+    if (!container) return;
+    try {
+        const files = await JeroDB.getAllFiles();
+        if (files.length === 0) {
+            container.innerHTML = '<span style="font-size:11px; color:#888;">よく使うPDFや画像をここにピン留めできるぞ</span>';
+            return;
+        }
+        container.innerHTML = '';
+        files.sort((a, b) => b.timestamp - a.timestamp).forEach(f => {
+            const isPdf = f.type === 'application/pdf';
+            const icon = isPdf ? '📄' : '🖼️';
+            const el = document.createElement('div');
+            el.style.cssText = `display:flex; align-items:center; gap:4px; padding:4px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.05); white-space:nowrap;`;
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.innerText = `${icon} ${f.name.length > 8 ? f.name.substring(0,8)+'...' : f.name}`;
+            nameSpan.onclick = () => openQuickFile(f);
+            
+            const delBtn = document.createElement('span');
+            delBtn.innerText = '✕';
+            delBtn.style.cssText = `margin-left:4px; color:#888; font-weight:normal; font-size:10px; padding:2px;`;
+            delBtn.onclick = async (e) => { e.stopPropagation(); if(confirm('このピン留めを外すか？')) { await JeroDB.deleteFile(f.id); renderQuickFiles(); } };
+            
+            el.appendChild(nameSpan);
+            el.appendChild(delBtn);
+            container.appendChild(el);
+        });
+    } catch(e) { console.error("Quick files render error", e); }
+}
+
+async function handleQuickFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (typeof showGlobalLoader === 'function') showGlobalLoader('DBに保存中...');
+    try {
+        await JeroDB.saveFile(file);
+        await renderQuickFiles();
+    } catch(e) {
+        alert('保存に失敗したぞ。');
+    } finally {
+        if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+        event.target.value = '';
+    }
+}
+
+function openQuickFile(fileRecord) {
+    // PDFや画像を別ウィンドウまたはタブで即座に展開
+    const newWindow = window.open();
+    if(newWindow) {
+        newWindow.document.write(`<iframe src="${fileRecord.data}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+        newWindow.document.title = fileRecord.name;
+    } else {
+        alert('ポップアップブロックを解除してくれ。');
+    }
+}
+
+// カレンダーのガベージコレクション（古いキャッシュの破棄）
+function runGarbageCollection() {
+    if (typeof dataCache === 'undefined') return;
+    const now = new Date();
+    const keepMonths = [];
+    // 前後3ヶ月分(計7ヶ月)のキーを生成 (例: "2026-4")
+    for (let i = -3; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        keepMonths.push(`${d.getFullYear()}-${d.getMonth()}`);
+    }
+    
+    let deletedCount = 0;
+    for (const key in dataCache) {
+        if (!keepMonths.includes(key)) {
+            delete dataCache[key];
+            deletedCount++;
+        }
+    }
+    if (deletedCount > 0) {
+        console.log(`🧹 Jero GC: 古いキャッシュを ${deletedCount} ヶ月分破棄し、メモリを解放したぞ。`);
+    }
+}
+
+// アプリ起動時にJeroDBとGCを起動する
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await JeroDB.init();
+        renderQuickFiles();
+    } catch(e) { console.error("JeroDBの初期化に失敗した", e); }
+    
+    // アプリの起動を邪魔しないよう、5秒後に裏側でひっそりとGCを実行する
+    setTimeout(runGarbageCollection, 5000);
+});

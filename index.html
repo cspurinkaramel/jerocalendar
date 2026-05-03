@@ -50,6 +50,15 @@
     <div id="calendar-view" style="display: flex; flex-direction: column; height: calc(100vh - var(--top-bar-h) - env(safe-area-inset-top)); margin-top: calc(var(--top-bar-h) + env(safe-area-inset-top)); overflow: hidden;">
         <div id="weekdays"></div>
 
+        <!-- ★ Phase 5: クイックアクセスファイルスロット -->
+        <div id="quick-access-slot" style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:var(--head-bg); border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none; flex-shrink:0;">
+            <button class="btn-blue" style="padding:4px 8px; font-size:11px; border-radius:6px; border:none; color:white; font-weight:bold; cursor:pointer; flex-shrink:0;" onclick="document.getElementById('quick-file-input').click()">📁 追加</button>
+            <input type="file" id="quick-file-input" style="display:none;" onchange="handleQuickFileUpload(event)" accept="application/pdf, image/*">
+            <div id="quick-files-container" style="display:flex; gap:8px; align-items:center;">
+                <span style="font-size:11px; color:#888;">よく使うPDFや画像をここにピン留めできるぞ</span>
+            </div>
+        </div>
+
         <div id="scroll-container">
             <div id="top-trigger" class="loader-container hidden">
                 <div class="spinner"></div>
@@ -720,8 +729,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.48" defer></script>
-    <script src="./js/jero_core.js?v=16.48" defer></script>
+    <script src="./js/main.js?v=16.49" defer></script>
+    <script src="./js/jero_core.js?v=16.49" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
