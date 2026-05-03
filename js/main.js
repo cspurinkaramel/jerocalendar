@@ -2292,23 +2292,50 @@ async function promptAddQuickLink() {
     }
 }
 
-function openQuickFile(fileRecord) {
-    // ★URLリンクの場合は別タブでそのまま開く
+async function openQuickFile(fileRecord) {
+    // ★リンクの場合はそのまま別タブ(外部ブラウザ)で開く
     if (fileRecord.type === 'url') {
         window.open(fileRecord.data, '_blank');
         return;
     }
 
-    // ファイル(バイナリ)の場合は一時URLを錬成してiframeで開く
-    const blobUrl = URL.createObjectURL(fileRecord.data);
-    const newWindow = window.open();
-    if(newWindow) {
-        newWindow.document.write(`<iframe src="${blobUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
-        newWindow.document.title = fileRecord.name;
-        newWindow.addEventListener('unload', () => URL.revokeObjectURL(blobUrl));
-    } else {
-        alert('ポップアップブロックを解除してくれ。');
+    const file = fileRecord.data;
+
+    // ★画像の場合：アプリ内の安全なビューワ(×ボタンで戻れる)を使う
+    if (file.type && file.type.startsWith('image/')) {
+        const blobUrl = URL.createObjectURL(file);
+        const viewer = document.getElementById('img-viewer');
+        const img = document.getElementById('img-viewer-src');
+        if (viewer && img) {
+            img.src = blobUrl;
+            viewer.style.display = 'flex';
+            return;
+        }
     }
+
+    // ★PDFなどの場合：iOS特有の「スクロール不可＆戻れない地獄」を完全に回避する
+    try {
+        // iPhoneネイティブの「共有メニュー」を呼び出し、OSの力で読ませる
+        if (navigator.share && navigator.canShare) {
+            const shareFile = new File([file], fileRecord.name, { type: file.type });
+            if (navigator.canShare({ files: [shareFile] })) {
+                await navigator.share({ files: [shareFile], title: fileRecord.name });
+                return; // 成功すれば、クイックルックや他のアプリで安全に読める
+            }
+        }
+    } catch(e) {
+        console.log("共有がキャンセルされたか、失敗した", e);
+    }
+
+    // 共有メニューが使えなかった場合の最終手段（強制ダウンロード）
+    const blobUrl = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileRecord.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 }
 // カレンダーのガベージコレクション（古いキャッシュの破棄）
 function runGarbageCollection() {
