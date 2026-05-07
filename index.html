@@ -721,6 +721,24 @@
         </div>
     </div>
 
+    <div id="pdf-viewer-modal" class="bottom-modal" style="z-index: 130; height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-drag-area" onclick="closePdfViewer()">
+            <div class="modal-drag"></div>
+        </div>
+        <div class="modal-header">
+            <h2 id="pdf-viewer-title" style="font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">PDF</h2>
+            <button class="close-btn" onclick="closePdfViewer()">✕</button>
+        </div>
+        <div class="modal-body" style="flex: 1; padding: 0; background: #e5e5ea; overflow-y: auto; display: flex; flex-direction: column; align-items: center;" id="pdf-viewer-container">
+            <canvas id="pdf-canvas" style="max-width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 10px;"></canvas>
+        </div>
+        <div class="action-bar" style="padding: 10px 15px; display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn btn-gray" id="pdf-prev" onclick="changePdfPage(-1)" style="font-weight:bold;">◀ 前へ</button>
+            <span style="font-weight:bold; font-size:14px;"><span id="pdf-page-num">1</span> / <span id="pdf-page-count">?</span></span>
+            <button class="btn btn-blue" id="pdf-next" onclick="changePdfPage(1)" style="font-weight:bold;">次へ ▶</button>
+        </div>
+    </div>
+
     <div id="img-viewer" onclick="closeImageViewer()">
         <div id="img-viewer-zoom-container" onclick="event.stopPropagation()">
             <img id="img-viewer-src" src="">
@@ -731,8 +749,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.53" defer></script>
-    <script src="./js/jero_core.js?v=16.53" defer></script>
+    <script src="./js/main.js?v=16.54" defer></script>
+    <script src="./js/jero_core.js?v=16.54" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

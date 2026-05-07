@@ -2293,7 +2293,6 @@ async function promptAddQuickLink() {
 }
 
 async function openQuickFile(fileRecord) {
-    // ★リンクの場合はそのまま別タブ(外部ブラウザ)で開く
     if (fileRecord.type === 'url') {
         window.open(fileRecord.data, '_blank');
         return;
@@ -2301,7 +2300,6 @@ async function openQuickFile(fileRecord) {
 
     const file = fileRecord.data;
 
-    // ★画像の場合：アプリ内の安全なビューワ(×ボタンで戻れる)を使う
     if (file.type && file.type.startsWith('image/')) {
         const blobUrl = URL.createObjectURL(file);
         const viewer = document.getElementById('img-viewer');
@@ -2313,21 +2311,13 @@ async function openQuickFile(fileRecord) {
         }
     }
 
-    // ★PDFなどの場合：iOS特有の「スクロール不可＆戻れない地獄」を完全に回避する
-    try {
-        // iPhoneネイティブの「共有メニュー」を呼び出し、OSの力で読ませる
-        if (navigator.share && navigator.canShare) {
-            const shareFile = new File([file], fileRecord.name, { type: file.type });
-            if (navigator.canShare({ files: [shareFile] })) {
-                await navigator.share({ files: [shareFile], title: fileRecord.name });
-                return; // 成功すれば、クイックルックや他のアプリで安全に読める
-            }
-        }
-    } catch(e) {
-        console.log("共有がキャンセルされたか、失敗した", e);
+    // ★PDFの場合：OSに一切頼らず、内蔵のJero PDFエンジンで安全に展開する
+    if (file.type === 'application/pdf') {
+        openPdfInJero(file, fileRecord.name);
+        return;
     }
 
-    // 共有メニューが使えなかった場合の最終手段（強制ダウンロード）
+    // PDFでも画像でもない未知のファイルは、とりあえずダウンロードさせる
     const blobUrl = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = blobUrl;
@@ -2336,6 +2326,97 @@ async function openQuickFile(fileRecord) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
+// ==========================================
+// ★ Phase 6: Jero Native PDF Engine
+// ==========================================
+let pdfDoc = null, pageNum = 1, pageIsRendering = false, pageNumIsPending = null;
+
+async function openPdfInJero(file, title) {
+    if (!window.pdfjsLib) {
+        alert('PDFエンジンが読み込まれていないようだ。');
+        return;
+    }
+    
+    document.getElementById('pdf-viewer-title').innerText = title;
+    document.getElementById('pdf-viewer-modal').classList.add('active');
+    if (document.getElementById('overlay')) document.getElementById('overlay').classList.add('active');
+    
+    if (typeof showGlobalLoader === 'function') showGlobalLoader('PDFを解析中...');
+    
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        // 処理を軽くするための裏方(Worker)を呼び出す
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        
+        pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        document.getElementById('pdf-page-count').innerText = pdfDoc.numPages;
+        pageNum = 1;
+        renderPdfPage(pageNum);
+    } catch(e) {
+        console.error(e);
+        alert('PDFの展開に失敗したぞ。壊れているかもしれないな。');
+    } finally {
+        if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+    }
+}
+
+async function renderPdfPage(num) {
+    pageIsRendering = true;
+    try {
+        const page = await pdfDoc.getPage(num);
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // スマホの画面幅に合わせてPDFを自動でズームする
+        const containerWidth = document.getElementById('pdf-viewer-container').clientWidth || window.innerWidth;
+        const unscaledViewport = page.getViewport({ scale: 1.0 });
+        const dynamicScale = Math.min((containerWidth - 20) / unscaledViewport.width, 2.0); 
+        
+        const viewport = page.getViewport({ scale: dynamicScale > 0.5 ? dynamicScale : 1.5 });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderCtx = { canvasContext: ctx, viewport: viewport };
+        await page.render(renderCtx).promise;
+        
+        pageIsRendering = false;
+        if (pageNumIsPending !== null) {
+            renderPdfPage(pageNumIsPending);
+            pageNumIsPending = null;
+        }
+    } catch(e) {
+        console.error("Page render error", e);
+        pageIsRendering = false;
+    }
+    
+    document.getElementById('pdf-page-num').innerText = num;
+    document.getElementById('pdf-prev').disabled = num <= 1;
+    document.getElementById('pdf-next').disabled = num >= pdfDoc.numPages;
+}
+
+function changePdfPage(dir) {
+    if (!pdfDoc) return;
+    let newPage = pageNum + dir;
+    if (newPage <= 0 || newPage > pdfDoc.numPages) return;
+    pageNum = newPage;
+    if (pageIsRendering) {
+        pageNumIsPending = pageNum;
+    } else {
+        renderPdfPage(pageNum);
+    }
+}
+
+function closePdfViewer() {
+    document.getElementById('pdf-viewer-modal').classList.remove('active');
+    if (document.getElementById('overlay')) document.getElementById('overlay').classList.remove('active');
+    pdfDoc = null;
+    const canvas = document.getElementById('pdf-canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 }
 // カレンダーのガベージコレクション（古いキャッシュの破棄）
 function runGarbageCollection() {
