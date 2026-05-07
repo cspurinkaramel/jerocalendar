@@ -2329,34 +2329,34 @@ async function openQuickFile(fileRecord) {
 }
 
 // ==========================================
-// ★ Phase 6: Jero Native PDF Engine
+// ★ Phase 6: Jero Native PDF Engine (究極進化版)
 // ==========================================
 let pdfDoc = null, pageNum = 1, pageIsRendering = false, pageNumIsPending = null;
+let pdfScale = 1.0, pdfSearchMatches = [], currentMatchIdx = -1;
 
 async function openPdfInJero(file, title) {
-    if (!window.pdfjsLib) {
-        alert('PDFエンジンが読み込まれていないようだ。');
-        return;
-    }
-    
+    if (!window.pdfjsLib) { alert('PDFエンジン不在だ。'); return; }
     document.getElementById('pdf-viewer-title').innerText = title;
     document.getElementById('pdf-viewer-modal').classList.add('active');
     if (document.getElementById('overlay')) document.getElementById('overlay').classList.add('active');
     
-    if (typeof showGlobalLoader === 'function') showGlobalLoader('PDFを解析中...');
-    
+    // リセット
+    pdfSearchMatches = [];
+    currentMatchIdx = -1;
+    document.getElementById('pdf-search-results').style.display = 'none';
+    document.getElementById('pdf-search-input').value = '';
+
+    if (typeof showGlobalLoader === 'function') showGlobalLoader('巨大PDFを解析中...');
     try {
         const arrayBuffer = await file.arrayBuffer();
-        // 処理を軽くするための裏方(Worker)を呼び出す
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        
         pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         document.getElementById('pdf-page-count').innerText = pdfDoc.numPages;
+        document.getElementById('pdf-page-jump').max = pdfDoc.numPages;
         pageNum = 1;
-        renderPdfPage(pageNum);
+        zoomPdf(0, true); // 最初は「幅合わせ」で描画
     } catch(e) {
-        console.error(e);
-        alert('PDFの展開に失敗したぞ。壊れているかもしれないな。');
+        alert('解析失敗。');
     } finally {
         if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
     }
@@ -2368,32 +2368,21 @@ async function renderPdfPage(num) {
         const page = await pdfDoc.getPage(num);
         const canvas = document.getElementById('pdf-canvas');
         const ctx = canvas.getContext('2d');
+        const viewport = page.getViewport({ scale: pdfScale });
         
-        // スマホの画面幅に合わせてPDFを自動でズームする
-        const containerWidth = document.getElementById('pdf-viewer-container').clientWidth || window.innerWidth;
-        const unscaledViewport = page.getViewport({ scale: 1.0 });
-        const dynamicScale = Math.min((containerWidth - 20) / unscaledViewport.width, 2.0); 
-        
-        const viewport = page.getViewport({ scale: dynamicScale > 0.5 ? dynamicScale : 1.5 });
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-
         const renderCtx = { canvasContext: ctx, viewport: viewport };
         await page.render(renderCtx).promise;
         
         pageIsRendering = false;
-        if (pageNumIsPending !== null) {
-            renderPdfPage(pageNumIsPending);
-            pageNumIsPending = null;
-        }
-    } catch(e) {
-        console.error("Page render error", e);
-        pageIsRendering = false;
-    }
+        if (pageNumIsPending !== null) { renderPdfPage(pageNumIsPending); pageNumIsPending = null; }
+    } catch(e) { pageIsRendering = false; }
     
-    document.getElementById('pdf-page-num').innerText = num;
+    document.getElementById('pdf-page-jump').value = num;
     document.getElementById('pdf-prev').disabled = num <= 1;
     document.getElementById('pdf-next').disabled = num >= pdfDoc.numPages;
+    document.getElementById('pdf-zoom-val').innerText = Math.round(pdfScale * 100) + '%';
 }
 
 function changePdfPage(dir) {
@@ -2401,22 +2390,83 @@ function changePdfPage(dir) {
     let newPage = pageNum + dir;
     if (newPage <= 0 || newPage > pdfDoc.numPages) return;
     pageNum = newPage;
-    if (pageIsRendering) {
-        pageNumIsPending = pageNum;
+    if (pageIsRendering) pageNumIsPending = pageNum; else renderPdfPage(pageNum);
+}
+
+function jumpToPdfPage(val) {
+    let n = parseInt(val);
+    if (isNaN(n) || n < 1 || n > pdfDoc.numPages) return;
+    pageNum = n;
+    renderPdfPage(pageNum);
+}
+
+function zoomPdf(delta, isFit = false) {
+    if (!pdfDoc) return;
+    if (isFit) {
+        // 幅合わせロジック
+        pdfDoc.getPage(pageNum).then(page => {
+            const containerWidth = document.getElementById('pdf-viewer-container').clientWidth - 30;
+            const unscaledViewport = page.getViewport({ scale: 1.0 });
+            pdfScale = containerWidth / unscaledViewport.width;
+            renderPdfPage(pageNum);
+        });
     } else {
+        pdfScale = Math.min(Math.max(pdfScale + delta, 0.5), 3.0);
         renderPdfPage(pageNum);
     }
+}
+
+// ★全文検索エンジン：500ページを音速で走査する
+async function searchPdf() {
+    const query = document.getElementById('pdf-search-input').value.trim();
+    if (!query || !pdfDoc) return;
+
+    pdfSearchMatches = [];
+    currentMatchIdx = -1;
+    const statusEl = document.getElementById('pdf-search-status');
+    const resultsArea = document.getElementById('pdf-search-results');
+    
+    resultsArea.style.display = 'block';
+    statusEl.innerText = "探索中...🐈💨";
+
+    try {
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const textContent = await page.getTextContent();
+            const text = textContent.items.map(item => item.str).join('');
+            if (text.toLowerCase().includes(query.toLowerCase())) {
+                pdfSearchMatches.push(i);
+            }
+            // 進行状況を出すと遅くなるので、100ページごとに一瞬表示
+            if (i % 100 === 0) statusEl.innerText = `${i}ページ通過...`;
+        }
+
+        if (pdfSearchMatches.length > 0) {
+            statusEl.innerText = `${pdfSearchMatches.length}箇所で見つかったぞ！`;
+            navigateSearch(1); // 最初のヒットへ
+        } else {
+            statusEl.innerText = "見つからなかった。";
+        }
+    } catch(e) {
+        statusEl.innerText = "探索エラーだ。";
+    }
+}
+
+function navigateSearch(dir) {
+    if (pdfSearchMatches.length === 0) return;
+    currentMatchIdx += dir;
+    if (currentMatchIdx >= pdfSearchMatches.length) currentMatchIdx = 0;
+    if (currentMatchIdx < 0) currentMatchIdx = pdfSearchMatches.length - 1;
+
+    document.getElementById('pdf-search-status').innerText = `${currentMatchIdx + 1} / ${pdfSearchMatches.length} ページ目`;
+    pageNum = pdfSearchMatches[currentMatchIdx];
+    renderPdfPage(pageNum);
 }
 
 function closePdfViewer() {
     document.getElementById('pdf-viewer-modal').classList.remove('active');
     if (document.getElementById('overlay')) document.getElementById('overlay').classList.remove('active');
     pdfDoc = null;
-    const canvas = document.getElementById('pdf-canvas');
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
 }
 // カレンダーのガベージコレクション（古いキャッシュの破棄）
 function runGarbageCollection() {
@@ -2451,3 +2501,107 @@ document.addEventListener('DOMContentLoaded', async () => {
     // アプリの起動を邪魔しないよう、5秒後に裏側でひっそりとGCを実行する
     setTimeout(runGarbageCollection, 5000);
 });
+
+// ==========================================
+// ★ Phase 6.5: スワイプ・ナビゲーション・エンジン
+// ==========================================
+let swipeStartX = 0;
+let swipeStartY = 0;
+
+function initSwipeNavigation() {
+    // カレンダー全体を包むビューに対して検閲を開始する
+    const calendarView = document.getElementById('calendar-view');
+    if (!calendarView) return;
+
+    // タッチ開始地点を記録
+    calendarView.addEventListener('touchstart', (e) => {
+        swipeStartX = e.changedTouches[0].screenX;
+        swipeStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    // タッチ終了時にベクトルの解析を実行
+    calendarView.addEventListener('touchend', (e) => {
+        const endX = e.changedTouches[0].screenX;
+        const endY = e.changedTouches[0].screenY;
+        analyzeSwipe(swipeStartX, swipeStartY, endX, endY);
+    }, { passive: true });
+}
+
+function analyzeSwipe(startX, startY, endX, endY) {
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    
+    const threshold = 80;    // 80px以上の横移動が必要
+    const restraint = 100;   // 縦方向のズレは100px以内であること
+
+    // 【第一原理思考】横の移動が縦の移動より圧倒的に大きく、かつ閾値を超えているか？
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > threshold && Math.abs(deltaY) < restraint) {
+        if (deltaX > 0) {
+            // 右方向へスワイプ = 前の月へ
+            console.log("🐈 Jero: 前の月へ移動するぞ。");
+            if (typeof changeMonth === 'function') {
+                changeMonth(-1);
+            } else {
+                // まだ changeMonth がない場合はスクロールで代用
+                document.getElementById('scroll-container').scrollBy({ top: -300, behavior: 'smooth' });
+            }
+        } else {
+            // 左方向へスワイプ = 次の月へ
+            console.log("🐈 Jero: 次の月へ移動するぞ。");
+            if (typeof changeMonth === 'function') {
+                changeMonth(1);
+            } else {
+                // まだ changeMonth がない場合はスクロールで代用
+                document.getElementById('scroll-container').scrollBy({ top: 300, behavior: 'smooth' });
+            }
+        }
+    }
+}
+
+// 起動時にエンジンを回す
+document.addEventListener('DOMContentLoaded', initSwipeNavigation);
+
+// ==========================================
+// ★ Phase 6.6: PDFビューワ専用 スワイプめくりエンジン
+// ==========================================
+let pdfSwipeStartX = 0;
+let pdfSwipeStartY = 0;
+
+function initPdfSwipeNavigation() {
+    const pdfContainer = document.getElementById('pdf-viewer-container');
+    if (!pdfContainer) return;
+
+    pdfContainer.addEventListener('touchstart', (e) => {
+        // ピンチズーム操作中（指2本以上）は無視する
+        if (e.touches.length > 1) return; 
+        pdfSwipeStartX = e.changedTouches[0].screenX;
+        pdfSwipeStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    pdfContainer.addEventListener('touchend', (e) => {
+        if (e.changedTouches.length > 1) return;
+        
+        // ★絶対防壁（誤爆防止）：PDFが拡大されていて横スクロール可能な状態なら、めくり判定を無効化する
+        const isScrollableX = pdfContainer.scrollWidth > pdfContainer.clientWidth + 5;
+        if (isScrollableX) return;
+
+        const endX = e.changedTouches[0].screenX;
+        const endY = e.changedTouches[0].screenY;
+        const deltaX = endX - pdfSwipeStartX;
+        const deltaY = endY - pdfSwipeStartY;
+        
+        // 横方向への明確なスワイプ判定（縦のブレより横の移動が大きく、かつ50px以上動かしたか）
+        if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && Math.abs(deltaX) > 50) {
+            if (deltaX > 0) {
+                // 右へスワイプ = 前のページへ
+                changePdfPage(-1);
+            } else {
+                // 左へスワイプ = 次のページへ
+                changePdfPage(1);
+            }
+        }
+    }, { passive: true });
+}
+
+// 起動時にPDF用のスワイプエンジンも点火する
+document.addEventListener('DOMContentLoaded', initPdfSwipeNavigation);

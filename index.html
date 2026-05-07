@@ -721,21 +721,43 @@
         </div>
     </div>
 
-    <div id="pdf-viewer-modal" class="bottom-modal" style="z-index: 130; height: 90vh; display: flex; flex-direction: column;">
+    <div id="pdf-viewer-modal" class="bottom-modal" style="z-index: 130; height: 95vh; display: flex; flex-direction: column;">
         <div class="modal-drag-area" onclick="closePdfViewer()">
             <div class="modal-drag"></div>
         </div>
-        <div class="modal-header">
-            <h2 id="pdf-viewer-title" style="font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">PDF</h2>
-            <button class="close-btn" onclick="closePdfViewer()">✕</button>
+        <div class="modal-header" style="flex-direction: column; height: auto; padding: 10px 15px; gap: 10px;">
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <h2 id="pdf-viewer-title" style="font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 70%;">PDF</h2>
+                <button class="close-btn" onclick="closePdfViewer()">✕</button>
+            </div>
+            <div style="display:flex; width:100%; gap:8px;">
+                <input type="text" id="pdf-search-input" placeholder="キーワード検索..." style="flex:1; padding:6px 12px; border-radius:15px; border:1px solid var(--border); background:var(--bg); color:var(--txt); font-size:13px;">
+                <button class="btn-blue" style="padding:6px 12px; border-radius:15px; font-size:12px; white-space:nowrap;" onclick="searchPdf()">🔍 検索</button>
+            </div>
+            <div id="pdf-search-results" style="font-size:11px; color:var(--accent); display:none; width:100%; text-align:center;">
+                <span id="pdf-search-status">探索中...</span>
+                <button class="btn-gray" style="padding:2px 8px; font-size:10px; margin-left:10px;" onclick="navigateSearch(-1)">前</button>
+                <button class="btn-gray" style="padding:2px 8px; font-size:10px;" onclick="navigateSearch(1)">次</button>
+            </div>
         </div>
-        <div class="modal-body" style="flex: 1; padding: 0; background: #e5e5ea; overflow-y: auto; display: flex; flex-direction: column; align-items: center;" id="pdf-viewer-container">
-            <canvas id="pdf-canvas" style="max-width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 10px;"></canvas>
+        <div class="modal-body" style="flex: 1; padding: 0; background: #e5e5ea; overflow: auto; display: flex; flex-direction: column; align-items: center; position: relative;" id="pdf-viewer-container">
+            <canvas id="pdf-canvas" style="box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 10px 0;"></canvas>
         </div>
-        <div class="action-bar" style="padding: 10px 15px; display:flex; justify-content:space-between; align-items:center;">
-            <button class="btn btn-gray" id="pdf-prev" onclick="changePdfPage(-1)" style="font-weight:bold;">◀ 前へ</button>
-            <span style="font-weight:bold; font-size:14px;"><span id="pdf-page-num">1</span> / <span id="pdf-page-count">?</span></span>
-            <button class="btn btn-blue" id="pdf-next" onclick="changePdfPage(1)" style="font-weight:bold;">次へ ▶</button>
+        <div class="action-bar" style="padding: 10px 15px; display:flex; flex-direction: column; gap:10px; height:auto;">
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <button class="btn btn-gray" id="pdf-prev" onclick="changePdfPage(-1)" style="padding:6px 10px;">◀</button>
+                    <input type="number" id="pdf-page-jump" min="1" style="width:45px; text-align:center; padding:5px; border-radius:6px; border:1px solid var(--border); font-size:13px;" onchange="jumpToPdfPage(this.value)">
+                    <span style="font-size:13px; color:#888;">/ <span id="pdf-page-count">?</span></span>
+                    <button class="btn btn-blue" id="pdf-next" onclick="changePdfPage(1)" style="padding:6px 10px;">▶</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn-gray" style="width:32px; height:32px; border-radius:50%; font-size:18px;" onclick="zoomPdf(-0.2)">−</button>
+                    <span id="pdf-zoom-val" style="font-size:12px; font-weight:bold; min-width:35px; text-align:center;">100%</span>
+                    <button class="btn-gray" style="width:32px; height:32px; border-radius:50%; font-size:18px;" onclick="zoomPdf(0.2)">＋</button>
+                    <button class="btn-blue" style="padding:6px 10px; font-size:11px;" onclick="zoomPdf(0, true)">幅</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -749,8 +771,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.54" defer></script>
-    <script src="./js/jero_core.js?v=16.54" defer></script>
+    <script src="./js/main.js?v=16.55" defer></script>
+    <script src="./js/jero_core.js?v=16.55" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
