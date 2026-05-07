@@ -2502,16 +2502,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ==========================================
-// ★ Phase 6.5: スワイプ・ナビゲーション・エンジン
-// ==========================================
-let swipeStartX = 0;
-let swipeStartY = 0;
-
-// ==========================================
-// ★ Phase 6.7: 全自動ナビゲーション & PDFビューワ座標修正
+// ★ Phase 6.7: 全自動ナビゲーション & PDFビューワ統合エンジン (完全浄化版)
 // ==========================================
 let swipeStartX = 0, swipeStartY = 0;
-let isSwipeLocked = false; // 連続発動防止
+let isSwipeLocked = false; 
 
 function initSwipeNavigation() {
     const calendarView = document.getElementById('calendar-view');
@@ -2528,7 +2522,6 @@ function initSwipeNavigation() {
         const diffX = Math.abs(e.changedTouches[0].screenX - swipeStartX);
         const diffY = Math.abs(e.changedTouches[0].screenY - swipeStartY);
         
-        // ★阿吽の呼吸：縦より横の動きが圧倒的（2倍以上）なら、OSの「戻る」を殺して月移動を予約する
         if (diffX > diffY * 2 && diffX > 15) {
             if (e.cancelable) e.preventDefault();
         }
@@ -2566,18 +2559,18 @@ function jumpMonthBySwipe(dir) {
     const targetId = `month-${y}-${m}`;
     const targetWrapper = document.getElementById(targetId);
 
-    // ★スクロールの乱れを鎮圧：behavior を一瞬無効化するか、確実な位置へ飛ばす
     if (targetWrapper) {
         targetWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
-        fetchAndRenderMonth(y, m, dir > 0 ? 'append' : 'prepend', false).then(() => {
-            const newW = document.getElementById(targetId);
-            if (newW) newW.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
+        if (typeof fetchAndRenderMonth === 'function') {
+            fetchAndRenderMonth(y, m, dir > 0 ? 'append' : 'prepend', false).then(() => {
+                const newW = document.getElementById(targetId);
+                if (newW) newW.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
     }
 }
 
-// PDFピンチ・座標修正
 let initialPinchDist = null, initialScale = 1.0, pdfCurrentZoomRatio = 1.0;
 let pdfSwipeStartX = 0, pdfSwipeStartY = 0;
 
@@ -2590,6 +2583,9 @@ function initPdfSwipeNavigation() {
         if (e.touches.length === 2) {
             initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             initialScale = pdfScale;
+            // 拡大時は左上を基点に固定
+            canvas.style.transformOrigin = '0 0';
+            pdfContainer.style.alignItems = 'flex-start';
         } else {
             pdfSwipeStartX = e.changedTouches[0].screenX;
             pdfSwipeStartY = e.changedTouches[0].screenY;
@@ -2601,10 +2597,9 @@ function initPdfSwipeNavigation() {
             const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             pdfCurrentZoomRatio = currentDist / initialPinchDist;
             
-            // ★死角の破壊：拡大時は左上(0 0)を起点にし、中央揃えを解除する
-            canvas.style.transformOrigin = '0 0';
-            pdfContainer.style.alignItems = 'flex-start';
-            canvas.style.transform = `scale(${pdfCurrentZoomRatio})`;
+            // 安全装置：スケールがマイナス（鏡文字）にならないよう防御しつつCSSで仮拡大
+            const safeScale = Math.max(pdfCurrentZoomRatio, 0.1);
+            canvas.style.transform = `scale(${safeScale})`;
             
             if (e.cancelable) e.preventDefault();
         }
@@ -2616,9 +2611,8 @@ function initPdfSwipeNavigation() {
                 initialPinchDist = null;
                 pdfScale = Math.min(Math.max(initialScale * pdfCurrentZoomRatio, 0.5), 4.0);
                 canvas.style.transform = 'none';
-                // 1倍以下の時は中央揃えに戻す
-                if (pdfScale <= 1.1) pdfContainer.style.alignItems = 'center';
-                renderPdfPage(pageNum);
+                if (pdfScale <= 1.0) pdfContainer.style.alignItems = 'center';
+                if (typeof renderPdfPage === 'function') renderPdfPage(pageNum);
             }
             return;
         }
@@ -2627,13 +2621,14 @@ function initPdfSwipeNavigation() {
         if (isScrollableX) return;
 
         const deltaX = e.changedTouches[0].screenX - pdfSwipeStartX;
-        if (Math.abs(deltaX) > 80) changePdfPage(deltaX > 0 ? -1 : 1);
+        if (Math.abs(deltaX) > 80 && typeof changePdfPage === 'function') {
+            changePdfPage(deltaX > 0 ? -1 : 1);
+        }
     }, { passive: true });
 }
 
+// 起動時にエンジンを一括点火
 document.addEventListener('DOMContentLoaded', () => {
     initSwipeNavigation();
     initPdfSwipeNavigation();
 });
-// 起動時にPDF用のスワイプ・ズームエンジンを点火する
-document.addEventListener('DOMContentLoaded', initPdfSwipeNavigation);
