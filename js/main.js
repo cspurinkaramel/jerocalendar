@@ -141,65 +141,79 @@ async function renderCurrentViewerFile() {
     const fileData = currentViewerFileList[currentViewerFileIndex];
     if (!fileData) return;
     const fileId = fileData.fileId;
+    const mime = fileData.mimeType || '';
+    const isPdf = mime === 'application/pdf' || (fileData.title && fileData.title.toLowerCase().endsWith('.pdf'));
+    const isImg = mime.startsWith('image/') || (!isPdf && !fileData.title.match(/\.(doc|docx|xls|xlsx|txt|zip|csv)$/i));
     
-    let isImg = true;
-    if (fileData.mimeType && !fileData.mimeType.startsWith('image/')) isImg = false;
-    else if (fileData.title && fileData.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) isImg = false;
-    else if (fileData.isImg === false) isImg = false;
-    
-    const viewer = document.getElementById('img-viewer'); 
     const img = document.getElementById('img-viewer-src'); 
+    const canvas = document.getElementById('img-viewer-pdf-canvas');
     const nonImgBox = document.getElementById('img-viewer-non-img');
-    const nonImgIcon = document.getElementById('img-viewer-non-img-icon');
     const driveBtn = document.getElementById('img-viewer-drive-btn');
-    
-    if (!viewer || !img) return;
     
     currentViewerFileId = fileId;
     resetViewerZoom();
     
-    // UI反映 (ページ数・矢印・タイトル)
+    // UI基本表示
     document.getElementById('img-viewer-title').innerText = fileData.title || 'ファイル';
     document.getElementById('img-viewer-count').innerText = `${currentViewerFileIndex + 1} / ${currentViewerFileList.length}`;
-    document.getElementById('img-viewer-count').style.display = currentViewerFileList.length > 1 ? 'block' : 'none';
     document.getElementById('img-viewer-prev').style.display = currentViewerFileList.length > 1 ? 'flex' : 'none';
     document.getElementById('img-viewer-next').style.display = currentViewerFileList.length > 1 ? 'flex' : 'none';
     
-    // 未送信(ダミー)ファイルの表示
+    // 状態リセット
+    img.style.display = 'none'; canvas.style.display = 'none'; nonImgBox.style.display = 'none';
+
+    // 1. 未送信(dummy_)ファイルの処理
     if (fileId.startsWith('dummy_')) {
-        const realUid = parseInt(fileId.replace('dummy_', ''));
+        driveBtn.style.display = 'none';
         const queue = await getSyncQueue();
-        let foundBase64 = null; let foundMime = 'image/jpeg';
-        for (const q of queue) { if (q.payload.attachments) { const match = q.payload.attachments.find(a => a.uid === realUid); if (match && match.base64) { foundBase64 = match.base64; foundMime = match.mimeType; break; } } }
+        let foundItem = null;
+        for (const q of queue) { if (q.payload.attachments) { foundItem = q.payload.attachments.find(a => a.uid === parseInt(fileId.replace('dummy_', ''))); if (foundItem) break; } }
         
-        if (foundBase64) {
-            isImg = foundMime.startsWith('image/');
-            driveBtn.style.display = 'none';
-            if (isImg) {
-                img.style.display = 'block'; nonImgBox.style.display = 'none';
-                img.src = `data:${foundMime};base64,${foundBase64}`;
+        if (foundItem && foundItem.base64) {
+            if (foundItem.mimeType.startsWith('image/')) {
+                img.style.display = 'block'; img.src = `data:${foundItem.mimeType};base64,${foundItem.base64}`;
+            } else if (foundItem.mimeType === 'application/pdf') {
+                canvas.style.display = 'block';
+                renderPdfFirstPageToCanvas(foundItem.base64, canvas);
             } else {
-                img.style.display = 'none'; nonImgBox.style.display = 'flex';
-                nonImgIcon.src = SAFE_PDF_ICON;
-                showToast('⚠️ 未送信の非画像ファイルだ。送信完了を待て。');
+                nonImgBox.style.display = 'flex';
+                document.getElementById('img-viewer-non-img-icon').src = SAFE_PDF_ICON;
             }
-            viewer.classList.add('active'); return;
         }
+        document.getElementById('img-viewer').classList.add('active');
+        return;
     }
-    
-    // 既存ファイルの表示
-    driveBtn.style.display = 'block'; 
-    if (isImg) {
-        img.style.display = 'block'; nonImgBox.style.display = 'none';
-        showGlobalLoader('読み込み中...');
-        img.onload = () => { hideGlobalLoader(); };
-        img.onerror = () => { hideGlobalLoader(); showToast('❌ 読み込み失敗'); };
+
+    // 2. 既存ファイルの処理
+    driveBtn.style.display = 'block';
+    if (isImg || isPdf) {
+        // ★阿吽の呼吸：PDFもDriveのサムネイル機能を使えば「画像」としてプレビューできる
+        img.style.display = 'block';
+        showGlobalLoader(isPdf ? 'PDFプレビュー生成中...' : '読み込み中...');
+        img.onload = () => hideGlobalLoader();
+        img.onerror = () => { hideGlobalLoader(); img.src = SAFE_PDF_ICON; };
         img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
     } else {
-        img.style.display = 'none'; nonImgBox.style.display = 'flex';
-        nonImgIcon.src = SAFE_PDF_ICON;
+        nonImgBox.style.display = 'flex';
+        document.getElementById('img-viewer-non-img-icon').src = SAFE_PDF_ICON;
     }
-    viewer.classList.add('active');
+    document.getElementById('img-viewer').classList.add('active');
+}
+
+// 未送信PDFの1ページ目を自前で描画する職人関数
+async function renderPdfFirstPageToCanvas(base64, canvas) {
+    try {
+        const bin = atob(base64);
+        const uint8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) uint8[i] = bin.charCodeAt(i);
+        
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({ data: uint8 }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+    } catch (e) { console.error("PDF Preview Error", e); }
 }
 
 function navigateImageViewer(dir) {
@@ -278,21 +292,19 @@ function initImageViewerZoom() {
 }
 
 function applyZoomTransform() {
-    const img = document.getElementById('img-viewer-src');
-    const nonImgBox = document.getElementById('img-viewer-non-img');
     const transformStr = `translate(${viewerZoom.x}px, ${viewerZoom.y}px) scale(${viewerZoom.scale})`;
-    if (img && img.style.display !== 'none') img.style.transform = transformStr;
-    if (nonImgBox && nonImgBox.style.display !== 'none') nonImgBox.style.transform = transformStr;
+    ['img-viewer-src', 'img-viewer-pdf-canvas', 'img-viewer-non-img'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.style.display !== 'none') el.style.transform = transformStr;
+    });
 }
 
 function resetViewerZoom() {
     viewerZoom = { scale: 1, x: 0, y: 0 };
-    const img = document.getElementById('img-viewer-src');
-    const nonImgBox = document.getElementById('img-viewer-non-img');
-    const resetStyle = (el) => {
+    ['img-viewer-src', 'img-viewer-pdf-canvas', 'img-viewer-non-img'].forEach(id => {
+        const el = document.getElementById(id);
         if (el) { el.style.transition = 'transform 0.2s ease-out'; el.style.transform = 'translate(0px, 0px) scale(1)'; setTimeout(() => el.style.transition = 'none', 200); }
-    };
-    resetStyle(img); resetStyle(nonImgBox);
+    });
 }
 
 function getContrastYIQ(hexcolor) { if (!hexcolor) return '#ffffff'; hexcolor = hexcolor.replace("#", ""); if (hexcolor.length === 3) hexcolor = hexcolor.split('').map(c => c + c).join(''); var r = parseInt(hexcolor.substr(0, 2), 16); var g = parseInt(hexcolor.substr(2, 2), 16); var b = parseInt(hexcolor.substr(4, 2), 16); var yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#000000' : '#ffffff'; }

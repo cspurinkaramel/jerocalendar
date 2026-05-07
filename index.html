@@ -772,6 +772,8 @@
         
         <div id="img-viewer-zoom-container" onclick="event.stopPropagation()">
             <img id="img-viewer-src" src="">
+            <canvas id="img-viewer-pdf-canvas" style="display:none; max-width:100%; max-height:100%; box-shadow:0 4px 20px rgba(0,0,0,0.5);"></canvas>
+            
             <div id="img-viewer-non-img" style="display:none; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; color:white;">
                 <img src="" id="img-viewer-non-img-icon" style="width:80px; height:80px; margin-bottom:15px; filter:drop-shadow(0 4px 6px rgba(0,0,0,0.5));">
                 <div style="font-weight:bold; font-size:16px; margin-bottom:5px;">プレビュー不可</div>
@@ -785,8 +787,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.60" defer></script>
-    <script src="./js/jero_core.js?v=16.60" defer></script>
+    <script src="./js/main.js?v=16.61" defer></script>
+    <script src="./js/jero_core.js?v=16.61" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>
