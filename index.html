@@ -345,6 +345,10 @@
                     <option value="light">ライトモード</option>
                     <option value="dark">ダークモード</option>
                 </select></div>
+            <div class="setting-row"><label>ナビ操作</label><select id="st-nav-mode" onchange="saveAndApplySettings()">
+                    <option value="vertical">縦スクロール (通常)</option>
+                    <option value="horizontal">横スワイプ (月切替)</option>
+                </select></div>
             <div class="setting-row"><label>文字サイズ: <span id="fs-val">10</span>px</label><input type="range" id="st-fs"
                     min="8" max="16" value="10" step="1" oninput="saveAndApplySettings()"></div>
             <div class="setting-row"><label>一日の最大表示数: <span id="max-disp-val">6</span>件</label><input type="range" id="st-max-disp"
@@ -771,8 +775,8 @@
         </div>
     </div>
 
-    <script src="./js/main.js?v=16.55" defer></script>
-    <script src="./js/jero_core.js?v=16.55" defer></script>
+    <script src="./js/main.js?v=16.56" defer></script>
+    <script src="./js/jero_core.js?v=16.56" defer></script>
     <div id="cleaner-modal" class="bottom-modal" style="z-index: 120; height: 75vh;">
         <div class="modal-drag-area" onclick="document.getElementById('cleaner-modal').classList.remove('active');">
             <div class="modal-drag"></div>

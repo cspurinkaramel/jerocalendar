@@ -271,6 +271,7 @@ const holiday = UI_THEME_COLORS[config.holidayColor] || UI_THEME_COLORS['darkgra
         const elHWords = document.getElementById('st-holiday-words'); if(elHWords) elHWords.value = config.holidayWords;
         const elAlpha = document.getElementById('st-alpha'); if(elAlpha) elAlpha.value = config.alpha;
         const elMaxDisp = document.getElementById('st-max-disp'); if(elMaxDisp) elMaxDisp.value = config.maxDisp;
+        const elNavMode = document.getElementById('st-nav-mode'); if(elNavMode) elNavMode.value = localStorage.getItem('jero_nav_mode') || 'vertical';
         
         applyAppConfig(config); // 画面への適用は専門関数へ丸投げ    
     // その他外部連携設定
@@ -303,7 +304,8 @@ function saveAndApplySettings() {
             holidayColor: document.getElementById('st-holiday-color') ? document.getElementById('st-holiday-color').value : 'darkgray',
             holidayWords: document.getElementById('st-holiday-words') ? document.getElementById('st-holiday-words').value : '',
             alpha: document.getElementById('st-alpha') ? document.getElementById('st-alpha').value : '25',
-            maxDisp: document.getElementById('st-max-disp') ? document.getElementById('st-max-disp').value : '6'
+            maxDisp: document.getElementById('st-max-disp') ? document.getElementById('st-max-disp').value : '6',
+            navMode: document.getElementById('st-nav-mode') ? document.getElementById('st-nav-mode').value : 'vertical'
         };
         
         localStorage.setItem('jero_theme', config.theme);
@@ -314,6 +316,7 @@ function saveAndApplySettings() {
         localStorage.setItem('jero_holiday_words', config.holidayWords);
         localStorage.setItem('jero_bg_alpha', config.alpha);
         localStorage.setItem('jero_max_disp', config.maxDisp);
+        localStorage.setItem('jero_nav_mode', config.navMode);
         
         applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
         triggerFullReRender(); // ★Phase 1: 表示上限を変えた瞬間にカレンダーを再描画する
@@ -2509,18 +2512,34 @@ let swipeStartX = 0;
 let swipeStartY = 0;
 
 function initSwipeNavigation() {
-    // カレンダー全体を包むビューに対して検閲を開始する
     const calendarView = document.getElementById('calendar-view');
     if (!calendarView) return;
 
-    // タッチ開始地点を記録
     calendarView.addEventListener('touchstart', (e) => {
         swipeStartX = e.changedTouches[0].screenX;
         swipeStartY = e.changedTouches[0].screenY;
     }, { passive: true });
 
-    // タッチ終了時にベクトルの解析を実行
+    // ★ iOSの「スワイプで戻る」を殺し、ナビ切替に対応する
+    calendarView.addEventListener('touchmove', (e) => {
+        const navMode = localStorage.getItem('jero_nav_mode') || 'vertical';
+        if (navMode !== 'horizontal') return;
+
+        const moveX = e.changedTouches[0].screenX;
+        const moveY = e.changedTouches[0].screenY;
+        const diffX = Math.abs(moveX - swipeStartX);
+        const diffY = Math.abs(moveY - swipeStartY);
+
+        // 横移動がメインなら、ブラウザの「戻る」を阻止する
+        if (diffX > diffY && diffX > 10) {
+            if (e.cancelable) e.preventDefault();
+        }
+    }, { passive: false });
+
     calendarView.addEventListener('touchend', (e) => {
+        const navMode = localStorage.getItem('jero_nav_mode') || 'vertical';
+        if (navMode !== 'horizontal') return;
+
         const endX = e.changedTouches[0].screenX;
         const endY = e.changedTouches[0].screenY;
         analyzeSwipe(swipeStartX, swipeStartY, endX, endY);
@@ -2562,26 +2581,44 @@ function analyzeSwipe(startX, startY, endX, endY) {
 document.addEventListener('DOMContentLoaded', initSwipeNavigation);
 
 // ==========================================
-// ★ Phase 6.6: PDFビューワ専用 スワイプめくりエンジン
+// ★ Phase 6.6: PDFビューワ専用 スワイプ・ズームエンジン
 // ==========================================
 let pdfSwipeStartX = 0;
 let pdfSwipeStartY = 0;
+
+let initialPinchDist = null;
+let initialScale = 1.0;
 
 function initPdfSwipeNavigation() {
     const pdfContainer = document.getElementById('pdf-viewer-container');
     if (!pdfContainer) return;
 
     pdfContainer.addEventListener('touchstart', (e) => {
-        // ピンチズーム操作中（指2本以上）は無視する
-        if (e.touches.length > 1) return; 
-        pdfSwipeStartX = e.changedTouches[0].screenX;
-        pdfSwipeStartY = e.changedTouches[0].screenY;
+        if (e.touches.length === 2) {
+            // ★ピンチズーム開始
+            initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            initialScale = pdfScale;
+        } else {
+            pdfSwipeStartX = e.changedTouches[0].screenX;
+            pdfSwipeStartY = e.changedTouches[0].screenY;
+        }
     }, { passive: true });
 
+    pdfContainer.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialPinchDist) {
+            // ★指の距離の変化を計算してスケールに反映
+            const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            const zoomRatio = currentDist / initialPinchDist;
+            pdfScale = Math.min(Math.max(initialScale * zoomRatio, 0.5), 4.0);
+            renderPdfPage(pageNum);
+            if (e.cancelable) e.preventDefault();
+        }
+    }, { passive: false });
+
     pdfContainer.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) initialPinchDist = null;
         if (e.changedTouches.length > 1) return;
         
-        // ★絶対防壁（誤爆防止）：PDFが拡大されていて横スクロール可能な状態なら、めくり判定を無効化する
         const isScrollableX = pdfContainer.scrollWidth > pdfContainer.clientWidth + 5;
         if (isScrollableX) return;
 
@@ -2590,18 +2627,12 @@ function initPdfSwipeNavigation() {
         const deltaX = endX - pdfSwipeStartX;
         const deltaY = endY - pdfSwipeStartY;
         
-        // 横方向への明確なスワイプ判定（縦のブレより横の移動が大きく、かつ50px以上動かしたか）
         if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && Math.abs(deltaX) > 50) {
-            if (deltaX > 0) {
-                // 右へスワイプ = 前のページへ
-                changePdfPage(-1);
-            } else {
-                // 左へスワイプ = 次のページへ
-                changePdfPage(1);
-            }
+            if (deltaX > 0) changePdfPage(-1);
+            else changePdfPage(1);
         }
     }, { passive: true });
 }
 
-// 起動時にPDF用のスワイプエンジンも点火する
+// 起動時にPDF用のスワイプ・ズームエンジンを点火する
 document.addEventListener('DOMContentLoaded', initPdfSwipeNavigation);
