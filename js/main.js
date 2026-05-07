@@ -295,7 +295,6 @@ const holiday = UI_THEME_COLORS[config.holidayColor] || UI_THEME_COLORS['darkgra
 function saveGasUrl() { localStorage.setItem('jero_gas_url', document.getElementById('st-gas-url').value.trim()); showToast('✅ サーバー接続キーを保存した。'); triggerFullReRender(); }
 
 function saveAndApplySettings() { 
-        // ★設定の保存をオブジェクトとして構造化
         const config = {
             theme: document.getElementById('st-theme') ? document.getElementById('st-theme').value : 'light',
             fs: document.getElementById('st-fs') ? document.getElementById('st-fs').value : '10',
@@ -304,10 +303,8 @@ function saveAndApplySettings() {
             holidayColor: document.getElementById('st-holiday-color') ? document.getElementById('st-holiday-color').value : 'darkgray',
             holidayWords: document.getElementById('st-holiday-words') ? document.getElementById('st-holiday-words').value : '',
             alpha: document.getElementById('st-alpha') ? document.getElementById('st-alpha').value : '25',
-            maxDisp: document.getElementById('st-max-disp') ? document.getElementById('st-max-disp').value : '6',
-            navMode: document.getElementById('st-nav-mode') ? document.getElementById('st-nav-mode').value : 'vertical'
+            maxDisp: document.getElementById('st-max-disp') ? document.getElementById('st-max-disp').value : '6'
         };
-        
         localStorage.setItem('jero_theme', config.theme);
         localStorage.setItem('jero_fs', config.fs);
         localStorage.setItem('jero_sel_color', config.selColor);
@@ -316,10 +313,9 @@ function saveAndApplySettings() {
         localStorage.setItem('jero_holiday_words', config.holidayWords);
         localStorage.setItem('jero_bg_alpha', config.alpha);
         localStorage.setItem('jero_max_disp', config.maxDisp);
-        localStorage.setItem('jero_nav_mode', config.navMode);
         
-        applyAppConfig(config); // 画面への適用は専門関数へ丸投げ
-        triggerFullReRender(); // ★Phase 1: 表示上限を変えた瞬間にカレンダーを再描画する
+        applyAppConfig(config);
+        triggerFullReRender();
     }
 function setProgress(p) { const pb = document.getElementById('progress-bar'); if (pb) { pb.style.width = p + '%'; if (p >= 100) setTimeout(() => pb.style.width = '0%', 500); } }
 function scrollToToday() { const todayStr = getSafeLocalDateStr(); const todayCell = document.getElementById(`cell-${todayStr}`); if (todayCell) { todayCell.scrollIntoView({ behavior: 'smooth', block: 'center' }); todayCell.click(); showToast('今日に移動したぞ。'); } else { const t = new Date(); fetchAndRenderMonth(t.getFullYear(), t.getMonth(), 'replace', false).then(() => { const retryCell = document.getElementById(`cell-${todayStr}`); if (retryCell) { retryCell.scrollIntoView({ behavior: 'smooth', block: 'center' }); retryCell.click(); showToast('今日に移動したぞ。'); } }); } }
@@ -2511,6 +2507,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 let swipeStartX = 0;
 let swipeStartY = 0;
 
+// ==========================================
+// ★ Phase 6.7: 全自動ナビゲーション & PDFビューワ座標修正
+// ==========================================
+let swipeStartX = 0, swipeStartY = 0;
+let isSwipeLocked = false; // 連続発動防止
+
 function initSwipeNavigation() {
     const calendarView = document.getElementById('calendar-view');
     if (!calendarView) return;
@@ -2518,108 +2520,76 @@ function initSwipeNavigation() {
     calendarView.addEventListener('touchstart', (e) => {
         swipeStartX = e.changedTouches[0].screenX;
         swipeStartY = e.changedTouches[0].screenY;
+        isSwipeLocked = false;
     }, { passive: true });
 
-    // ★ iOSの「スワイプで戻る」を殺し、ナビ切替に対応する
     calendarView.addEventListener('touchmove', (e) => {
-        const navMode = localStorage.getItem('jero_nav_mode') || 'vertical';
-        if (navMode !== 'horizontal') return;
-
-        const moveX = e.changedTouches[0].screenX;
-        const moveY = e.changedTouches[0].screenY;
-        const diffX = Math.abs(moveX - swipeStartX);
-        const diffY = Math.abs(moveY - swipeStartY);
-
-        // 横移動がメインなら、ブラウザの「戻る」を阻止する
-        if (diffX > diffY && diffX > 10) {
+        if (isSwipeLocked) return;
+        const diffX = Math.abs(e.changedTouches[0].screenX - swipeStartX);
+        const diffY = Math.abs(e.changedTouches[0].screenY - swipeStartY);
+        
+        // ★阿吽の呼吸：縦より横の動きが圧倒的（2倍以上）なら、OSの「戻る」を殺して月移動を予約する
+        if (diffX > diffY * 2 && diffX > 15) {
             if (e.cancelable) e.preventDefault();
         }
     }, { passive: false });
 
     calendarView.addEventListener('touchend', (e) => {
-        const navMode = localStorage.getItem('jero_nav_mode') || 'vertical';
-        if (navMode !== 'horizontal') return;
-
-        const endX = e.changedTouches[0].screenX;
-        const endY = e.changedTouches[0].screenY;
-        analyzeSwipe(swipeStartX, swipeStartY, endX, endY);
+        if (isSwipeLocked) return;
+        analyzeSwipe(swipeStartX, swipeStartY, e.changedTouches[0].screenX, e.changedTouches[0].screenY);
     }, { passive: true });
 }
 
 function analyzeSwipe(startX, startY, endX, endY) {
     const deltaX = endX - startX;
     const deltaY = endY - startY;
-    const threshold = 80;
-    const restraint = 100;
-
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > threshold && Math.abs(deltaY) < restraint) {
-        if (deltaX > 0) jumpMonthBySwipe(-1); // 右スワイプ: 前の月へ
-        else jumpMonthBySwipe(1);             // 左スワイプ: 次の月へ
+    if (Math.abs(deltaX) > Math.abs(deltaY) * 2 && Math.abs(deltaX) > 100) {
+        isSwipeLocked = true;
+        jumpMonthBySwipe(deltaX > 0 ? -1 : 1);
     }
 }
 
-// ★真の月ジャンプエンジン：画面中央の月を割り出し、隣の月へワープする
 function jumpMonthBySwipe(dir) {
     const wrappers = document.querySelectorAll('.month-wrapper');
-    let currentWrapper = null;
     const centerY = window.innerHeight / 2;
-
-    // 現在画面の中心にいる月を特定する
+    let currentWrapper = null;
     wrappers.forEach(w => {
         const rect = w.getBoundingClientRect();
-        if (rect.top <= centerY && rect.bottom >= centerY) {
-            currentWrapper = w;
-        }
+        if (rect.top <= centerY && rect.bottom >= centerY) currentWrapper = w;
     });
     if (!currentWrapper) return;
 
-    const parts = currentWrapper.id.split('-'); // 例: month-2026-4
-    let y = parseInt(parts[1]);
-    let m = parseInt(parts[2]);
-
-    m += dir;
-    if (m < 0) { m = 11; y--; }
-    else if (m > 11) { m = 0; y++; }
+    const parts = currentWrapper.id.split('-');
+    let y = parseInt(parts[1]), m = parseInt(parts[2]) + dir;
+    if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
 
     const targetId = `month-${y}-${m}`;
     const targetWrapper = document.getElementById(targetId);
 
+    // ★スクロールの乱れを鎮圧：behavior を一瞬無効化するか、確実な位置へ飛ばす
     if (targetWrapper) {
-        // 既に描画されていれば、その月の先頭へスクロール
         targetWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
-        // まだ描画されていない未来/過去の月なら、裏で取得してから飛ぶ
-        if (typeof showGlobalLoader === 'function') showGlobalLoader('月を移動中...');
         fetchAndRenderMonth(y, m, dir > 0 ? 'append' : 'prepend', false).then(() => {
-            const newWrapper = document.getElementById(targetId);
-            if (newWrapper) newWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+            const newW = document.getElementById(targetId);
+            if (newW) newW.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     }
 }
 
-// 起動時にエンジンを回す
-document.addEventListener('DOMContentLoaded', initSwipeNavigation);
-
-// ==========================================
-// ★ Phase 6.6: PDFビューワ専用 スワイプ・ズームエンジン
-// ==========================================
-let pdfSwipeStartX = 0;
-let pdfSwipeStartY = 0;
-
-let initialPinchDist = null;
-let initialScale = 1.0;
-let pdfCurrentZoomRatio = 1.0; // ズーム中の仮倍率
+// PDFピンチ・座標修正
+let initialPinchDist = null, initialScale = 1.0, pdfCurrentZoomRatio = 1.0;
+let pdfSwipeStartX = 0, pdfSwipeStartY = 0;
 
 function initPdfSwipeNavigation() {
     const pdfContainer = document.getElementById('pdf-viewer-container');
-    if (!pdfContainer) return;
+    const canvas = document.getElementById('pdf-canvas');
+    if (!pdfContainer || !canvas) return;
 
     pdfContainer.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             initialScale = pdfScale;
-            pdfCurrentZoomRatio = 1.0;
         } else {
             pdfSwipeStartX = e.changedTouches[0].screenX;
             pdfSwipeStartY = e.changedTouches[0].screenY;
@@ -2628,14 +2598,14 @@ function initPdfSwipeNavigation() {
 
     pdfContainer.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2 && initialPinchDist) {
-            // ★指を動かしている最中は「再描画」せず、CSSで軽く仮拡大するだけにする（鏡文字バグの根絶）
             const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             pdfCurrentZoomRatio = currentDist / initialPinchDist;
-            const canvas = document.getElementById('pdf-canvas');
-            if (canvas) {
-                canvas.style.transform = `scale(${pdfCurrentZoomRatio})`;
-                canvas.style.transformOrigin = 'center top';
-            }
+            
+            // ★死角の破壊：拡大時は左上(0 0)を起点にし、中央揃えを解除する
+            canvas.style.transformOrigin = '0 0';
+            pdfContainer.style.alignItems = 'flex-start';
+            canvas.style.transform = `scale(${pdfCurrentZoomRatio})`;
+            
             if (e.cancelable) e.preventDefault();
         }
     }, { passive: false });
@@ -2643,32 +2613,27 @@ function initPdfSwipeNavigation() {
     pdfContainer.addEventListener('touchend', (e) => {
         if (initialPinchDist) {
             if (e.touches.length < 2) {
-                // ★指を離した瞬間に1回だけ高画質で再描画する
                 initialPinchDist = null;
                 pdfScale = Math.min(Math.max(initialScale * pdfCurrentZoomRatio, 0.5), 4.0);
-                const canvas = document.getElementById('pdf-canvas');
-                if (canvas) canvas.style.transform = 'none'; // 仮拡大を解除
+                canvas.style.transform = 'none';
+                // 1倍以下の時は中央揃えに戻す
+                if (pdfScale <= 1.1) pdfContainer.style.alignItems = 'center';
                 renderPdfPage(pageNum);
             }
-            return; // ピンチズームの指離しなら、ここで処理を打ち切りページめくりはさせない
+            return;
         }
-        
         if (e.changedTouches.length > 1) return;
-        
-        const isScrollableX = pdfContainer.scrollWidth > pdfContainer.clientWidth + 5;
+        const isScrollableX = pdfContainer.scrollWidth > pdfContainer.clientWidth + 10;
         if (isScrollableX) return;
 
-        const endX = e.changedTouches[0].screenX;
-        const endY = e.changedTouches[0].screenY;
-        const deltaX = endX - pdfSwipeStartX;
-        const deltaY = endY - pdfSwipeStartY;
-        
-        if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && Math.abs(deltaX) > 50) {
-            if (deltaX > 0) changePdfPage(-1);
-            else changePdfPage(1);
-        }
+        const deltaX = e.changedTouches[0].screenX - pdfSwipeStartX;
+        if (Math.abs(deltaX) > 80) changePdfPage(deltaX > 0 ? -1 : 1);
     }, { passive: true });
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    initSwipeNavigation();
+    initPdfSwipeNavigation();
+});
 // 起動時にPDF用のスワイプ・ズームエンジンを点火する
 document.addEventListener('DOMContentLoaded', initPdfSwipeNavigation);
