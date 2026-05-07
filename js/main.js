@@ -82,67 +82,132 @@ function parseTaskAttachments(text) {
     return { cleanText, files };
 }
 
-// ★プレビュー表示・ピンチズーム統合エンジン
+// ==========================================
+// ★ Phase 7: ギャラリー・スワイプ＆プレビュー統合エンジン
+// ==========================================
+let currentViewerFileList = [];
+let currentViewerFileIndex = -1;
 let currentViewerFileId = null;
 let viewerZoom = { scale: 1, x: 0, y: 0 };
 
 async function openImageViewer(fileId) {
-    // ★大手術：PDFなどの「画像じゃないファイル」を引いた場合は、ビューアーの黒画面を開かずに直接Driveへ飛ばす
-    let isImg = true; let foundAtt = null;
-    if (typeof activeEventAttachments !== 'undefined') foundAtt = activeEventAttachments.find(a => a.fileId === fileId) || foundAtt;
-    if (typeof activeTaskAttachments !== 'undefined') foundAtt = activeTaskAttachments.find(a => a.fileId === fileId) || foundAtt;
-    if (!foundAtt) {
+    let foundAtt = null;
+    let parentList = [];
+    
+    // 1. 属するファイルリストの探索（予定/タスクの全添付ファイルを抽出）
+    if (typeof activeEventAttachments !== 'undefined' && activeEventAttachments.some(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId)))) {
+        parentList = activeEventAttachments;
+    } else if (typeof activeTaskAttachments !== 'undefined' && activeTaskAttachments.some(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId)))) {
+        parentList = activeTaskAttachments;
+    } else {
         for (const key in dataCache) {
             const evs = dataCache[key].events || [];
             for (const e of evs) {
-                if (e.attachments) { const m = e.attachments.find(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId))); if (m) { foundAtt = m; break; } }
-                const p = parseTaskAttachments(e.description || ''); const m = p.files.find(f => f.fileId === fileId); if (m) { foundAtt = { title: m.title, mimeType: m.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg' }; break; }
+                let tempFiles = [];
+                if (e.attachments) tempFiles = tempFiles.concat(e.attachments.map(a => ({ fileId: a.fileId, fileUrl: a.fileUrl, title: a.title, mimeType: a.mimeType || 'image/jpeg' })));
+                const p = parseTaskAttachments(e.description || '');
+                p.files.forEach(f => { if(!tempFiles.some(tf => tf.fileId === f.fileId)) tempFiles.push({ fileId: f.fileId, fileUrl: f.fileUrl, title: f.title, mimeType: f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg' }); });
+                const match = tempFiles.find(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId)));
+                if (match) { parentList = tempFiles; break; }
             }
-            if (foundAtt) break;
+            if (parentList.length > 0) break;
+            
             const tks = dataCache[key].tasks || [];
-            for (const t of tks) { const p = parseTaskAttachments(t.notes || ''); const m = p.files.find(f => f.fileId === fileId); if (m) { foundAtt = { title: m.title, mimeType: m.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg' }; break; } }
-            if (foundAtt) break;
+            for (const t of tks) {
+                let tempFiles = [];
+                if (t.attachments) tempFiles = tempFiles.concat(t.attachments.map(a => ({ fileId: a.fileId, fileUrl: a.fileUrl, title: a.title, mimeType: a.mimeType || 'image/jpeg' })));
+                const p = parseTaskAttachments(t.notes || '');
+                p.files.forEach(f => { if(!tempFiles.some(tf => tf.fileId === f.fileId)) tempFiles.push({ fileId: f.fileId, fileUrl: f.fileUrl, title: f.title, mimeType: f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? 'application/pdf' : 'image/jpeg' }); });
+                const match = tempFiles.find(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId)));
+                if (match) { parentList = tempFiles; break; }
+            }
+            if (parentList.length > 0) break;
         }
     }
-    if (foundAtt) {
-        if (foundAtt.mimeType && !foundAtt.mimeType.startsWith('image/')) isImg = false;
-        else if (foundAtt.title && foundAtt.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) isImg = false;
-        else if (foundAtt.isImg === false) isImg = false;
+    
+    // 2. リスト構築と現在位置の設定
+    if (parentList.length === 0) {
+        currentViewerFileList = [{ fileId: fileId, title: "ファイル", mimeType: "image/jpeg" }];
+        currentViewerFileIndex = 0;
+    } else {
+        currentViewerFileList = parentList;
+        currentViewerFileIndex = parentList.findIndex(a => a.fileId === fileId || (a.fileUrl && a.fileUrl.includes(fileId)));
     }
     
-    // 画像以外なら別タブでDriveを開いて、ビューアー処理はここで打ち切る
-    if (!isImg && !fileId.startsWith('dummy_')) {
-        window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank');
-        return;
-    }
+    renderCurrentViewerFile();
+}
 
-    const viewer = document.getElementById('img-viewer'); const img = document.getElementById('img-viewer-src'); const driveBtn = document.getElementById('img-viewer-drive-btn');
+async function renderCurrentViewerFile() {
+    const fileData = currentViewerFileList[currentViewerFileIndex];
+    if (!fileData) return;
+    const fileId = fileData.fileId;
+    
+    let isImg = true;
+    if (fileData.mimeType && !fileData.mimeType.startsWith('image/')) isImg = false;
+    else if (fileData.title && fileData.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) isImg = false;
+    else if (fileData.isImg === false) isImg = false;
+    
+    const viewer = document.getElementById('img-viewer'); 
+    const img = document.getElementById('img-viewer-src'); 
+    const nonImgBox = document.getElementById('img-viewer-non-img');
+    const nonImgIcon = document.getElementById('img-viewer-non-img-icon');
+    const driveBtn = document.getElementById('img-viewer-drive-btn');
+    
     if (!viewer || !img) return;
     
     currentViewerFileId = fileId;
-    img.src = ''; 
-    if (driveBtn) driveBtn.style.display = 'none'; 
-    resetViewerZoom(); // ★状態の記憶喪失防止：必ず1倍サイズ・中央にリセット
+    resetViewerZoom();
     
+    // UI反映 (ページ数・矢印・タイトル)
+    document.getElementById('img-viewer-title').innerText = fileData.title || 'ファイル';
+    document.getElementById('img-viewer-count').innerText = `${currentViewerFileIndex + 1} / ${currentViewerFileList.length}`;
+    document.getElementById('img-viewer-count').style.display = currentViewerFileList.length > 1 ? 'block' : 'none';
+    document.getElementById('img-viewer-prev').style.display = currentViewerFileList.length > 1 ? 'flex' : 'none';
+    document.getElementById('img-viewer-next').style.display = currentViewerFileList.length > 1 ? 'flex' : 'none';
+    
+    // 未送信(ダミー)ファイルの表示
     if (fileId.startsWith('dummy_')) {
         const realUid = parseInt(fileId.replace('dummy_', ''));
         const queue = await getSyncQueue();
         let foundBase64 = null; let foundMime = 'image/jpeg';
         for (const q of queue) { if (q.payload.attachments) { const match = q.payload.attachments.find(a => a.uid === realUid); if (match && match.base64) { foundBase64 = match.base64; foundMime = match.mimeType; break; } } }
+        
         if (foundBase64) {
-            if (!foundMime.startsWith('image/')) { showToast('⚠️ 画像以外のファイルは送信完了後にDriveで開けるぞ。'); return; }
-            img.src = `data:${foundMime};base64,${foundBase64}`; 
-            viewer.classList.add('active'); 
-            showToast('🔄 送信待機中だ。指で拡大できるぞ'); 
-            return; 
+            isImg = foundMime.startsWith('image/');
+            driveBtn.style.display = 'none';
+            if (isImg) {
+                img.style.display = 'block'; nonImgBox.style.display = 'none';
+                img.src = `data:${foundMime};base64,${foundBase64}`;
+            } else {
+                img.style.display = 'none'; nonImgBox.style.display = 'flex';
+                nonImgIcon.src = SAFE_PDF_ICON;
+                showToast('⚠️ 未送信の非画像ファイルだ。送信完了を待て。');
+            }
+            viewer.classList.add('active'); return;
         }
     }
     
-    showGlobalLoader('画像を読み込み中...');
-    img.onload = () => { hideGlobalLoader(); if (driveBtn) driveBtn.style.display = 'block'; };
-    img.onerror = () => { hideGlobalLoader(); showToast('❌ 読み込み失敗'); };
-    img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`; 
+    // 既存ファイルの表示
+    driveBtn.style.display = 'block'; 
+    if (isImg) {
+        img.style.display = 'block'; nonImgBox.style.display = 'none';
+        showGlobalLoader('読み込み中...');
+        img.onload = () => { hideGlobalLoader(); };
+        img.onerror = () => { hideGlobalLoader(); showToast('❌ 読み込み失敗'); };
+        img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+    } else {
+        img.style.display = 'none'; nonImgBox.style.display = 'flex';
+        nonImgIcon.src = SAFE_PDF_ICON;
+    }
     viewer.classList.add('active');
+}
+
+function navigateImageViewer(dir) {
+    if (currentViewerFileList.length <= 1) { resetViewerZoom(); return; }
+    currentViewerFileIndex += dir;
+    if (currentViewerFileIndex < 0) currentViewerFileIndex = currentViewerFileList.length - 1;
+    if (currentViewerFileIndex >= currentViewerFileList.length) currentViewerFileIndex = 0;
+    renderCurrentViewerFile();
 }
 
 function closeImageViewer() {
@@ -157,7 +222,7 @@ function openOriginalInDrive() {
     }
 }
 
-// ★ピンチズーム・パンニング計算隔離エンジン（裏側への干渉を完全遮断）
+// ★吸い付き機能付き ギャラリー・ズーム＆パンニングエンジン
 function initImageViewerZoom() {
     const container = document.getElementById('img-viewer-zoom-container');
     if (!container) return;
@@ -170,20 +235,28 @@ function initImageViewerZoom() {
             startTouches = Array.from(e.touches);
             initialScale = viewerZoom.scale;
             if (e.touches.length === 1) {
-                startX = e.touches[0].clientX - viewerZoom.x; startY = e.touches[0].clientY - viewerZoom.y;
-                isPanning = viewerZoom.scale > 1; 
+                startX = e.touches[0].clientX - viewerZoom.x; 
+                startY = e.touches[0].clientY - viewerZoom.y;
+                isPanning = true; // ★ズーム1倍でも指の動きに追従させる
             }
         }
     }, { passive: false });
 
     container.addEventListener('touchmove', (e) => {
-        e.preventDefault(); // ★絶対防壁：指の動きをここで完全に殺し、カレンダー側へのスクロール暴発を防ぐ
+        e.preventDefault(); 
         if (e.touches.length === 2 && startTouches.length === 2) {
             const scaleChange = getDistance(e.touches) / getDistance(startTouches);
             viewerZoom.scale = Math.max(1, Math.min(initialScale * scaleChange, 4)); 
             applyZoomTransform();
         } else if (e.touches.length === 1 && isPanning) {
-            viewerZoom.x = e.touches[0].clientX - startX; viewerZoom.y = e.touches[0].clientY - startY;
+            const currentX = e.touches[0].clientX - startX;
+            const currentY = e.touches[0].clientY - startY;
+            // ズームしていない時は横方向だけ動かす（スワイプ予告の吸い付き）
+            if (viewerZoom.scale <= 1.05) {
+                viewerZoom.x = currentX; viewerZoom.y = 0;
+            } else {
+                viewerZoom.x = currentX; viewerZoom.y = currentY;
+            }
             applyZoomTransform();
         }
     }, { passive: false });
@@ -192,25 +265,34 @@ function initImageViewerZoom() {
         if (e.touches.length < 2) startTouches = [];
         if (e.touches.length === 0) {
             isPanning = false;
-            if (viewerZoom.scale < 1) resetViewerZoom();
-            else applyZoomTransform();
+            if (viewerZoom.scale <= 1.05) {
+                // スワイプ距離による切り替え判定
+                if (viewerZoom.x < -60) navigateImageViewer(1); // 左に弾いた -> 次のファイル
+                else if (viewerZoom.x > 60) navigateImageViewer(-1); // 右に弾いた -> 前のファイル
+                else resetViewerZoom(); // 戻る
+            } else {
+                applyZoomTransform();
+            }
         }
     });
 }
 
 function applyZoomTransform() {
     const img = document.getElementById('img-viewer-src');
-    if (img) img.style.transform = `translate(${viewerZoom.x}px, ${viewerZoom.y}px) scale(${viewerZoom.scale})`;
+    const nonImgBox = document.getElementById('img-viewer-non-img');
+    const transformStr = `translate(${viewerZoom.x}px, ${viewerZoom.y}px) scale(${viewerZoom.scale})`;
+    if (img && img.style.display !== 'none') img.style.transform = transformStr;
+    if (nonImgBox && nonImgBox.style.display !== 'none') nonImgBox.style.transform = transformStr;
 }
 
 function resetViewerZoom() {
     viewerZoom = { scale: 1, x: 0, y: 0 };
     const img = document.getElementById('img-viewer-src');
-    if (img) {
-        img.style.transition = 'transform 0.2s ease-out';
-        applyZoomTransform();
-        setTimeout(() => img.style.transition = 'none', 200); 
-    }
+    const nonImgBox = document.getElementById('img-viewer-non-img');
+    const resetStyle = (el) => {
+        if (el) { el.style.transition = 'transform 0.2s ease-out'; el.style.transform = 'translate(0px, 0px) scale(1)'; setTimeout(() => el.style.transition = 'none', 200); }
+    };
+    resetStyle(img); resetStyle(nonImgBox);
 }
 
 function getContrastYIQ(hexcolor) { if (!hexcolor) return '#ffffff'; hexcolor = hexcolor.replace("#", ""); if (hexcolor.length === 3) hexcolor = hexcolor.split('').map(c => c + c).join(''); var r = parseInt(hexcolor.substr(0, 2), 16); var g = parseInt(hexcolor.substr(2, 2), 16); var b = parseInt(hexcolor.substr(4, 2), 16); var yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#000000' : '#ffffff'; }
