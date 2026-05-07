@@ -2549,31 +2549,52 @@ function initSwipeNavigation() {
 function analyzeSwipe(startX, startY, endX, endY) {
     const deltaX = endX - startX;
     const deltaY = endY - startY;
-    
-    const threshold = 80;    // 80px以上の横移動が必要
-    const restraint = 100;   // 縦方向のズレは100px以内であること
+    const threshold = 80;
+    const restraint = 100;
 
-    // 【第一原理思考】横の移動が縦の移動より圧倒的に大きく、かつ閾値を超えているか？
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > threshold && Math.abs(deltaY) < restraint) {
-        if (deltaX > 0) {
-            // 右方向へスワイプ = 前の月へ
-            console.log("🐈 Jero: 前の月へ移動するぞ。");
-            if (typeof changeMonth === 'function') {
-                changeMonth(-1);
-            } else {
-                // まだ changeMonth がない場合はスクロールで代用
-                document.getElementById('scroll-container').scrollBy({ top: -300, behavior: 'smooth' });
-            }
-        } else {
-            // 左方向へスワイプ = 次の月へ
-            console.log("🐈 Jero: 次の月へ移動するぞ。");
-            if (typeof changeMonth === 'function') {
-                changeMonth(1);
-            } else {
-                // まだ changeMonth がない場合はスクロールで代用
-                document.getElementById('scroll-container').scrollBy({ top: 300, behavior: 'smooth' });
-            }
+        if (deltaX > 0) jumpMonthBySwipe(-1); // 右スワイプ: 前の月へ
+        else jumpMonthBySwipe(1);             // 左スワイプ: 次の月へ
+    }
+}
+
+// ★真の月ジャンプエンジン：画面中央の月を割り出し、隣の月へワープする
+function jumpMonthBySwipe(dir) {
+    const wrappers = document.querySelectorAll('.month-wrapper');
+    let currentWrapper = null;
+    const centerY = window.innerHeight / 2;
+
+    // 現在画面の中心にいる月を特定する
+    wrappers.forEach(w => {
+        const rect = w.getBoundingClientRect();
+        if (rect.top <= centerY && rect.bottom >= centerY) {
+            currentWrapper = w;
         }
+    });
+    if (!currentWrapper) return;
+
+    const parts = currentWrapper.id.split('-'); // 例: month-2026-4
+    let y = parseInt(parts[1]);
+    let m = parseInt(parts[2]);
+
+    m += dir;
+    if (m < 0) { m = 11; y--; }
+    else if (m > 11) { m = 0; y++; }
+
+    const targetId = `month-${y}-${m}`;
+    const targetWrapper = document.getElementById(targetId);
+
+    if (targetWrapper) {
+        // 既に描画されていれば、その月の先頭へスクロール
+        targetWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        // まだ描画されていない未来/過去の月なら、裏で取得してから飛ぶ
+        if (typeof showGlobalLoader === 'function') showGlobalLoader('月を移動中...');
+        fetchAndRenderMonth(y, m, dir > 0 ? 'append' : 'prepend', false).then(() => {
+            const newWrapper = document.getElementById(targetId);
+            if (newWrapper) newWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+        });
     }
 }
 
@@ -2588,6 +2609,7 @@ let pdfSwipeStartY = 0;
 
 let initialPinchDist = null;
 let initialScale = 1.0;
+let pdfCurrentZoomRatio = 1.0; // ズーム中の仮倍率
 
 function initPdfSwipeNavigation() {
     const pdfContainer = document.getElementById('pdf-viewer-container');
@@ -2595,9 +2617,9 @@ function initPdfSwipeNavigation() {
 
     pdfContainer.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
-            // ★ピンチズーム開始
             initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             initialScale = pdfScale;
+            pdfCurrentZoomRatio = 1.0;
         } else {
             pdfSwipeStartX = e.changedTouches[0].screenX;
             pdfSwipeStartY = e.changedTouches[0].screenY;
@@ -2606,17 +2628,31 @@ function initPdfSwipeNavigation() {
 
     pdfContainer.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2 && initialPinchDist) {
-            // ★指の距離の変化を計算してスケールに反映
+            // ★指を動かしている最中は「再描画」せず、CSSで軽く仮拡大するだけにする（鏡文字バグの根絶）
             const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-            const zoomRatio = currentDist / initialPinchDist;
-            pdfScale = Math.min(Math.max(initialScale * zoomRatio, 0.5), 4.0);
-            renderPdfPage(pageNum);
+            pdfCurrentZoomRatio = currentDist / initialPinchDist;
+            const canvas = document.getElementById('pdf-canvas');
+            if (canvas) {
+                canvas.style.transform = `scale(${pdfCurrentZoomRatio})`;
+                canvas.style.transformOrigin = 'center top';
+            }
             if (e.cancelable) e.preventDefault();
         }
     }, { passive: false });
 
     pdfContainer.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) initialPinchDist = null;
+        if (initialPinchDist) {
+            if (e.touches.length < 2) {
+                // ★指を離した瞬間に1回だけ高画質で再描画する
+                initialPinchDist = null;
+                pdfScale = Math.min(Math.max(initialScale * pdfCurrentZoomRatio, 0.5), 4.0);
+                const canvas = document.getElementById('pdf-canvas');
+                if (canvas) canvas.style.transform = 'none'; // 仮拡大を解除
+                renderPdfPage(pageNum);
+            }
+            return; // ピンチズームの指離しなら、ここで処理を打ち切りページめくりはさせない
+        }
+        
         if (e.changedTouches.length > 1) return;
         
         const isScrollableX = pdfContainer.scrollWidth > pdfContainer.clientWidth + 5;
