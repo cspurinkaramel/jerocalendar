@@ -801,8 +801,34 @@ function renderMonthDOM(year, month, data, position) {
         if (tA !== tB) return tA - tB; 
         return (a.id || "").localeCompare(b.id || ""); 
     });
-    const today = new Date(); const slotMap = {}; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; }
-    sortedEvents.forEach(e => { if (!e.start) return; const occupiedDates = []; for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; let isTargetDay = false; if (e.start.date) { isTargetDay = e.start.date === dateStr; } else if (e.start.dateTime) { const stD = new Date(e.start.dateTime); const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`; isTargetDay = stStr === dateStr; } if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } } if (occupiedDates.length === 0) return; let slotIndex = 0; while (true) { let isFree = true; for (const d of occupiedDates) { if (slotMap[d][slotIndex]) { isFree = false; break; } } if (isFree) break; slotIndex++; } for (const d of occupiedDates) { while (slotMap[d].length <= slotIndex) slotMap[d].push(null); slotMap[d][slotIndex] = e; } });
+    const today = new Date(); const slotMap = {}; const badgeMap = {};
+    for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; badgeMap[dateStr] = []; }
+    
+    sortedEvents.forEach(e => { 
+        if (!e.start) return; 
+        
+        const occupiedDates = []; 
+        for (let i = 1; i <= daysInMonth; i++) { 
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; 
+            let isTargetDay = false; 
+            if (e.start.date) { isTargetDay = e.start.date === dateStr; } 
+            else if (e.start.dateTime) { const stD = new Date(e.start.dateTime); const stStr = `${stD.getFullYear()}-${String(stD.getMonth() + 1).padStart(2, '0')}-${String(stD.getDate()).padStart(2, '0')}`; isTargetDay = stStr === dateStr; } 
+            if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } 
+        } 
+        if (occupiedDates.length === 0) return; 
+
+        // ★バッジ化の判定：終日予定 かつ スタンプであれば、行を消費させずヘッダーバッジへ回す
+        const isAllDay = e.start.date ? true : false;
+        const pData = processSemanticText(e.summary);
+        if (isAllDay && pData.isStamp) {
+            occupiedDates.forEach(d => { badgeMap[d].push(pData.icon); });
+            return; // ★絶対命令：行の配置(slotMap)はスキップし、他の予定を上に詰める！
+        }
+
+        let slotIndex = 0; 
+        while (true) { let isFree = true; for (const d of occupiedDates) { if (slotMap[d][slotIndex]) { isFree = false; break; } } if (isFree) break; slotIndex++; } 
+        for (const d of occupiedDates) { while (slotMap[d].length <= slotIndex) slotMap[d].push(null); slotMap[d][slotIndex] = e; } 
+    });
     
     for (let i = 1; i <= daysInMonth; i++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; const dayEl = document.createElement('div'); let className = 'day'; const dow = new Date(year, month, i).getDay(); 
@@ -830,8 +856,9 @@ function renderMonthDOM(year, month, data, position) {
         }
         
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); 
-// ★上の1マス（day-header）のスタイルに headerStyle を適用する
-        dayEl.innerHTML = `<div class="day-header" style="${headerStyle}"><span class="day-num" style="${numStyle}">${i}</span></div>`;
+// ★上の1マス（day-header）にバッジを描画し、数字と両端揃えにする
+        const badgesHtml = badgeMap[dateStr].map(icon => `<span style="font-size:12px; margin-left:2px;">${icon}</span>`).join('');
+        dayEl.innerHTML = `<div class="day-header" style="${headerStyle} justify-content:space-between; padding:0 3px;"><span class="day-num" style="${numStyle} margin:0 !important;">${i}</span><div style="display:flex; align-items:center; overflow:hidden;">${badgesHtml}</div></div>`;
         
         // ★Phase 1改善（項目7）：一日のセル表示制限
         const MAX_DISPLAY = parseInt(localStorage.getItem('jero_max_disp') || '6');
@@ -2270,25 +2297,31 @@ function renderIconPalette(targetId, inputId) {
 }
 
 function processSemanticText(text) { 
-    if (!text) return { text: "", style: null }; 
+    if (!text) return { text: "", style: null, isStamp: false, icon: "" }; 
     let resText = text; let matchStyle = null; 
+    let isStamp = false; let stampIcon = "";
 
-    // 長いキーワード順にソートして部分一致バグを確実に防ぐ
     let allKeywords = [];
-    advancedDict.forEach(item => { item.keys.forEach(key => allKeywords.push({ keyword: key, data: item })); });
-    allKeywords.sort((a, b) => b.keyword.length - a.keyword.length);
+    if (typeof advancedDict !== 'undefined') {
+        advancedDict.forEach(item => { item.keys.forEach(key => allKeywords.push({ keyword: key, data: item })); });
+        allKeywords.sort((a, b) => b.keyword.length - a.keyword.length);
+    }
 
     for (const item of allKeywords) {
         if (resText.includes(item.keyword)) {
             const dictItem = item.data;
-            if (dictItem.isStamp) resText = resText.split(item.keyword).join(dictItem.icon + " " + dictItem.label);
-            else resText = resText.split(item.keyword).join(dictItem.icon);
+            if (dictItem.isStamp) {
+                resText = resText.split(item.keyword).join(dictItem.icon + " " + dictItem.label);
+                isStamp = true;
+                if (!stampIcon) stampIcon = dictItem.icon;
+            } else {
+                resText = resText.split(item.keyword).join(dictItem.icon);
+            }
             
-            // 色は最初に見つけたもの（一番長いキーワード）を優先
             if (!matchStyle) { const hexColor = dictItem.color || '#0a84ff'; const txtColor = getContrastYIQ(hexColor); matchStyle = { bg: hexColor, txt: txtColor }; }
         }
     }
-    return { text: resText, style: matchStyle }; 
+    return { text: resText, style: matchStyle, isStamp: isStamp, icon: stampIcon }; 
 }
 
 function selectEmoji(icon) { document.getElementById('dict-edit-icon').innerText = icon; closeEmojiPicker(); }
