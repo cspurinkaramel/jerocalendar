@@ -1658,8 +1658,9 @@ async function executeApiAction(action, isRetry = false) {
     }
 
     try {
-        // ★優しい世界：テキストデータは10秒でサクッと諦め、裏側での待機モードに移行する
-        const response = await fetchWithTimeout(getGasUrl(), { method: 'POST', body: JSON.stringify(payload), timeout: 10000 }); const result = await response.json();
+        // ★優しい世界の調整：GASの処理遅延を考慮し、諦めるまでの時間を「30秒」に延長する。
+        // これにより「実はサーバーで成功していたのに、勝手に諦めて再送し二重登録されるバグ」を根絶する。
+        const response = await fetchWithTimeout(getGasUrl(), { method: 'POST', body: JSON.stringify(payload), timeout: 30000 }); const result = await response.json();
         if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone") || errStr.includes("deleted")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
     } catch (error) {
         const code = error.status || 500;
