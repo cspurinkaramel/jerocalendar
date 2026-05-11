@@ -801,8 +801,8 @@ function renderMonthDOM(year, month, data, position) {
         if (tA !== tB) return tA - tB; 
         return (a.id || "").localeCompare(b.id || ""); 
     });
-    const today = new Date(); const slotMap = {}; const badgeMap = {};
-    for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; badgeMap[dateStr] = []; }
+    const today = new Date(); const slotMap = {}; const badgeMap = {}; const holidayMap = {};
+    for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; slotMap[dateStr] = []; badgeMap[dateStr] = []; holidayMap[dateStr] = false; }
     
     sortedEvents.forEach(e => { 
         if (!e.start) return; 
@@ -816,6 +816,11 @@ function renderMonthDOM(year, month, data, position) {
             if (isTargetDay || isEventSpanning(e, dateStr) !== 'single') { occupiedDates.push(dateStr); } 
         } 
         if (occupiedDates.length === 0) return; 
+
+        // ★記憶の保持：行として描画するかどうかにかかわらず、その日が「休日」であることは絶対に記憶しておく
+        if (isHolidayEvent(e.summary)) {
+            occupiedDates.forEach(d => { holidayMap[d] = true; });
+        }
 
         // ★バッジ化の判定：終日予定 かつ スタンプであれば、行を消費させずヘッダーバッジへ回す
         const isAllDay = e.start.date ? true : false;
@@ -836,7 +841,8 @@ function renderMonthDOM(year, month, data, position) {
         if (dow === 6) dayEl.style.backgroundColor = 'var(--sat)'; 
         
         const slots = slotMap[dateStr] || [];
-        const hasHoliday = slots.some(e => e && isHolidayEvent(e.summary));
+        // ★修正：スロットから消えていても、記憶(holidayMap)から休日の背景色を確実に引っ張り出す
+        const hasHoliday = holidayMap[dateStr] || slots.some(e => e && isHolidayEvent(e.summary));
         const isToday = (year === today.getFullYear() && month === today.getMonth() && i === today.getDate());
         let numStyle = '';
         let headerStyle = ''; // ★新設：上の1マス（ヘッダー部分）専用のスタイル
