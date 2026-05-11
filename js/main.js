@@ -602,10 +602,13 @@ function getCardHtml(type, item) {
     if (fileItems.length > 0) {
         driveThumbHtml = '<div style="display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px; margin-top:6px; padding-bottom:4px; padding-left:2px; -webkit-overflow-scrolling:touch;">';
         fileItems.forEach(f => {
-            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : (f.isImg ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : SAFE_PDF_ICON);
+            // ★PDFでもDriveに保存済みのものならサムネイルを取得する
+            const isPdf = f.mimeType === 'application/pdf';
+            const thumbSrc = (f.isImg && f.base64) ? `data:${f.mimeType};base64,${f.base64}` : 
+                             ((f.isImg || isPdf) && f.id && !f.id.startsWith('dummy_') ? `https://drive.google.com/thumbnail?id=${f.id}&sz=w150-h150` : SAFE_PDF_ICON);
             driveThumbHtml += `
                 <div style="position:relative; flex-shrink:0; border-radius:6px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.15); overflow:hidden; border:1px solid var(--border);" onclick="event.stopPropagation(); openImageViewer('${f.id}')">
-                    <img src="${thumbSrc}" onerror="this.onerror=null; this.src=SAFE_PDF_ICON" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
+                    <img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" loading="lazy" style="height:44px; width:44px; object-fit:cover; display:block; background:#f0f0f0;">
                 </div>`;
         });
         driveThumbHtml += '</div>';
@@ -1036,7 +1039,9 @@ function openEditor(e = null) {
                     if (!mType || mType === 'application/octet-stream') { mType = (att.title && att.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i)) ? 'application/pdf' : 'image/jpeg'; }
                     activeEventAttachments.push({ fileUrl: att.fileUrl, title: att.title, mimeType: mType, fileId: fileId });
                     let isImg = mType.startsWith('image/');
-                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : (isImg ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : SAFE_PDF_ICON);
+                    let isPdf = mType === 'application/pdf';
+                    const thumbSrc = (isImg && att.base64) ? `data:${mType};base64,${att.base64}` : 
+                                     ((isImg || isPdf) && fileId && !fileId.startsWith('dummy_') ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w150-h150` : SAFE_PDF_ICON);
                     previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingEventAttachment(this, '${fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
                 }
             });
@@ -1207,8 +1212,25 @@ function openTaskEditor(t = null) {
         parsed.files.forEach(f => {
             let isImg = f.title.match(/\.(pdf|doc|docx|xls|xlsx|txt|zip|csv)$/i) ? false : true;
             let currentMime = isImg ? 'image/jpeg' : 'application/pdf';
-            let thumbSrc = isImg ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : SAFE_PDF_ICON;
-            if (t && t.attachments) { const match = t.attachments.find(a => a.fileId === f.fileId); if (match) { currentMime = match.mimeType || currentMime; if (currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; isImg = currentMime.startsWith('image/'); if (isImg && match.base64) thumbSrc = `data:${currentMime};base64,${match.base64}`; else if (!isImg) thumbSrc = SAFE_PDF_ICON; } }
+            let isPdf = !isImg && f.title.match(/\.pdf$/i) ? true : false;
+            let thumbSrc = (isImg || isPdf) && f.fileId && !f.fileId.startsWith('dummy_') ? `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150` : SAFE_PDF_ICON;
+            
+            if (t && t.attachments) { 
+                const match = t.attachments.find(a => a.fileId === f.fileId); 
+                if (match) { 
+                    currentMime = match.mimeType || currentMime; 
+                    if (currentMime === 'application/octet-stream') currentMime = isImg ? 'image/jpeg' : 'application/pdf'; 
+                    isImg = currentMime.startsWith('image/'); 
+                    isPdf = currentMime === 'application/pdf';
+                    if (isImg && match.base64) {
+                        thumbSrc = `data:${currentMime};base64,${match.base64}`; 
+                    } else if (isPdf && f.fileId && !f.fileId.startsWith('dummy_')) {
+                        thumbSrc = `https://drive.google.com/thumbnail?id=${f.fileId}&sz=w150-h150`;
+                    } else if (!isImg && !isPdf) {
+                        thumbSrc = SAFE_PDF_ICON; 
+                    }
+                } 
+            }
             activeTaskAttachments.push({ title: f.title, fileUrl: f.fileUrl, fileId: f.fileId, mimeType: currentMime });
             previewContainer.innerHTML += `<div class="preview-item" style="position:relative; display:inline-block; cursor:pointer;" onclick="openImageViewer('${f.fileId}')"><img src="${thumbSrc}" onerror="this.onerror=null; this.src='${SAFE_PDF_ICON}'" style="height:60px; width:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:#f0f0f0;"><div class="preview-del" onclick="event.stopPropagation(); removeExistingTaskAttachment(this, '${f.fileId}')" style="position:absolute; top:-6px; right:-6px; background:#ff3b30; color:white; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; z-index:10;">✕</div></div>`;
         });
