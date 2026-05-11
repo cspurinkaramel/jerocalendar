@@ -520,7 +520,8 @@ async function processSyncQueue(isSilent = false) {
                         else if (code === 400 || code === 404 || code === 410 || code === 413) { console.error(`❌ Google拒絶(Code:${code})。不正データ破棄。`); await clearSyncQueueItem(item.id); itemSuccess = true; needsRefresh = true; batchSuccess = true; } 
                         else if (code === 429) { authErrorOccurred = true; showToast('⚠️ Google通信制限(429)。一時中断。'); } 
                         else { 
-                            if (msg) showToast(`⚠️ 裏側通信エラー: ${msg}`);
+                            // ★優しい世界：裏側での自動同期中は、電波が弱くても無慈悲なエラー通知で急かさず、静かにリトライする
+                            if (msg && !isSilent) showToast(`📶 電波が弱いようだ。データは安全に退避したぞ。`);
                             retries--; 
                             if (retries > 0) { const backoff = (4 - retries) * 2000; await sleep(backoff); } 
                         }
@@ -949,11 +950,23 @@ async function fetchAndRenderMonth(year, month, position = 'append', forceFetch 
     if (forceFetch || !dataCache[monthKey]) {
         if (!navigator.onLine) { if (!dataCache[monthKey]) showToast('オフラインのためデータが取得できません。'); return; }
         let events = [], tasks = [];
-        try { const url = `${getGasUrl()}?year=${year}&month=${month}`; const response = await fetch(url); const data = await response.json(); if (data.success) { 
-            // ★ブラックリストによる幻影の迎撃：遅延で送られてきた「すでに消したはずのデータ」を完全に弾く
-            events = (data.events || []).filter(e => !deletedIds.has(e.id)); 
-            tasks = (data.tasks || []).filter(t => !deletedIds.has(t.id)); 
-        } else { throw new Error(data.error || '不明なサーバーエラー'); } } catch (e) { console.error("GASデータ取得エラー:", e); showToast('通信エラーが発生した。'); return; }
+        try { 
+            const url = `${getGasUrl()}?year=${year}&month=${month}`; 
+            const response = await fetchWithTimeout(url, { timeout: 10000 }); 
+            const data = await response.json(); 
+            if (data.success) { 
+                // ★ブラックリストによる幻影の迎撃：遅延で送られてきた「すでに消したはずのデータ」を完全に弾く
+                events = (data.events || []).filter(e => !deletedIds.has(e.id)); 
+                tasks = (data.tasks || []).filter(t => !deletedIds.has(t.id)); 
+            } else { 
+                throw new Error(data.error || '不明なサーバーエラー'); 
+            } 
+        } catch (e) { 
+            console.error("GASデータ取得エラー:", e); 
+            // ★優しい世界：データを取れなくても怒らず、手元のキャッシュで平和に表示する
+            showToast('📶 電波が弱いため、手元の記憶(キャッシュ)を表示するぞ。'); 
+            return; 
+        }
         dataCache[monthKey] = { events, tasks }; saveDataCacheToIDB(monthKey, { events, tasks }); 
         
         // ★最強の防壁：サーバーのデータで上書きした直後、未送信キュー（野戦倉庫）にいる仮アイテムを再合成して点線を保護する
@@ -1526,6 +1539,23 @@ function updateLocalCacheForOptimisticUI(action, localId, replaceTempId = null) 
 }
 
 async function rehydrateSyncQueue() { const queue = await getSyncQueue(); for (const item of queue) { updateLocalCacheForOptimisticUI(item.payload, item.id); } }
+
+// ★優しい世界：無限に待ち続けてアプリをフリーズさせないための、タイムアウト付き通信関数
+async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 15000 } = options; 
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(resource, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') throw { status: 408, message: '通信タイムアウト(電波微弱)' };
+        throw error;
+    }
+}
+
 async function executeApiAction(action, isRetry = false) {
     if (!navigator.onLine) throw new Error("Offline"); const payload = JSON.parse(JSON.stringify(action)); payload.title = payload.title || "(無名)"; payload.description = payload.description || ""; payload.location = payload.location || "";
     if (payload.type === 'event') { 
@@ -1586,7 +1616,8 @@ async function executeApiAction(action, isRetry = false) {
                 }
             };
 
-            const res = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(uploadPayload) });
+            // ★優しい世界：巨大な画像データは焦らず30秒だけ待ち、ダメなら優しく諦める
+            const res = await fetchWithTimeout(getGasUrl(), { method: 'POST', body: JSON.stringify(uploadPayload), timeout: 30000 });
             const resData = await res.json();
             if (!resData.success || !resData.data) throw { status: 500, message: `GAS拒絶: ${resData.error || "詳細不明"}` };
             
@@ -1627,7 +1658,8 @@ async function executeApiAction(action, isRetry = false) {
     }
 
     try {
-        const response = await fetch(getGasUrl(), { method: 'POST', body: JSON.stringify(payload) }); const result = await response.json();
+        // ★優しい世界：テキストデータは10秒でサクッと諦め、裏側での待機モードに移行する
+        const response = await fetchWithTimeout(getGasUrl(), { method: 'POST', body: JSON.stringify(payload), timeout: 10000 }); const result = await response.json();
         if (!result.success) { let simulatedStatus = 500; const errStr = (result.error || "").toLowerCase(); if (errStr.includes("not found") || errStr.includes("404")) simulatedStatus = 404; else if (errStr.includes("invalid") || errStr.includes("400") || errStr.includes("bad request") || errStr.includes("parse") || errStr.includes("payload")) simulatedStatus = 400; else if (errStr.includes("410") || errStr.includes("gone") || errStr.includes("deleted")) simulatedStatus = 410; else if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("rate limit")) simulatedStatus = 429; else if (errStr.includes("401") || errStr.includes("403") || errStr.includes("unauthorized") || errStr.includes("forbidden")) simulatedStatus = 401; throw { status: simulatedStatus, message: result.error }; }
     } catch (error) {
         const code = error.status || 500;
