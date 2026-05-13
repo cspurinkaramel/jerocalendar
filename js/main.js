@@ -942,6 +942,13 @@ function renderMonthDOM(year, month, data, position) {
             
             if (spanType !== 'single') { 
                 div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; 
+                
+                // ★真の絶対防壁：SafariのFlexboxが文字のオーバーフローを検知して勝手に高さを広げるのを殺す
+                div.style.setProperty('height', '13px', 'important');
+                div.style.setProperty('min-height', '13px', 'important');
+                div.style.setProperty('max-height', '13px', 'important');
+                div.style.setProperty('margin', '0 0 1px 0', 'important');
+
                 if (spanType === 'span-start') { div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; } 
                 else if (spanType === 'span-mid') { div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent'; } 
                 else if (spanType === 'span-end') { div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent'; } 
