@@ -914,9 +914,9 @@ function renderMonthDOM(year, month, data, position) {
         }
         
         dayEl.className = className; dayEl.id = `cell-${dateStr}`; dayEl.setAttribute('onclick', `openDailyModal('${dateStr}', ${dow})`); dayEl.setAttribute('ondragover', 'handleDragOver(event)'); dayEl.setAttribute('ondragenter', 'handleDragEnter(event)'); dayEl.setAttribute('ondragleave', 'handleDragLeave(event)'); dayEl.setAttribute('ondrop', `handleDrop(event, '${dateStr}')`); 
-// ★上の1マス（day-header）にバッジを描画し、数字と両端揃えにする
-        const badgesHtml = badgeMap[dateStr].map(icon => `<span style="font-size:12px; margin-left:2px;">${icon}</span>`).join('');
-        dayEl.innerHTML = `<div class="day-header" style="${headerStyle} justify-content:space-between; padding:0 3px;"><span class="day-num" style="${numStyle} margin:0 !important;">${i}</span><div style="display:flex; align-items:center; overflow:hidden;">${badgesHtml}</div></div>`;
+// ★絶対防壁：絵文字のサイズによってヘッダーが膨張し、下の予定がズレるのを防ぐため、高さを16pxに完全固定する
+        const badgesHtml = badgeMap[dateStr].map(icon => `<span style="font-size:11px; margin-left:2px; line-height:1;">${icon}</span>`).join('');
+        dayEl.innerHTML = `<div class="day-header" style="${headerStyle} justify-content:space-between; padding:0 3px; height:16px !important; min-height:16px !important; max-height:16px !important; overflow:hidden; box-sizing:border-box;"><span class="day-num" style="${numStyle} margin:0 !important; line-height:16px; display:inline-block;">${i}</span><div style="display:flex; align-items:center; overflow:hidden; height:16px;">${badgesHtml}</div></div>`;
         
         // ★Phase 1改善（項目7）：一日のセル表示制限
         const MAX_DISPLAY = parseInt(localStorage.getItem('jero_max_disp') || '6');
