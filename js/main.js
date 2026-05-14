@@ -923,13 +923,17 @@ function renderMonthDOM(year, month, data, position) {
         let currentSlotIdx = 0; let hiddenCount = 0;
 
         slots.forEach(e => {
-            if (currentSlotIdx >= MAX_DISPLAY) { if (e) hiddenCount++; currentSlotIdx++; return; } // 上限を超えたらカウントだけして描画スキップ
+            if (currentSlotIdx >= MAX_DISPLAY) { if (e) hiddenCount++; currentSlotIdx++; return; } 
             
-            if (!e) { const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = '&nbsp;'; spacer.style.height = '14px'; spacer.style.minHeight = '14px'; spacer.style.flexShrink = '0'; spacer.style.margin = '1px 0'; spacer.style.padding = '0'; spacer.style.border = '1px solid transparent'; spacer.style.boxSizing = 'border-box'; dayEl.appendChild(spacer); currentSlotIdx++; return; }
+            if (!e) { 
+                const spacer = document.createElement('div'); spacer.className = 'event'; spacer.style.visibility = 'hidden'; spacer.innerHTML = ''; 
+                // ★線のズレを根絶する絶対防御：空き枠も13px、マージンも完全に実体と合わせる
+                spacer.style.setProperty('height', '13px', 'important'); spacer.style.setProperty('min-height', '13px', 'important'); spacer.style.setProperty('max-height', '13px', 'important'); spacer.style.setProperty('margin', '0 0 1px 0', 'important'); spacer.style.setProperty('padding', '0', 'important'); spacer.style.setProperty('border', 'none', 'important'); spacer.style.setProperty('box-sizing', 'border-box', 'important'); spacer.style.flexShrink = '0';
+                dayEl.appendChild(spacer); currentSlotIdx++; return; 
+            }
             const div = document.createElement('div'); div.className = 'event'; let timeStr = ""; if (e.start.dateTime) { const d = new Date(e.start.dateTime); timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; }
             let spanType = isEventSpanning(e, dateStr); 
-            if (dateStr.endsWith('-01') && spanType === 'span-mid') { spanType = 'span-start'; }
-            else if (dateStr.endsWith('-01') && spanType === 'span-end') { spanType = 'single'; } 
+            // ★月またぎ送信(描画)エラーの破壊：月初めの線を強制的に切り落とす過去の悪しき処理を消滅させ、本来の連続線を復活させる
             
             const isPendingInsert = e._localId ? true : false; const isPendingUpdate = e._pendingUpdate ? true : false; const isPendingDelete = e._pendingDelete ? true : false; let stateIcon = ''; if (isPendingInsert) stateIcon = '➕🔄 '; if (isPendingUpdate) stateIcon = '📝🔄 '; if (isPendingDelete) stateIcon = '🗑️ '; const recurIcon = e.recurrence ? '🔁 ' : ''; const pData = processSemanticText(e.summary); 
             
@@ -941,19 +945,15 @@ function renderMonthDOM(year, month, data, position) {
             div.style.overflow = 'hidden'; div.style.whiteSpace = 'nowrap'; div.style.textOverflow = 'clip'; div.style.position = 'relative'; div.style.zIndex = '1'; div.style.boxSizing = 'border-box'; div.style.fontSize = '10px'; div.style.fontWeight = '700';
             
             if (spanType !== 'single') { 
-                div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; div.style.height = '14px'; div.style.lineHeight = '11px'; div.style.margin = '1px 0'; div.style.padding = '0 2px'; div.style.boxShadow = 'none'; 
-                
-                // ★真の絶対防壁：SafariのFlexboxが文字のオーバーフローを検知して勝手に高さを広げるのを殺す
-                div.style.setProperty('height', '13px', 'important');
-                div.style.setProperty('min-height', '13px', 'important');
-                div.style.setProperty('max-height', '13px', 'important');
-                div.style.setProperty('margin', '0 0 1px 0', 'important');
-
+                div.classList.add('continuous'); div.classList.add(spanType); div.style.background = 'transparent'; div.style.color = bgColor; div.style.borderTop = 'none'; div.style.borderBottom = `3px solid ${bgColor}`; 
+                // ★真の絶対防壁：実際の予定要素にもスペーサーと全く同じ高さ・マージンを強制適用し、段差を物理的に消滅させる
+                div.style.setProperty('height', '13px', 'important'); div.style.setProperty('min-height', '13px', 'important'); div.style.setProperty('max-height', '13px', 'important'); div.style.setProperty('margin', '0 0 1px 0', 'important'); div.style.setProperty('padding', '0 2px', 'important'); div.style.setProperty('line-height', '10px', 'important'); div.style.boxShadow = 'none'; 
                 if (spanType === 'span-start') { div.style.borderLeft = 'none'; div.style.borderRadius = '0'; div.style.marginRight = '-6px'; div.style.paddingRight = '6px'; } 
                 else if (spanType === 'span-mid') { div.style.borderRadius = '0'; div.style.borderLeft = 'none'; div.style.borderRight = 'none'; div.style.marginLeft = '-6px'; div.style.marginRight = '-6px'; div.style.color = 'transparent'; } 
                 else if (spanType === 'span-end') { div.style.borderRight = 'none'; div.style.borderRadius = '0'; div.style.marginLeft = '-6px'; div.style.paddingLeft = '6px'; div.style.color = 'transparent'; } 
             } else { 
-                div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; div.style.height = '14px'; div.style.lineHeight = '14px'; div.style.margin = '1px 2px'; div.style.padding = '0 3px'; 
+                div.classList.add('single'); div.style.background = bgColor; div.style.color = txtColor; div.style.borderRadius = '3px'; 
+                div.style.setProperty('height', '13px', 'important'); div.style.setProperty('min-height', '13px', 'important'); div.style.setProperty('max-height', '13px', 'important'); div.style.setProperty('margin', '0 0 1px 0', 'important'); div.style.setProperty('padding', '0 3px', 'important'); div.style.setProperty('line-height', '13px', 'important'); 
             }
             if (isPendingInsert || isPendingUpdate) { div.style.border = `1px dashed ${txtColor}`; div.style.opacity = '0.8'; } if (isPendingDelete) { div.style.textDecoration = 'line-through'; div.style.opacity = '0.3'; div.style.filter = 'grayscale(100%)'; } 
             
@@ -1257,8 +1257,8 @@ async function saveEvent() {
     const id = document.getElementById('edit-id').value; const title = document.getElementById('edit-title').value.trim(); if (!title) { showToast('タイトルを入力してくれ'); return; }
     const isAllDay = document.getElementById('edit-allday').checked; let startVal = document.getElementById('edit-start').value; let endVal = document.getElementById('edit-end').value; if (!startVal) { showToast('開始日時が不正だ'); return; } if (!endVal) endVal = startVal;
     
-    // ★予定の死角保護2：終了時間が開始時間より前になる「時間逆転バグ」を強制補正する
-    if (!isAllDay && new Date(startVal) > new Date(endVal)) endVal = startVal;
+    // ★予定の死角保護2：終了時間が開始時間より前になる「時間逆転バグ」を完全補正する（終日予定の月またぎエラーを根絶）
+    if (new Date(startVal) > new Date(endVal)) endVal = startVal;
 
     const action = { type: 'event', method: id ? 'update' : 'insert', id: id, title: title, location: document.getElementById('edit-loc').value, description: document.getElementById('edit-desc').value, colorId: selectedColorId };
     
